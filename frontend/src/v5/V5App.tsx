@@ -65,9 +65,12 @@ function AuthGate() {
   useEffect(() => { if (auth.data?.authenticated === false || (auth.isError && auth.error instanceof V5ApiError && auth.error.status === 401)) client.removeQueries({ predicate: query => query.queryKey[0] !== "v5-auth" }); }, [auth.isError, auth.error, auth.data?.authenticated]);
   if (auth.isPending) return <main className="v5-loading-screen"><div className="v5-spinner" /><span>Connecting to the V5 workspace…</span></main>;
   if (auth.isError && auth.error instanceof V5ApiError && auth.error.status === 401) return <LoginPage />;
-  if (auth.isError) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>Workspace connection failed</strong><span>{auth.error.message}</span><button className="v5-button" onClick={() => void auth.refetch()}>Retry connection</button></div></main>;
-  if (!auth.data.authenticated) return <LoginPage />;
-  return <Outlet />;
+  if (auth.isError && !auth.data) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>Workspace connection failed</strong><span>{auth.error.message}</span><button className="v5-button" onClick={() => void auth.refetch()}>Retry connection</button></div></main>;
+  if (!auth.data?.authenticated) return <LoginPage />;
+  return <>
+    <Outlet />
+    {auth.isError && <div role="status" className="fixed right-4 top-16 z-50 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Reconnecting to the V5 workspace…</div>}
+  </>;
 }
 
 function ProfileGate() {

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
+from condor.v5 import app as app_module
 from condor.v5.app import _safe_feed_refresh, _safe_task_latest, create_app
 from condor.v5.config import ConfigurationError, Settings
-from condor.v5.state import WorkspaceState
+from condor.v5.state import MAX_ROWS, StateCapacityError, WorkspaceState
 
 TOKEN = "d" * 48
 READ_TOKEN = "r" * 48
@@ -269,6 +273,94 @@ def test_login_cookie_is_v5_scoped_and_same_origin_only(tmp_path):
         assert client.post(
             "/api/v5/auth/logout", headers={"Origin": ORIGIN}
         ).json() == {"authenticated": False}
+
+
+def test_login_compares_token_even_when_failed_guesses_are_limited(tmp_path, monkeypatch):
+    compare_digest = app_module.hmac.compare_digest
+    comparisons = []
+
+    def record_comparison(supplied, expected):
+        if expected in (TOKEN, TOKEN.encode()):
+            comparisons.append(supplied)
+        return compare_digest(supplied, expected)
+
+    monkeypatch.setattr(app_module.hmac, "compare_digest", record_comparison)
+    app = create_app(settings=settings(tmp_path), upstream=FakeUpstream())
+    with TestClient(app, client=("192.0.2.1", 50000)) as failed, TestClient(
+        app, client=("192.0.2.1", 50001)
+    ) as operator:
+        def failed_login():
+            return failed.post(
+                "/api/v5/auth/login", json={"token": "x" * 40}, headers={"Origin": ORIGIN}
+            )
+
+        for _ in range(8):
+            assert failed_login().status_code == 401
+        login(operator)
+        limited = failed_login()
+        assert limited.status_code == 429
+        assert limited.json() == {"detail": {"code": "login_rate_limited"}}
+        assert failed_login().status_code == 429
+        assert len(comparisons) == 11
+
+
+def test_login_failure_tracking_is_bounded_and_releases_expired_keys(tmp_path, monkeypatch):
+    monkeypatch.setattr(app_module, "MAX_LOGIN_FAILURE_KEYS", 2, raising=False)
+    now = 0.0
+    monkeypatch.setattr(
+        app_module, "time", SimpleNamespace(monotonic=lambda: now, time_ns=app_module.time.time_ns)
+    )
+    app = create_app(settings=settings(tmp_path), upstream=FakeUpstream())
+
+    def try_invalid(client):
+        return client.post(
+            "/api/v5/auth/login", json={"token": "x" * 40}, headers={"Origin": ORIGIN}
+        )
+
+    with TestClient(app, client=("192.0.2.1", 50000)) as first:
+        with TestClient(app, client=("192.0.2.2", 50000)) as second, TestClient(
+            app, client=("192.0.2.3", 50000)
+        ) as third:
+            assert try_invalid(first).status_code == 401
+            assert try_invalid(second).status_code == 401
+            assert try_invalid(third).status_code == 429
+            login(third)
+            now = 60.0
+            assert try_invalid(third).status_code == 401
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n"])
+def test_login_accepts_one_token_file_line_ending(tmp_path, ending):
+    config = settings(tmp_path)
+    config.dashboard_token_file.write_bytes((TOKEN + ending).encode())
+    with TestClient(create_app(settings=config, upstream=FakeUpstream())) as client:
+        login(client)
+        assert client.get("/api/v5/auth").json() == {"authenticated": True}
+        assert client.get("/api/v5/workspace").status_code == 200
+
+
+def test_unreadable_token_file_is_a_service_error_not_a_failed_guess(tmp_path, caplog):
+    config = settings(tmp_path)
+    with TestClient(create_app(settings=config, upstream=FakeUpstream())) as client:
+        login(client)
+        config.dashboard_token_file.unlink()
+        for _ in range(9):
+            unavailable = client.post(
+                "/api/v5/auth/login", json={"token": TOKEN}, headers={"Origin": ORIGIN}
+            )
+            assert unavailable.status_code == 503
+            assert unavailable.json() == {"detail": {"code": "server_token_unavailable"}}
+            assert "set-cookie" not in unavailable.headers
+        assert client.get("/api/v5/auth").status_code == 503
+        assert client.get("/api/v5/workspace").status_code == 503
+        assert caplog.text.count("V5 dashboard token file is unreadable or invalid") == 1
+        assert TOKEN not in caplog.text
+        config.dashboard_token_file.write_text(TOKEN)
+        assert client.get("/api/v5/auth").json() == {"authenticated": True}
+        assert client.post(
+            "/api/v5/auth/login", json={"token": "x" * 40}, headers={"Origin": ORIGIN}
+        ).status_code == 401
+        login(client)
 
 
 def test_settings_keeps_advisor_and_scheduler_sources_separate(tmp_path):
@@ -543,30 +635,64 @@ def test_runtime_lease_refuses_second_process_before_recovery(tmp_path):
     second.close()
 
 
-def test_storage_limit_preserves_old_sessions_without_pruning(tmp_path, monkeypatch):
+def test_storage_prunes_oldest_terminal_session_and_its_ticks(tmp_path, monkeypatch):
     import condor.v5.state as state_module
-    from condor.v5.state import StateCapacityError
 
-    monkeypatch.setattr(state_module, "MAX_ROWS", 2)
-    state = WorkspaceState(tmp_path / "append-only")
-    one = state.create_session("market_analyst", kind="inspect")
-    state.add_tick(
-        one["id"],
-        status="COMPLETED",
-        summary="retained evidence",
-        evidence_refs=["snapshot-a"],
-    )
-    state.finish_session(one["id"], "COMPLETED", "retained")
-    two = state.create_session("source_auditor", kind="inspect")
+    monkeypatch.setattr(state_module, "MAX_ROWS", 3)
+    stamps = iter(range(20))
+    state = WorkspaceState(tmp_path / "journal", clock=lambda: next(stamps))
     try:
-        state.create_session("market_analyst", kind="inspect")
-        raise AssertionError("session capacity must refuse new work")
-    except StateCapacityError:
-        pass
-    assert state.session(one["id"]) is not None
-    assert state.session(one["id"])["ticks"][0]["evidence_refs"] == ["snapshot-a"]
-    assert state.session(two["id"]) is not None
-    state.close()
+        running = state.create_session("market_analyst", kind="loop")
+        older = state.create_session("market_analyst", kind="inspect")
+        state.add_tick(older["id"], status="COMPLETED", summary="old evidence")
+        state.finish_session(older["id"], "COMPLETED", "old")
+        newer = state.create_session("source_auditor", kind="report")
+        state.finish_session(newer["id"], "FAILED", "newer")
+        with pytest.raises(StateCapacityError):
+            state.create_session("source_auditor", kind="report", expected_sessions=2)
+        assert state.session(older["id"]) is not None
+        with monkeypatch.context() as limits:
+            limits.setattr(state_module, "MAX_DATABASE_BYTES", 0)
+            with pytest.raises(StateCapacityError, match="storage capacity"):
+                state.create_session("source_auditor", kind="inspect")
+        assert state.session(older["id"])["ticks"][0]["summary"] == "old evidence"
+        state.create_session("source_auditor", kind="inspect")
+        assert state.session(running["id"])["status"] == "RUNNING"
+        assert state.session(older["id"]) is None
+        assert state.session(newer["id"])["status"] == "FAILED"
+        with sqlite3.connect(state.path) as db:
+            assert db.execute("SELECT COUNT(*) FROM ticks").fetchone()[0] == 0
+    finally:
+        state.close()
+
+
+def test_inspections_keep_working_after_journal_fills_and_across_max_tick_loops(tmp_path):
+    config = settings(tmp_path)
+    state = WorkspaceState(config.runtime_root)
+    app = create_app(settings=config, upstream=FakeUpstream(), state=state)
+    headers = {"Origin": ORIGIN}
+    inspect_path = "/api/v5/agents/market_analyst/inspect"
+    loop_path = "/api/v5/agents/market_analyst/loops/start"
+    loop_body = {"loop_id": "market_analyst_monitor", "frequency_sec": 900, "max_ticks": 96}
+    with TestClient(app) as client:
+        login(client)
+        for _ in range(250):
+            inspected = client.post(inspect_path, headers=headers)
+            assert inspected.status_code == 200
+        storage = state.storage_status()
+        assert storage["sessions_used"] == MAX_ROWS
+        assert storage["status"] == "AVAILABLE"
+        for _ in range(2):
+            loop = client.post(loop_path, headers=headers, json=loop_body)
+            assert loop.status_code == 200
+            assert state.storage_status()["sessions_used"] == MAX_ROWS - 96
+            duplicate = client.post(loop_path, headers=headers, json=loop_body)
+            assert duplicate.status_code == 409
+            assert duplicate.json()["detail"]["code"] == "active_loop_exists"
+            assert client.post(inspect_path, headers=headers).status_code == 200
+            loop_path_by_id = f"/api/v5/sessions/{loop.json()['id']}"
+            assert client.get(loop_path_by_id).json()["status"] == "RUNNING"
+            assert client.post(f"{loop_path_by_id}/stop", headers=headers).json()["status"] == "STOPPED"
 
 
 def test_state_backup_uses_sqlite_backup_and_preserves_journal(tmp_path):
@@ -593,6 +719,7 @@ def test_report_storage_capacity_refuses_before_upstream_request(tmp_path, monke
     config = settings(tmp_path)
     state = WorkspaceState(config.runtime_root)
     state.create_session("market_analyst", kind="inspect")
+    assert state.storage_status()["status"] == "LIMIT_REACHED"
     api = FakeUpstream()
     app = create_app(
         settings=config, upstream=api, state=state, static_dir=tmp_path / "dist"
@@ -683,6 +810,12 @@ def test_secret_reader_is_bounded_and_rejects_nonprintable_tokens(tmp_path):
     assert read_secret_file(large) == ""
     assert read_secret_file(bad) == ""
     assert read_secret_file(good) == "a" * 48
+    for ending in (b"\n", b"\r\n"):
+        good.write_bytes(b"a" * 256 + ending)
+        assert read_secret_file(good) == "a" * 256
+    for ending in (b"\n\n", b"\r\n\r\n", b"\r", b" \n"):
+        bad.write_bytes(b"a" * 48 + ending)
+        assert read_secret_file(bad) == ""
 
 
 def test_wire_body_limit_precedes_json_decode_for_chunked_and_length(tmp_path):

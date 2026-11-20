@@ -38,13 +38,16 @@ from .learning_projection import PROJECTION_PATHS, ResearchOwnerLearningSource
 from .paper import PaperObservation, read_paper_status
 from .read_bridge import read_research, read_tradepad, research_route, tradepad_route
 from .state import StateCapacityError, WorkspaceState
-from .upstream import UpstreamError, V5Upstream
+from .upstream import UPSTREAM_AUTH_REJECTION_STATUSES, UpstreamError, V5Upstream
 
 logger = logging.getLogger(__name__)
 COOKIE_NAME = "rsi_v5_session"
 SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 MARKET_PAGE_COINS = frozenset({"BTC", "ETH", "BNB", "SOL", "XRP"})
 MAX_JSON_BODY_BYTES = 16_384
+LOGIN_FAILURE_WINDOW_SEC = 60
+LOGIN_FAILURE_LIMIT = 8
+MAX_LOGIN_FAILURE_KEYS = 1024
 MAX_TICKS_PER_LOOP = 96
 MIN_LOOP_FREQUENCY_SEC = 900
 ADVISOR_TASK_IDS = ("market_context", "source_quality")
@@ -334,6 +337,7 @@ def create_app(
     active_loop_task: asyncio.Task | None = None
     active_loop_stop: asyncio.Event | None = None
     login_failures: dict[str, list[float]] = {}
+    dashboard_token_error_logged = False
 
     async def money_section(path: str) -> dict | None:
         """The same validated paper read the pages use; None when the owner read is refused or fails."""
@@ -430,9 +434,17 @@ def create_app(
         return response
 
     def dashboard_token() -> str:
+        nonlocal dashboard_token_error_logged
         token = read_secret_file(config.dashboard_token_file)
-        if not 32 <= len(token) <= 256:
-            raise HTTPException(503, detail={"code": "dashboard_auth_unavailable"})
+        if not token:
+            if not dashboard_token_error_logged:
+                logger.error(
+                    "V5 dashboard token file is unreadable or invalid; "
+                    "check the V5_DASHBOARD_TOKEN_FILE mount and permissions"
+                )
+                dashboard_token_error_logged = True
+            raise HTTPException(503, detail={"code": "server_token_unavailable"})
+        dashboard_token_error_logged = False
         return token
 
     def caller_key(request: Request) -> str:
@@ -488,9 +500,7 @@ def create_app(
 
     @app.get("/api/v5/auth")
     async def auth_status(request: Request):
-        token = read_secret_file(config.dashboard_token_file)
-        if not 32 <= len(token) <= 256:
-            return {"authenticated": False}
+        token = dashboard_token()
         supplied = request.cookies.get(COOKIE_NAME, "")
         authenticated = bool(supplied and hmac.compare_digest(supplied, token))
         if authenticated and projection is not None:
@@ -636,6 +646,10 @@ def create_app(
             try:
                 payload = await api.observation(result["source_route"])
             except UpstreamError as exc:
+                if exc.http_status in UPSTREAM_AUTH_REJECTION_STATUSES:
+                    raise HTTPException(
+                        502, detail={"code": "upstream_auth_rejected"}
+                    ) from None
                 if result.get("section") == "accounting" and exc.http_status in {
                     404,
                     501,
@@ -656,19 +670,26 @@ def create_app(
     @app.post("/api/v5/auth/login")
     async def login(payload: LoginBody, request: Request, response: Response):
         check_origin(request)
-        now = time.monotonic()
-        key = caller_key(request)
-        attempts = [time for time in login_failures.get(key, []) if now - time < 60]
-        if len(attempts) >= 8:
-            raise HTTPException(429, detail={"code": "login_rate_limited"})
-        expected = read_secret_file(config.dashboard_token_file)
-        if not 32 <= len(expected) <= 256 or not hmac.compare_digest(
-            payload.token, expected
-        ):
+        expected = dashboard_token()
+        if not hmac.compare_digest(payload.token.encode(), expected.encode("ascii")):
+            now = time.monotonic()
+            key = caller_key(request)
+            if key not in login_failures and len(login_failures) >= MAX_LOGIN_FAILURE_KEYS:
+                for caller, recorded in list(login_failures.items()):
+                    if now - recorded[-1] >= LOGIN_FAILURE_WINDOW_SEC:
+                        del login_failures[caller]
+                if len(login_failures) >= MAX_LOGIN_FAILURE_KEYS:
+                    raise HTTPException(429, detail={"code": "login_rate_limited"})
+            attempts = [
+                stamp
+                for stamp in login_failures.get(key, [])
+                if now - stamp < LOGIN_FAILURE_WINDOW_SEC
+            ]
+            if len(attempts) >= LOGIN_FAILURE_LIMIT:
+                raise HTTPException(429, detail={"code": "login_rate_limited"})
             attempts.append(now)
             login_failures[key] = attempts
             raise HTTPException(401, detail={"code": "invalid_dashboard_token"})
-        login_failures.pop(key, None)
         response.set_cookie(
             COOKIE_NAME,
             expected,

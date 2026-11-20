@@ -183,10 +183,19 @@ class WorkspaceState:
         if reserve_bytes < 0 or reserve_bytes > MAX_RESERVATION_BYTES:
             raise StateCapacityError("requested journal reservation exceeds limit")
         with self._connection() as db:
+            db.execute("BEGIN IMMEDIATE")
             sessions_count = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+            overflow = sessions_count + 1 + expected_sessions - MAX_ROWS
+            if overflow > 0:
+                deleted = db.execute(
+                    "DELETE FROM sessions WHERE id IN ("
+                    "SELECT id FROM sessions WHERE status != 'RUNNING' "
+                    "ORDER BY started_at_ms, rowid LIMIT ?)",
+                    (overflow,),
+                ).rowcount
+                if deleted < overflow:
+                    raise StateCapacityError("V5 journal session limit reached")
             ticks_count = db.execute("SELECT COUNT(*) FROM ticks").fetchone()[0]
-            if sessions_count + 1 + expected_sessions > MAX_ROWS:
-                raise StateCapacityError("V5 journal session limit reached")
             if ticks_count + expected_ticks > MAX_TICKS:
                 raise StateCapacityError("V5 journal tick limit reached")
             self._ensure_capacity(db, reserve_bytes + 2_048)
@@ -349,7 +358,9 @@ class WorkspaceState:
 
     def storage_status(self) -> dict[str, Any]:
         with self._connection() as db:
-            sessions = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+            sessions, running = db.execute(
+                "SELECT COUNT(*), COUNT(CASE WHEN status='RUNNING' THEN 1 END) FROM sessions"
+            ).fetchone()
             ticks = db.execute("SELECT COUNT(*) FROM ticks").fetchone()[0]
             reserved = db.execute(
                 "SELECT COALESCE(SUM(bytes),0) FROM reservations"
@@ -357,7 +368,7 @@ class WorkspaceState:
         return {
             "status": (
                 "LIMIT_REACHED"
-                if sessions >= MAX_ROWS
+                if running >= MAX_ROWS
                 or self._database_bytes() + reserved >= MAX_DATABASE_BYTES
                 or ticks >= MAX_TICKS
                 else "AVAILABLE"

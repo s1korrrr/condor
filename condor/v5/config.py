@@ -296,7 +296,7 @@ def _validate_base_url(value: str, name: str) -> str:
 
 
 def read_secret_file(path: Path) -> str:
-    """Read one bounded secret without following a symlink."""
+    """Read one bounded secret, allowing one line ending but no other whitespace."""
     descriptor = None
     try:
         descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -311,6 +311,7 @@ def read_secret_file(path: Path) -> str:
     finally:
         if descriptor is not None:
             os.close(descriptor)
+    raw = raw.removesuffix(b"\r\n") if raw.endswith(b"\r\n") else raw.removesuffix(b"\n")
     if not 32 <= len(raw) <= 256 or any(byte < 0x21 or byte > 0x7E for byte in raw):
         return ""
     return raw.decode("ascii")

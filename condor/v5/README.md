@@ -5,29 +5,46 @@ This is a separate FastAPI application factory. Run it with
 the V5 process. It does not import Condor's `AgentStore`, `TickEngine`, generic
 agent routes, MCP tools, Hummingbot client, or deployment controls.
 
-The app requires these process settings:
+## V5 dashboard environment
 
-| Setting | Use |
-| --- | --- |
-| `V5_RUNTIME_ROOT` | V5-only database and local notes. Must not point into `.condor`. |
-| `V5_DASHBOARD_TOKEN_FILE` | Login token for the V5-only HttpOnly cookie. |
-| `V5_DASHBOARD_ORIGIN` | Exact browser origin checked on every write request. |
-| `V5_OBSERVATION_BASE_URL` | Fixed observation API base URL. |
-| `V5_OBSERVATION_TOKEN_FILE` | Read token for evidence and task-profile reads. |
-| `V5_ADVISOR_CONTROL_BASE_URL` | Fixed advisor service URL. |
-| `V5_ADVISORY_REQUEST_TOKEN_FILE` | Separate request token for bounded assessment POSTs. |
-| `V5_STOCK_AGENTS_ROOT` | Read-only V5 stock agent folders; defaults to the repository `agents_v5/`. |
-| `V5_FRONTEND_DIST` | Separate frontend build root; defaults to `frontend/dist-v5/`. |
-| `V5_COOKIE_SECURE` | Defaults to `true`; use `false` only for an isolated local development browser. |
-| `V5_PAPER_STATUS_FILE` | Optional. Absolute `<bot>.status.json` of the native paper runtime, mounted read-only. Unset keeps every projection unbound and unchanged. |
-| `V5_TRADEPAD_URL` | Optional fixed HTTP(S) base URL for the read-only Tradepad owner. Unset reports not connected. |
-| `V5_TRADEPAD_CAMPAIGN_ID` | Optional exact tested-window campaign ID, for example `w1772323200-1790812800`. Required to open a campaign; other campaign IDs are refused. |
-| `V5_RESEARCH_URL` | Optional fixed HTTP(S) base URL for the Research OS owner. Only its overview and network are read; unset reports not connected. The displayed generation time and age describe the owner projection, not its choice of source tree. |
-| `V5_LEARNING_SOURCE` | Optional. Exactly `research_os_v1` enables the read-only Learning / Factory / Lineage projection source (design `docs/plans/active/2026-11-18-v5-learning-factory-lineage-projection.md` §5 in rsibot, frozen appendix vendored in `condor/v5/schemas/learning_projection/`). Unset disables it: `/api/v5/learning/{manifest,lessons,records,jobs}` answer a typed `503 PUBLICATION_UNAVAILABLE`, never fixture data. Any other value fails startup. When set, all five `V5_LEARNING_*` names are required; a partial or invalid set fails startup. |
-| `V5_LEARNING_OWNER_URL` | Fixed HTTP(S) owner projection-proxy origin. Path must be empty or `/`; no query, fragment or credentials. Read with its own 256,000-byte cap, 4 s deadline, no retries, identity encoding and no credentials. |
-| `V5_LEARNING_SCOPE_ID` | Must match the selected artifact. The authenticated browser reads it from `/api/v5/auth` and supplies `scope_id` on every projection request. Condor never appends or rewrites it: missing or different is `400 INVALID_QUERY`; valid raw query bytes pass through unchanged. |
-| `V5_LEARNING_SCOPE_SHA256` | Canonical SHA-256 (64 lowercase hex characters) of an artifact pinned in `schemas/learning_scopes/PIN.md`. Unknown pins, corrupted canonical preimages and scope ID mismatches fail startup. Both runtimes check the envelope summary and row membership against the selected artifact, not the response's own membership claims. |
-| `V5_LEARNING_PROJECTION_REVISION` | The frozen projection revision hash, lowercase hex, 64 characters. An owner envelope with another revision is rejected. |
+Machine-local Compose overlays supply deployment values and bind mounts. They
+are private by design and are tracked in neither Condor nor rsibot. This table
+describes the inputs, not the contents of those overlays.
+
+| Setting | Where it comes from and what it does | When unset |
+| --- | --- | --- |
+| `V5_RUNTIME_ROOT` | Deployment's dedicated writable V5 state mount for the database and local notes. Must not overlap ordinary Condor state. | Startup fails. |
+| `V5_DASHBOARD_TOKEN_FILE` | Deployment secret mount for the V5 login token and HttpOnly session cookie. | Startup fails. |
+| `V5_DASHBOARD_ORIGIN` | Deployment's browser-facing origin, without a path; checked on writes. | Startup fails. |
+| `V5_OBSERVATION_BASE_URL` | Deployment's fixed observation API base URL for evidence and task reads. | Startup fails. |
+| `V5_OBSERVATION_TOKEN_FILE` | Secret mount provisioned for read access to the observation API. | Startup fails. |
+| `V5_ADVISOR_CONTROL_BASE_URL` | Deployment's fixed advisor service URL for bounded assessments. | Startup fails. |
+| `V5_ADVISORY_REQUEST_TOKEN_FILE` | Advisor request secret mount, distinct from the observation read token. | Startup fails. |
+| `V5_STOCK_AGENTS_ROOT` | Optional deployment override for read-only stock agent definitions. | Uses the repository `agents_v5/`. |
+| `V5_FRONTEND_DIST` | Deployment path to the separate V5 frontend build. | Uses `frontend/dist-v5/`. |
+| `V5_COOKIE_SECURE` | Operator override; use `false` only for an isolated local development browser. | `true`; cookies require HTTPS. |
+| `V5_PAPER_STATUS_FILE` | Absolute `<bot>_paper.status.json` path from the native paper runtime, mounted read-only. | Paper projections remain unbound. |
+| `V5_CANDLE_STORE_SOCKET` | Absolute `.sock` path mounted from the candle-store owner. | Candle-store views are not configured and their API returns 404. |
+| `V5_HOST_OPERATIONS_FILE` | Read-only bind of the host monitor's sanitized operations export. | Uses the observation API for a bound paper bot's operations read. |
+| `V5_HELM_STATUS_FILE` | Absolute `<bot>_paper.status.json` path, a read-only bind of the Helm trial's `runtime_status` export. | The Helm endpoint reports `UNBOUND`. |
+| `V5_MONEY_SAMPLER` | Deployment opt-in: `1` records money samples every five minutes in the V5 runtime root. | No new samples; retained rows remain readable. |
+| `V5_TRADEPAD_URL` | Fixed HTTP(S) base URL from the read-only Tradepad owner. Not wired in the current deployment. | Tradepad reports not connected. |
+| `V5_TRADEPAD_CAMPAIGN_ID` | Exact tested-window ID from the Tradepad owner publication, e.g. `w1772323200-1790812800`. Not wired in the current deployment. | No campaign is selected or admitted. |
+| `V5_RESEARCH_URL` | Fixed HTTP(S) base URL from the Research OS owner, used only for the overview and network. Displayed generation time and age describe the projection, not its source tree. | Research reports not connected. |
+
+All five Learning settings are intentionally **unset** until the pilot packet is
+approved. D07 and D12 stay off. With all five unset, the Learning / Factory /
+Lineage owner projection is disabled: `/api/v5/learning/{manifest,lessons,records,jobs}`
+return `503 PUBLICATION_UNAVAILABLE`, never fixture data. Missing any setting
+when another is supplied, or supplying an invalid value, fails startup.
+
+| Setting | Where it comes from and what it does | When unset |
+| --- | --- | --- |
+| `V5_LEARNING_SOURCE` | The pilot packet selects exactly `research_os_v1`, the read-only projection protocol frozen in `schemas/learning_projection/`. | Disabled with the other four unset. |
+| `V5_LEARNING_OWNER_URL` | The pilot packet's fixed HTTP(S) Research OS projection-proxy origin, with no path other than `/`, query, fragment or credentials. Reads use identity encoding and no credentials, with a 256,000-byte cap, four-second deadline and no retries. | No owner proxy bound. |
+| `V5_LEARNING_SCOPE_ID` | Identifier from the approved scope artifact. Authenticated browsers get it from `/api/v5/auth` and send it on each projection request. Condor rejects a missing or mismatched scope with `400 INVALID_QUERY` and forwards valid query bytes unchanged. | No scope selected. |
+| `V5_LEARNING_SCOPE_SHA256` | Canonical SHA-256 of the approved scope artifact pinned in `schemas/learning_scopes/PIN.md`; used to validate envelope and row membership. | No scope digest pinned. |
+| `V5_LEARNING_PROJECTION_REVISION` | Frozen 64-character lowercase hexadecimal revision from the approved pilot contract; must match the stage of the scope pin. Other owner revisions are rejected. | No projection revision pinned. |
 
 Tradepad's owner publishes numeric PnL as a float; numeric values are shown as published, not as exact accounting. Decimal strings, when supplied, retain their text. Browsers without lossless JSON primitive source access fail closed rather than display a rounded number. The campaign owner may publish no generation time or freshness deadline; neither a successful refresh nor the Research tree selection establishes freshness. Bridge limits in `config.py` reject oversized collections without truncating them: 10,000 strategies or sources, 20,000 network nodes, 100,000 network edges, and 10,000 statistics, facet or limitation rows. Per-endpoint byte limits are 4–64 MiB and the deadline is 20 seconds. Collection caps are checked after decode; the byte cap bounds the work. The pages label display subsets.
 
@@ -90,11 +107,13 @@ receives the provider key. A dashboard loop waits at least fifteen minutes per
 tick, allows at most 96 ticks, and stops without replay after process restart.
 
 The V5 process takes an exclusive lock on its runtime root before opening the
-journal. Only one dashboard process may use that root. Session and tick history
-is append-only and is not pruned automatically. The journal stops accepting new
-work at 200 sessions, 20,000 ticks, or 32 MiB; a report reserves outcome space
-before the API request starts. To make a consistent SQLite backup, stop the V5
-service and run:
+journal. Only one dashboard process may use that root. To stay within 200
+sessions, admission prunes the oldest terminal sessions and their ticks in the
+same transaction. Running sessions are never pruned, and only one report loop
+can run at a time. Admission still refuses work if running sessions and the
+new work cannot fit, or if the 20,000-tick or 32 MiB limit would be exceeded.
+A report reserves outcome space before the API request starts. To make a
+consistent SQLite backup, stop the V5 service and run:
 
 ```python
 from pathlib import Path

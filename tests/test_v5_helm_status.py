@@ -164,6 +164,37 @@ def test_path_like_and_out_of_range_values_are_withheld_and_counted(tmp_path):
     assert "secret" not in text and "/home/hummingbot" not in text and "command_id" not in text
 
 
+def test_native_owner_detail_reasons_are_shown_not_withheld(tmp_path):
+    # The native runtime builds "<owner>: <detail>" (component_paper_runtime); a no-space code check dropped every one.
+    reasons = ["modular_spot_helm_v5_paper: native_candles_unavailable", "fresh_books_required:BNB-USDC"]
+    status = read_helm_status(write(tmp_path, helm_status(ready=False, reasons=reasons)), now=NOW)["status"]
+    assert status["reasons"] == reasons and status["withheld"] == 0
+
+
+def test_invalid_reasons_are_still_withheld_and_counted(tmp_path):
+    reasons = ["runtime_stopped", "/home/hummingbot/data/private: failed", "x" * 257, 7]
+    status = read_helm_status(write(tmp_path, helm_status(reasons=reasons)), now=NOW)["status"]
+    assert status["reasons"] == ["runtime_stopped"] and status["withheld"] == 3
+
+
+def test_mandate_publishes_the_effective_end_when_the_runtime_does(tmp_path):
+    # effective_until_ms is the earliest of mandate, authorization and eligibility ends (native_helm_observation).
+    value = helm_status()
+    value["helm"]["mandate"].update(effective_until_ms=1796000000000, authorization_valid_until_ms=1796000000000)
+    status = read_helm_status(write(tmp_path, value), now=NOW)["status"]
+    assert status["mandate"]["effective_until_ms"] == 1796000000000
+    assert status["mandate"]["valid_until_ms"] == 1796496650500 and status["withheld"] == 0
+
+
+def test_mandate_effective_end_is_unknown_when_not_published_and_withheld_when_invalid(tmp_path):
+    status = read_helm_status(write(tmp_path, helm_status()), now=NOW)["status"]
+    assert status["mandate"]["effective_until_ms"] is None and status["withheld"] == 0
+    value = helm_status()
+    value["helm"]["mandate"]["effective_until_ms"] = 999999999999999999
+    status = read_helm_status(write(tmp_path, value), now=NOW)["status"]
+    assert status["mandate"]["effective_until_ms"] is None and status["withheld"] == 1
+
+
 @pytest.mark.parametrize("generated", [-1e300, 1e300, 0, "1793929890"])
 def test_generated_time_must_be_a_real_epoch(tmp_path, generated):
     result = read_helm_status(write(tmp_path, helm_status(generated_at=generated)), now=NOW)

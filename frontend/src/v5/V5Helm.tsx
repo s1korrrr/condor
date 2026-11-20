@@ -19,7 +19,7 @@ export type HelmStatus = {
   steps: Amount; actions: Amount; phase: string | null; profile_id: string | null; entries_held: string | null; operator_entry_paused: boolean | null;
   kill_switch: boolean | null; adaptive_actions: string | null; funding: string | null; image_tag: string | null;
   shutdown: { checkpoint: boolean | null; clean: boolean | null } | null;
-  mandate: { mandate_id: string | null; revision: number | null; revocation_id: string | null; state: string | null; valid_until_ms: number | null } | null;
+  mandate: { mandate_id: string | null; revision: number | null; revocation_id: string | null; state: string | null; valid_until_ms: number | null; effective_until_ms?: number | null } | null;
   risk: { reason: string | null; latched: boolean | null; daily_loss_use: Amount; risk_reference_quote: Amount; unit: string | null } | null;
   control_rejections: { count: Amount; recent: ({ action: string | null; at_ms: number | null; reason: string | null } | null)[] } | null;
   recipe_version: string | null;
@@ -38,6 +38,10 @@ export async function readHelm(): Promise<HelmRead> {
 /** Owner codes as words; anything that is not text is shown as missing, never coerced. */
 const words = (value: unknown) => typeof value === "string" && value ? value.replaceAll("_", " ") : "—";
 const at = (ms: number | null | undefined) => utcMin(ms) ?? "unknown time";
+/** The runtime's effective end (earliest of mandate, authorization and eligibility) when it publishes one, else the mandate's own end, named as such. */
+const mandateEnd = (mandate: NonNullable<HelmStatus["mandate"]>) => mandate.effective_until_ms != null
+  ? `until ${at(mandate.effective_until_ms)}`
+  : `mandate ends ${at(mandate.valid_until_ms)} (effective end not published)`;
 
 /** Helm page: the Helm paper bot's own published runtime state, read-only. Nothing here sends a control command. */
 export function V5Helm() {
@@ -73,7 +77,7 @@ export function V5Helm() {
         {status.withheld > 0 && <p className="v5m-hint" role="note">{count(status.withheld)} published value(s) did not match their expected form and are not shown.</p>}
         <div className="v5m-stats v5m-stats--wide">
           <Stat label="New entries" value={status.operator_entry_paused === true ? "Paused" : status.entries_held ? "Held" : status.operator_entry_paused === false ? "Not paused" : "Not published"} note={status.entries_held ? words(status.entries_held) : status.operator_entry_paused === false ? "no entry hold published" : "pause state not published"} warn={!!status.entries_held || status.operator_entry_paused !== false} />
-          <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? <><span>{status.mandate.mandate_id ?? "id not published"}</span> · revision {status.mandate.revision == null ? "not published" : count(status.mandate.revision)} · until {at(status.mandate.valid_until_ms)}</> : "not published"} title={status.mandate?.revocation_id ? `Revocation id ${status.mandate.revocation_id} (shared by the mandate and its authorization)` : undefined} />
+          <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? <><span>{status.mandate.mandate_id ?? "id not published"}</span> · revision {status.mandate.revision == null ? "not published" : count(status.mandate.revision)} · {mandateEnd(status.mandate)}</> : "not published"} title={status.mandate?.revocation_id ? `Revocation id ${status.mandate.revocation_id} (shared by the mandate and its authorization)` : undefined} />
           <Stat label="Risk latch" value={tri(status.risk?.latched, "Latched", "Clear")} note={words(status.risk?.reason)} warn={status.risk?.latched !== false} />
           <Stat label="Daily loss used" value={<OwnerValue value={status.risk?.daily_loss_use} kind="usdc" unit="" />} note={<>of the <span title={ownerTitleText(status.risk?.risk_reference_quote == null ? undefined : String(status.risk.risk_reference_quote))}>{usdc(status.risk?.risk_reference_quote, status.risk?.unit ?? "")}</span> risk reference</>} />
           <Stat label="Kill switch" value={tri(status.kill_switch, "On", "Off")} warn={status.kill_switch !== false} />

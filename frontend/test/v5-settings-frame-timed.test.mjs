@@ -81,6 +81,28 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     return new Response(JSON.stringify(body),{status:200,headers:{'Content-Type':'application/json'}});
   };
   try {
+    await context.test('Refresh settings without a bound paper bot skips owner reads', async () => {
+      route = '/settings';
+      client.setQueryData(['v5-auth'],{authenticated:true});
+      client.setQueryData(['v5-profile'],baseline.profile.body);
+      client.setQueryData(['v5-settings'],settings);
+      const container = document.createElement('div');
+      const mount = createRoot(container);
+      try {
+        await React.act(async () => {mount.render(React.createElement(V5App));});
+        assert.match(container.textContent,/Owner readiness is reported separately/);
+        const refresh = [...container.querySelectorAll('button')].find(button => button.textContent === 'Refresh settings');
+        assert.ok(refresh);
+        const start = requests.length;
+        await React.act(async () => {refresh.click();});
+        const refreshed = requests.slice(start);
+        assert.ok(refreshed.includes('/api/v5/settings'));
+        assert.deepEqual(refreshed.filter(request => request.startsWith('/api/v5/dashboard/read')),[]);
+      } finally {
+        await React.act(async () => mount.unmount());
+        client.clear();
+      }
+    });
     for (const [pathname,heading] of routes.filter(([pathname]) => pathname === '/settings' || pathname === '/market/stocks')) await context.test(pathname,async () => {
       route = pathname;
       const requestStart = requests.length;

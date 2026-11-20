@@ -1,6 +1,7 @@
 import json
 from dataclasses import replace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from condor.v5.app import create_app
@@ -154,6 +155,35 @@ def test_sampler_records_on_start_and_route_serves_rows(tmp_path):
         assert client.get("/api/v5/money", params={"range": "1y"}).status_code == 422
         assert client.get("/api/v5/money", params={"range": "30d"}).status_code == 422
         assert client.post("/api/v5/money", headers={"Origin": ORIGIN}).status_code == 405
+
+
+@pytest.mark.parametrize(("stale_sections", "gap"), [
+    ({"wallet"}, "wallet: stale"),
+    ({"accounting"}, "accounting: stale"),
+    ({"wallet", "accounting"}, "wallet: stale; accounting: stale"),
+])
+def test_sampler_records_gap_when_owner_read_is_stale_at_receipt(tmp_path, stale_sections, gap):
+    now_ms = NOW_MS
+
+    class DelayedUpstream(PaperUpstream):
+        async def observation(self, path):
+            nonlocal now_ms
+            payload = await super().observation(path)
+            # A selected snapshot is exactly 30 seconds old before the response arrives.
+            generated = now_ms - 30_000 if payload["section"] in stale_sections else now_ms
+            now_ms += 1
+            return dict(payload, generated_at_ms=generated, source_at_ms=generated,
+                        observed_at_ms=generated, read_at_ms=now_ms)
+
+    settings = replace(make_settings(tmp_path), paper_status_file=write_status(tmp_path, status()), money_sampler=True)
+    app = create_app(settings=settings, upstream=DelayedUpstream(), static_dir=tmp_path / "dist", clock=lambda: now_ms)
+    with TestClient(app) as client:
+        signed_in(client)
+        for _ in range(50):
+            rows = client.get("/api/v5/money").json()["rows"]
+            if rows:
+                break
+        assert rows == [{"bot": "v5", "at_ms": NOW_MS, "gap": gap}]
 
 
 def test_sampler_is_off_by_default_and_daily_does_not_depend_on_range(tmp_path):

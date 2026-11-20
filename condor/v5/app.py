@@ -32,12 +32,14 @@ from .candles import MAX_TIMESTAMP, CandleOwner, OwnerUnavailable, validate_quer
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
+from .http_pool import SharedSession
 from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
 from .learning import FixtureLearningAPI, learning_router
 from .learning_projection import PROJECTION_PATHS, ResearchOwnerLearningSource
 from .paper import PaperObservation, read_paper_status
 from .read_bridge import read_research, read_tradepad, research_route, tradepad_route
 from .state import StateCapacityError, WorkspaceState
+from . import timing
 from .upstream import UpstreamError, V5Upstream
 
 logger = logging.getLogger(__name__)
@@ -313,6 +315,7 @@ def create_app(
     clock=lambda: time.time_ns() // 1_000_000,
     learning_source: FixtureLearningAPI | None = None,
     projection_source: ResearchOwnerLearningSource | None = None,
+    reuse_bridge_connections: bool = True,
 ) -> FastAPI:
     config = settings or Settings.from_env()
     store = state or WorkspaceState(config.runtime_root, clock=clock)
@@ -322,6 +325,8 @@ def create_app(
         KNOWN_TASK_IDS if config.paper_status_file is not None else ADVISOR_TASK_IDS
     )
     api = upstream or V5Upstream(config)
+    # One session for the Tradepad/Research bridge reads, closed on shutdown. False keeps a session per read.
+    bridge_session = SharedSession() if reuse_bridge_connections else None
     candle_owner = (
         CandleOwner(str(config.candle_store_socket))
         if config.candle_store_socket
@@ -401,6 +406,11 @@ def create_app(
             close = getattr(store, "close", None)
             if callable(close):
                 close()
+            if bridge_session is not None:
+                await bridge_session.close()
+            api_close = getattr(api, "close", None)  # V5Upstream owns a shared session; test doubles have none
+            if api_close is not None:
+                await api_close()
 
     app = FastAPI(
         title="RSI V5 Workspace",
@@ -416,11 +426,20 @@ def create_app(
 
     @app.middleware("http")
     async def safe_headers(request: Request, call_next):
-        response = await call_next(request)
+        # scope["path"], not request.url: building the URL decodes the raw query string, which a hostile non-UTF-8
+        # query must not be able to fail before the route rejects it.
+        timed, token = timing.begin() if request.scope["path"].startswith("/api/v5/") else (None, None)
+        try:
+            response = await call_next(request)
+        finally:
+            if token is not None:
+                timing.end(token)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-V5-Authority"] = "reports-only"
+        if timed is not None:
+            response.headers["Server-Timing"] = timed.header()
         # Every response: HTML entry routes include /agents, /sessions/... and
         # /settings, and JSON never needs a weaker policy.
         response.headers["Content-Security-Policy"] = (
@@ -512,7 +531,11 @@ def create_app(
         """One bounded read of the configured paper status; None when not configured."""
         if config.paper_status_file is None:
             return None
-        return read_paper_status(config.paper_status_file, now=clock() / 1000)
+        started = time.perf_counter()
+        try:
+            return read_paper_status(config.paper_status_file, now=clock() / 1000)
+        finally:
+            timing.record_parse(time.perf_counter() - started)
 
     async def current_paper() -> PaperObservation | None:
         if config.paper_status_file is None:
@@ -573,6 +596,7 @@ def create_app(
             raise HTTPException(404) from None
         except ValueError:
             raise HTTPException(422, detail={"code": "invalid_candle_query"}) from None
+        started = time.perf_counter()
         try:
             data = await (
                 candle_owner.read_summary()
@@ -589,6 +613,8 @@ def create_app(
                 status_code=503,
                 headers={"Cache-Control": "no-store"},
             )
+        finally:
+            timing.record_owner(time.perf_counter() - started)
 
     @app.get("/api/v5/dashboard/read", dependencies=[Depends(require_auth)])
     async def dashboard_compatibility_read(
@@ -596,11 +622,11 @@ def create_app(
     ):
         tradepad = tradepad_route(path, config.tradepad_campaign_id)
         if tradepad is not None:
-            raw = await read_tradepad(config.tradepad_url, *tradepad)
+            raw = await read_tradepad(config.tradepad_url, *tradepad, bridge_session)
             return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
         research = research_route(path)
         if research is not None:
-            raw = await read_research(config.research_url, *research)
+            raw = await read_research(config.research_url, *research, bridge_session)
             return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
         paper = await current_paper()
         result = (

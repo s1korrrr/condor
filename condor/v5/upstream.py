@@ -5,12 +5,15 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from urllib.parse import parse_qsl, urlsplit
 from typing import Any
 
 import aiohttp
 
 from .config import Settings, read_secret_file
+from .http_pool import SharedSession, lease
+from .timing import record_owner
 
 MAX_RESPONSE_BYTES = 256_000
 MAX_REQUEST_BYTES = 2_048
@@ -44,9 +47,16 @@ class UpstreamError(RuntimeError):
 
 
 class V5Upstream:
-    def __init__(self, settings: Settings, *, session_factory=aiohttp.ClientSession):
+    def __init__(self, settings: Settings, *, session_factory=None):
         self.settings = settings
+        # An injected factory (tests) is called once per request, as before. By default every owner read reuses
+        # one session, created on first use and closed by ``close`` when the app shuts down.
         self.session_factory = session_factory
+        self._shared = SharedSession() if session_factory is None else None
+
+    async def close(self) -> None:
+        if self._shared is not None:
+            await self._shared.close()
 
     async def _request(
         self,
@@ -68,16 +78,18 @@ class V5Upstream:
             if len(data) > MAX_REQUEST_BYTES:
                 raise UpstreamError("request_too_large", http_status=400)
             headers["Content-Type"] = "application/json"
+        started = time.perf_counter()
         try:
             async with asyncio.timeout(timeout_sec):
                 timeout = aiohttp.ClientTimeout(total=timeout_sec)
-                async with self.session_factory(timeout=timeout) as session:
+                async with lease(self._shared, self.session_factory, timeout) as (session, extra):
                     async with session.request(
                         method,
                         base_url + path,
                         headers=headers,
                         data=data,
                         allow_redirects=False,
+                        **extra,
                     ) as response:
                         # read(n) may return one fragment; read through EOF
                         # under the request timeout, stopping at the bound.
@@ -115,6 +127,8 @@ class V5Upstream:
             raise UpstreamError("upstream_timeout") from exc
         except aiohttp.ClientError as exc:
             raise UpstreamError("upstream_unavailable") from exc
+        finally:
+            record_owner(time.perf_counter() - started)
 
     async def observation(self, path: str) -> dict[str, Any]:
         allowed = {

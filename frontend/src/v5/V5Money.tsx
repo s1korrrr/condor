@@ -17,20 +17,24 @@ export { readMoney } from "./money-api";
 import "./market.css";
 
 type CrossLine = { venue: string; lane: string; close: [number, number][] };
-type Hold = { closes: Record<string, [number, number][] | undefined> };
+type Hold = { closes: Record<string, [number, number][] | undefined>; failures: Record<string, string> };
 const RANGES = ["24h", "7d"] as const;
 
-
-/** The reference spot lane's closes for each coin over the candle store's 7 days, read one after another. */
+/**
+ * The reference spot lane's closes for each coin over the candle store's 7 days. The five reads are independent, so
+ * they run together; a coin whose read fails keeps the owner's reason rather than passing for a coin with no closes.
+ */
 async function readHold(): Promise<Hold> {
-  const closes: Record<string, [number, number][] | undefined> = {};
-  for (const coin of MARKET_COINS) {
-    try {
-      const view = await readCandleStore<{ series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" });
-      closes[coin] = view.series.find(line => line.lane === REFERENCE.spot)?.close;
-    } catch { closes[coin] = undefined; }
-  }
-  return { closes };
+  const reads = await Promise.allSettled(MARKET_COINS.map(async coin =>
+    (await readCandleStore<{ series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" })).series.find(line => line.lane === REFERENCE.spot)?.close));
+  const closes: Hold["closes"] = {}, failures: Hold["failures"] = {};
+  MARKET_COINS.forEach((coin, index) => {
+    const read = reads[index];
+    // A failed coin keeps its key with no closes, so the basket is never quietly reduced to fewer coins.
+    closes[coin] = read.status === "fulfilled" ? read.value : undefined;
+    if (read.status === "rejected") failures[coin] = read.reason instanceof Error ? read.reason.message : String(read.reason);
+  });
+  return { closes, failures };
 }
 
 const num = (value: string | null | undefined) => value != null && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -80,6 +84,9 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const holdView = hold.data ? holdReturn(hold.data.closes) : null;
   // V5 over its own first and last sample in the 7-day rows; it is "the same window" only if both ends match exactly.
   const v5View = money.data?.range === "7d" ? equityChange(rows, "v5") : null;
+  const holdFailures = Object.entries(hold.data?.failures ?? {});
+  const holdEmpty = holdView?.missing.filter(coin => !hold.data?.failures[coin]) ?? [];
+  const holdUnavailable = [holdFailures.length ? `could not read 7-day closes for ${holdFailures.map(([coin, reason]) => `${coin} (${reason})`).join(", ")}` : "", holdEmpty.length ? `no 7-day closes for ${holdEmpty.join(", ")}` : ""].filter(Boolean).join("; ") || "the five coins share no first and last minute";
   const sameWindow = holdView?.pct != null && v5View?.pct != null && holdView.startS! * 1000 === v5View.startMs && holdView.endS! * 1000 === v5View.endMs;
 
   return <div className="v5m">
@@ -115,9 +122,9 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
         <article className="v5m-card"><h3>By coin</h3><p className="v5m-hint">Lifetime closed-trade profit and held-coin gain or loss per coin, latest sample</p>
           <BarsChart rows={coinRows} bars={[{ id: "realized", label: "Closed-trade profit", color: CHART.positive }, { id: "unrealized", label: "Held-coin gain or loss", color: CHART.negative }]} height={200} ariaLabel="V5 P&L by coin" emptyText="No per-coin values in the latest sample." /></article>
         <article className="v5m-card"><h3>Against holding the five coins</h3><p className="v5m-hint">Equal weights in {MARKET_COINS.join(", ")} over the candle store's 7 days ({REFERENCE.venue} spot {REFERENCE.quote})</p>
-          {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : hold.isPending ? <p role="status" className="v5m-hint">Reading 7 days of prices…</p> : !holdView || holdView.pct == null ? <p className="v5m-hint">Holding comparison unavailable{holdView?.missing.length ? `: no 7-day closes for ${holdView.missing.join(", ")}` : ": the five coins share no first and last minute"}. The basket is never reduced to fewer coins.</p> : <div className="v5m-stats">
-            <Stat label="Holding the five coins" value={pct(holdView.pct)} title={holdView.title} note={`from ${at(holdView.startS! * 1000)} to ${at(holdView.endS! * 1000)}`} />
-            <Stat label="V5 wallet equity" value={pct(v5View?.pct)} title={v5View?.title} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${utcExact(v5View.startMs) ?? "unknown time"} to ${utcExact(v5View.endMs) ?? "unknown time"}${sameWindow ? " · same window" : " · its own record, not the same window"}`} />
+          {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : <div className="v5m-stats">
+            <Stat label="Holding the five coins" value={hold.isPending ? "—" : pct(holdView?.pct)} title={holdView?.title} note={hold.isPending ? <span role="status">Reading 7 days of prices…</span> : holdView?.pct == null ? `Holding comparison unavailable: ${holdUnavailable}. The basket is never reduced to fewer coins.` : `from ${at(holdView.startS! * 1000)} to ${at(holdView.endS! * 1000)}`} />
+            <Stat label="V5 wallet equity" value={pct(v5View?.pct)} title={v5View?.title} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${utcExact(v5View.startMs) ?? "unknown time"} to ${utcExact(v5View.endMs) ?? "unknown time"}${hold.isPending ? " · compared once the prices arrive" : sameWindow ? " · same window" : " · its own record, not the same window"}`} />
           </div>}
           <p className="v5m-hint">Only the candle store's 7 days can be priced, so the comparison never reaches the trial start (2026-10-29).</p></article>
       </div>

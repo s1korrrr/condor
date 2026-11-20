@@ -49,7 +49,7 @@ export function V5Helm() {
   const ageS = status ? status.age_s + Math.max(0, now - helm.dataUpdatedAt) / 1000 : null;
   const fresh = read?.state === "FRESH";
   const coins = status?.symbols.map(row => helmCoinRow(row, { fresh: fresh && ageS != null && ageS <= 30, nowS: status.generated_at + (ageS ?? status.age_s) })) ?? [];
-  const coinsNote = helmCoinsNote(coins);
+  const coinsNote = helmCoinsNote(coins, status?.withheld);
   const rejectionCount = status?.control_rejections?.count;
   const noRejections = rejectionCount === 0 || typeof rejectionCount === "string" && /^-?0+(?:\.0+)?$/.test(rejectionCount);
   const lastAt = at(status ? status.generated_at * 1000 : null);

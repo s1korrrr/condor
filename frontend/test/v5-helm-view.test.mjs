@@ -43,13 +43,26 @@ test('Helm daily loss keeps its owner title off the phone helper and formats eve
 test('unpublished signals have no default recipe numbers and render table and narrow-screen cards', () => {
   const html = render();
   assert.equal(html.match(/not published by Helm|Signal time not published/g), null, 'no per-row repeats of "not published"');
-  assert.equal(html.match(/Helm does not publish its buy rule or signal values; the state and hold reason below are Helm&#x27;s own\./g)?.length, 1);
+  assert.equal(html.match(/No signal values are shown\. Helm did not publish them\./g)?.length, 1);
   assert.doesNotMatch(html, /RSI\(17\)|through 29|by default|Current RSI values are not published/);
   assert.match(html, /class="v5m-card v5m-helm-table"/);
   assert.match(html, /class="v5m-helm-mobile"/);
   assert.match(html, /<article class="v5m-card v5m-helm-coin"><h3>BNB-USDC<\/h3>/);
   assert.match(html, /<th class="is-number">Held/);
   assert.match(html, /<th class="is-number">Breakeven/);
+});
+
+test('a withheld value leaves the cause of a null signal uncertain, and stale rows hide the owner detail', () => {
+  const extra = { withheld: 1, symbols: [{ pair: 'BNB-USDC', signal: null, status: 'ready', candidate_hold: 'low_volatility' }] };
+  const fresh = render({ extra });
+  assert.match(fresh, /Helm did not publish them, or Condor withheld them as invalid\./);
+  assert.doesNotMatch(fresh, /does not publish/);
+  assert.match(fresh, /state and hold reason below come from Helm/);
+  assert.match(fresh, /State: ready · entry hold: low volatility/);
+  for (const stale of [render({ state: 'STALE', extra }), render({ age_s: 31, extra })]) {
+    assert.match(stale, /No signal values are shown\./);
+    assert.doesNotMatch(stale, /hold reason below|entry hold: low volatility/);
+  }
 });
 
 test('zero refused commands hides the section, unknown and nonzero counts do not', () => {
@@ -105,7 +118,7 @@ test('the single note explains dashes in rule and signal columns only, not Held 
   ] } });
   assert.match(html, /Buys when RSI\(21\) crosses up through 31/);
   assert.match(html, /RSI 40.5, 9.5 points above the line/);
-  assert.equal(html.match(/A dash in place of a buy rule or signal means Helm has not published it for that coin\./g)?.length, 1);
+  assert.equal(html.match(/A dash in place of a coin’s buy rule and signal means its signal values are unavailable\. Helm did not publish them\./g)?.length, 1);
   assert.match(html, /<dt>Held<\/dt><dd>—<\/dd><dt>Breakeven<\/dt><dd>—<\/dd>/);
   assert.equal(html.match(/Rule not published by Helm|Signal not published by Helm/g), null);
 });

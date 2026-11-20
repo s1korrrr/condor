@@ -113,14 +113,26 @@ test('missing bags and incomplete breakevens have a reason, zero bags have no in
   assert.equal(row(signal(), {}, { bag: { held_amount: '0.000', breakeven_price: '640' } }).breakeven, '—');
 });
 
-const NONE = 'Helm does not publish its buy rule or signal values; the state and hold reason below are Helm\'s own.';
+test('the note points to the state and hold reason only when the rows show both values', () => {
+  assert.match(helm.helmCoinsNote([row(null)], 0), /state and hold reason below/i);
+  for (const missing of [
+    row(null, { fresh: false }),
+    row(null, {}, { status: null }),
+    row(null, {}, { candidate_hold: null }),
+  ]) {
+    assert.doesNotMatch(helm.helmCoinsNote([missing], 0), /hold reason below/i);
+  }
+});
 
-test('the unpublished-signal note is one table-level sentence, and only for coins without a signal', () => {
-  const rows = (...signals) => signals.map((published, index) => helm.helmCoinRow(coin(published, { pair: `C${index}-USDC` }), { fresh: true, nowS }));
-  assert.equal(helm.helmCoinsNote(rows(null, null, null)), NONE);
-  assert.equal(helm.helmCoinsNote(rows(signal(), signal())), null);
+test('missing signals have one table note that accounts for withheld values', () => {
+  assert.equal(helm.helmCoinsNote([row(signal())]), null);
   assert.equal(helm.helmCoinsNote([]), null);
-  assert.equal(helm.helmCoinsNote(rows(signal(), null)), 'A dash in place of a buy rule or signal means Helm has not published it for that coin.');
+  for (const rows of [[row(null)], [row(signal()), row(null)]]) {
+    assert.doesNotMatch(helm.helmCoinsNote(rows, 0), /invalid/);
+    const note = helm.helmCoinsNote(rows, 1);
+    assert.match(note, /or Condor withheld them as invalid/);
+    assert.doesNotMatch(note, /does not publish/);
+  }
 });
 
 test('a coin whose signal is published still shows every published value beside an unpublished coin', () => {

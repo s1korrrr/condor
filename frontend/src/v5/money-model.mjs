@@ -5,8 +5,26 @@
  */
 
 import { decimalPercentRatio, ownerTitleText, rationalPercent } from './format.mjs';
+import { exactSignedSum } from './bots-position-model.mjs';
 
 export const SAMPLE_MS = 300_000;
+export const MONEY_SAMPLE_MAX_AGE_MS = SAMPLE_MS + 60_000;
+
+export function hasZeroExternalFlows(value) {
+  return typeof value === 'string' && value.length <= 128 && /^-?0+(\.0{1,30})?$/.test(value);
+}
+
+export function moneySinceStart(row) {
+  const unavailable = reason => ({ value: null, reason });
+  if (!row) return unavailable('no sample with values');
+  if (row.external_flows == null) return unavailable('owner external cash flows not published');
+  if (!hasZeroExternalFlows(row.external_flows)) return unavailable('owner external cash flows are not exactly zero');
+  const { equity, initial_funding: funding } = row;
+  const oppositeFunding = typeof funding === 'string' ? funding.startsWith('-') ? funding.slice(1) : `-${funding}` : null;
+  const value = exactSignedSum(equity, oppositeFunding);
+  if (value == null) return unavailable('owner equity or initial funding not published');
+  return { value, title: `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(value.replace(/^-/, '−'))}` };
+}
 
 const number = value => (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null);
 

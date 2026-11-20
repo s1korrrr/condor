@@ -30,7 +30,7 @@ import { paperCompleteRead, paperNativeHolds, paperSnapshotsAgree } from "@/v5/p
 import { utcExact } from "@/v5/shown.mjs";
 import { ownerTitleText, quantity, usdc } from '@/v5/format.mjs';
 import { latest, SAMPLE_MS } from "@/v5/money-model.mjs";
-import { paperAmount, paperQuantity, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionAdmissionError, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
+import { paperAmount, paperQuantity, paperQuantityValue, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionAdmissionError, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
 import { phoneRecordTime } from "@/v5/phone-records";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
@@ -760,7 +760,7 @@ function PaperRecords({ read, positions, executors, now, valuesAt = now, kind }:
     { id: "id", header: kind === "fills" ? "Fill ID" : kind === "positions" ? "Position ID" : "Executor ID", value: row => String(row[idKey] ?? "Not published"), size: 180, cell: row => <button className="paper-copy" onClick={() => { const id = String(row[idKey] ?? ""); void navigator.clipboard.writeText(id).then(() => { setCopied(id); setCopyError(false); }, () => setCopyError(true)); }} title="Copy full owner ID">{copied === row[idKey] ? "Copied" : String(row[idKey] ?? "Not published")}</button> },
     { id: "pair", header: "Pair", value: row => String(row.trading_pair ?? "Not published"), size: 130 },
     { id: "state", header: kind === "fills" ? "Side" : "State", value: row => paperWords(row.side ?? row.state), size: 150 },
-    { id: "quantity", header: kind === "executors" ? "Remaining close" : "Quantity", value: row => paperQuantity(kind === "executors" ? row.remaining_close_quantity : row.quantity, base(row)), cell: row => exactQuantity(kind === "executors" ? row.remaining_close_quantity : row.quantity, base(row)), size: 180 },
+    { id: "quantity", header: kind === "executors" ? "Remaining close" : "Quantity", kind: "number", value: row => paperQuantityValue(kind === "executors" ? row.remaining_close_quantity : row.quantity), cell: row => exactQuantity(kind === "executors" ? row.remaining_close_quantity : row.quantity, base(row)), size: 180 },
     ...(kind === "fills" ? [
       { id: "price", header: "Fill price", value: (row: PaperRow) => paperAmount(row.price, "USDC"), cell: (row: PaperRow) => exactAmount(row.price, "USDC"), size: 160 },
       { id: "fee", header: "Fee", value: (row: PaperRow) => paperAmount(row.fee_amount, String(row.fee_currency ?? "unit not published")), cell: (row: PaperRow) => exactAmount(row.fee_amount, String(row.fee_currency ?? "unit not published")), size: 160 },

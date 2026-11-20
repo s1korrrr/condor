@@ -293,6 +293,15 @@ test('quantity owner display carries the exact owner decimal for the hover title
   assert.deepEqual(format.ownerDisplay(null, 'quantity', { unit: 'BTC' }), { text: '—', exact: null, tone: 'none' });
 });
 
+test('quantity hover title is exact up to 12 fractional places and approximate above, down to "≈ 0 (rounded)"', () => {
+  assert.equal(format.ownerTitleText('0.016245819000000000'), '0.016245819000000000');
+  assert.equal(format.ownerTitleText('0.000000007317'), '0.000000007317');
+  assert.equal(format.ownerTitleText('0.0000000000005'), '≈ 0.000000000001 (rounded)');
+  assert.equal(format.ownerTitleText('0.00000000000049'), '≈ 0 (rounded)');
+  assert.equal(format.ownerDisplay('-0.00000000000049', 'quantity', { unit: 'BTC' }).exact, '≈ 0 (rounded)');
+  assert.equal(quantity('-0.00000000000049', 'BTC'), `> ${M}0.00000001 BTC`);
+});
+
 test('pct: signed with a true minus and a single percent sign; count: integers with separators', () => {
   assert.equal(pct(1.4512), '+1.45%');
   assert.equal(pct(-1.45), `${M}1.45%`);

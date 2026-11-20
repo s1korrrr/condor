@@ -11,6 +11,7 @@ export function pnl(value: unknown, digits?: number): { text: string; tone: 'up'
 export function price(value: unknown): string;
 export function coin(value: unknown, asset?: string): string;
 export function quantity(value: unknown, asset?: string): string;
+export function compareDecimal(left: unknown, right: unknown): -1 | 0 | 1 | null;
 export function pct(value: unknown, digits?: number): string;
 export type OwnerValueKind = 'usdc' | 'coin' | 'quantity' | 'price' | 'pct' | 'bps' | 'signed' | 'pnl';
 export type OwnerDisplay = { text: string; exact: string | null; tone: 'up' | 'down' | 'zero' | 'none' };

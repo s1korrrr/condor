@@ -306,8 +306,14 @@ export function paperAmount(value: unknown, unit: string, places = 4): string {
   return `${/^0(?:\.0+)?$/.test(shown) ? "0" : shown} ${unit}`;
 }
 
+/** The owner's exact coin amount when it is a plain decimal, else undefined: the value a table sorts, filters and exports. */
+export function paperQuantityValue(value: unknown): string | undefined {
+  return typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value) && value.length <= 128 ? value : undefined;
+}
+
 export function paperQuantity(value: unknown, unit: string): string {
-  return typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value) && value.length <= 128 ? quantity(value, unit) : "Not published";
+  const exact = paperQuantityValue(value);
+  return exact === undefined ? "Not published" : quantity(exact, unit);
 }
 
 export function paperExactAmount(value: unknown, unit: string): string {

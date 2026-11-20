@@ -196,10 +196,32 @@ export function coin(value, asset) {
  * Coin quantity held, bought or sold (the Bots page): `coin()`, except that a non-zero value is never shown as "0".
  * Below 0.001 it keeps three significant digits, up to 8 decimals (0.00000049; 0.00000123), the most the dashboard
  * shows. Under 0.00000001 it reads "< 0.00000001" ("> −0.00000001" when negative): plain digits, never exponent
- * text, and the exact value stays in the hover title. Zero is "0".
+ * text. Zero is "0".
+ *
+ * Hover title (`ownerTitle`, shared by every owner value): the owner's exact text when it has at most 12 fractional
+ * places after trailing zeros, which covers 18-decimal values such as 0.016245819000000000. Above 12 places it is
+ * approximate: "≈ x (rounded)" to 12 places, and "≈ 0 (rounded)" for a non-zero amount below 0.0000000000005
+ * (0.00000000000049). The cell text still reads "< 0.00000001"; only that hover is not exact.
  */
 export function quantity(value, asset) {
   return amount(value, asset, true);
+}
+
+/**
+ * -1, 0 or 1 for two decimal strings, compared exactly as digits (an 18-decimal value never goes through a float),
+ * or null when either is not a decimal string. A table sorts a coin column by this, never by its display text.
+ */
+export function compareDecimal(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string') return null;
+  const a = parse(left), b = parse(right);
+  if (!a || !b) return null;
+  const places = Math.max(a.frac.length, b.frac.length);
+  const scaled = parts => {
+    const magnitude = BigInt(parts.int + parts.frac.padEnd(places, '0'));
+    return parts.neg ? -magnitude : magnitude;
+  };
+  const x = scaled(a), y = scaled(b);
+  return x < y ? -1 : x > y ? 1 : 0;
 }
 
 const SMALLEST_PLACES = 8;

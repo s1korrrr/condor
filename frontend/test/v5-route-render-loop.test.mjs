@@ -65,6 +65,7 @@ const poisonStockAmounts = value => {
 };
 const baseline = fixture('v5_unbound_base_8284ffe7.json');
 const sections = Object.fromEntries(['status','wallet','positions','executors','risk','fills','decisions','history','accounting','operations'].map(section => [section,fixture(`paper-api-final3/native-replay/${section}.json`)]));
+const hostOperations = fixture('paper-api-final3/host-operations.json');
 for (const section of Object.values(sections)) section.data = poisonDecimals(section.data);
 sections.fills.next_cursor = null;
 sections.orders = {...sections.executors, section:'orders', data:[{order_id:'fixture-open-order',executor_id:sections.executors.data[0].executor_id,side:'SELL',trading_pair:sections.executors.data[0].trading_pair,quantity:'1.123456789',price:'123.456789',created_at_ms:sections.status.generated_at_ms-1000}], next_cursor:null};
@@ -97,6 +98,7 @@ const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/helm','Helm paper bot'], ['/money','Money'], ['/capital','Capital'],
   ['/operations','Operations'], ['/v5/readiness','Paper readiness'], ['/system','Operations'], ['/system/checks','Operations'],
   ['/system/data-feeds','Venues and data health'], ['/system/engine-inputs','V5 market features'], ['/system/readiness','Paper readiness'], ['/system/settings','Workspace settings'],
+  ['/system/operations','Observed service history'],
   ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'], ['/market/BTC','Market'], ['/market/evidence','Market'], ['/market/candles','Market'],
   ['/market/stocks','OKX stocks'], ['/agents','Agents'], ['/agents/decisions','Agent decisions'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
@@ -191,9 +193,10 @@ test('decimal scan covers a complete native-risk snapshot', async () => {
 test('real V5 routes settle with shared providers and an advancing paper clock', async context => {
   const routeSource = fs.readFileSync(new URL('../src/v5/V5App.tsx',import.meta.url),'utf8');
   const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/system/:tab','/system/checks').replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
-  assert.deepEqual([...new Set(routes.map(([pathname]) => pathname.replace(/^\/system\/(data-feeds|engine-inputs|readiness|settings)$/, '/system/checks')))].sort(),registered.sort(),'every registered V5 route needs a real render case');
+  assert.deepEqual([...new Set(routes.map(([pathname]) => pathname.replace(/^\/system\/(data-feeds|engine-inputs|readiness|settings|operations)$/, '/system/checks')))].sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
-  const profileForRoute = () => route === '/system/data-feeds' || (route.startsWith('/market') && route !== '/market/stocks') ? {...profile,candle_store:{configured:true}} : profile;
+  let ownerBound = true;
+  const profileForRoute = () => !ownerBound ? baseline.profile.body : route === '/system/data-feeds' || (route.startsWith('/market') && route !== '/market/stocks') ? {...profile,candle_store:{configured:true}} : profile;
   const workspaceForRoute = () => route === '/system/data-feeds' ? {...workspace,context:{...cohortFixture,cutoff_ms:now - 1000},source_refresh:{feed_freshness:'FRESH',feed_fresh_until_ms:now + 60_000,last_success_at_ms:now}} : workspace;
   const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
   const statusForRoute = () => journalRoutes.has(route) ? {...sections.status, state:'degraded', reason:'OWNER_JOURNAL_EXCEEDED', data:{...sections.status.data, journal_budget:{state:'exceeded',journal_evidence_held:true,native_execution_continues:true}}} : sections.status;
@@ -252,7 +255,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const native = url.searchParams.get('path');
       const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.includes('operations/workspace') ? 'operations' : native.split('?')[0].split('/').at(-1);
       assert.ok(sections[section],`unmapped owner read: ${native}`);
-      body = section === 'status' ? statusForRoute() : section === 'fills' && duplicateTradeFills ? {...sections.fills,data:[...sections.fills.data,{...fixtureFill}]} : sections[section];
+      body = native.includes('operations/workspace') ? hostOperations : section === 'status' ? statusForRoute() : section === 'fills' && duplicateTradeFills ? {...sections.fills,data:[...sections.fills.data,{...fixtureFill}]} : sections[section];
     } else if (url.pathname === '/api/v5/auth') body = auth;
     else if (url.pathname === '/api/v5/dashboard/profile') body = profileForRoute();
     else if (url.pathname === '/api/v5/settings') body = settings;
@@ -310,6 +313,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         }
       };
       if (pathname === '/bots') now = sections.status.generated_at_ms + 1000;
+      if (pathname === '/system/operations') now = hostOperations.generated_at_ms + 1000;
       if (pathname === '/system/data-feeds') now = sections.status.generated_at_ms + 90_000;
       const requestStart = requests.length;
       const failures = [];
@@ -562,6 +566,30 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       } finally {
         await React.act(async () => mount.unmount());
         if (pathname === '/bots') context.mock.timers.reset();
+        container.remove();
+        client.clear();
+      }
+    });
+    await context.test('/system/checks with an unbound owner', async () => {
+      route = '/system/checks';
+      ownerBound = false;
+      client.setQueryData(['v5-auth'], auth);
+      client.setQueryData(['v5-profile'], profileForRoute());
+      const container = document.createElement('div');
+      document.body.append(container);
+      const mount = createRoot(container);
+      const start = requests.length;
+      try {
+        await React.act(async () => mount.render(React.createElement(V5App)));
+        const notice = container.querySelector('.v5-system [data-read-state="unavailable"]');
+        assert.equal(notice?.querySelector('strong')?.textContent, 'Not connected');
+        assert.match(notice.textContent, /Paper owner is not bound\./);
+        assert.doesNotMatch(container.textContent, /Owner read in progress/);
+        assert.deepEqual(requests.slice(start), []);
+        await React.act(async () => notice.querySelector('button').click());
+        assert.deepEqual(requests.slice(start), ['/api/v5/dashboard/profile']);
+      } finally {
+        await React.act(async () => mount.unmount());
         container.remove();
         client.clear();
       }

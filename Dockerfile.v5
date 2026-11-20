@@ -2,6 +2,10 @@
 # Separate V5 workspace image; normal Condor entrypoints and runtime are absent.
 FROM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend
 WORKDIR /build/condor/frontend
+ARG CONDOR_SOURCE_COMMIT
+ARG WORKSPACE_SOURCE_COMMIT
+COPY frontend/tooling/check-v5-source-identity.mjs tooling/
+RUN --mount=type=bind,from=workspace,target=/workspace node tooling/check-v5-source-identity.mjs /workspace/source-identity.json
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY frontend/ ./

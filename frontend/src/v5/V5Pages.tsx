@@ -11,6 +11,7 @@ import { cohortCoverageDisplay, formatUsdAmount, marketFeatures, qualifiedFeatur
 import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel, paperWords } from "./policy";
 import { advisorAvailability, advisorTaskProfile, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
 import { usePaperClock } from "./usePaperClock";
+import { sessionKindLabel, sessionSummaryText } from "./session-display.mjs";
 
 function useWorkspace() {
   return useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
@@ -407,14 +408,14 @@ export function SessionsPage() {
   const query = useQuery({ queryKey: ["v5-sessions"], queryFn: v5Api.sessions, refetchInterval: 20_000 });
   if (query.isPending) return <Loading label="Loading session journal" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
-  return <><PageHeading title="Sessions" description="Source inspections, bounded reports, and report-loop records." actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh journal</button>} />
+  return <><PageHeading title="Sessions" description="Actions started from this dashboard: inspections, reports and loops. Advisor reports are on Agents." actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh journal</button>} />
     {query.data.length ? <div className="v5-session-table-wrap"><SessionRows sessions={query.data} expanded /></div> : <EmptyState title="No V5 sessions yet" body="Sessions appear here after an agent source inspection, report request, or report-loop run." />}
   </>;
 }
 
 function SessionRows({ sessions, expanded = false }: { sessions: V5Session[]; expanded?: boolean }) {
   return <div className={`v5-session-rows${expanded ? " is-expanded" : ""}`}>{sessions.map((session) => <Link className="v5-session-row" to={`/sessions/${encodeURIComponent(session.id)}`} key={session.id}>
-    <span className="v5-session-icon"><FileText size={16} /></span><span className="v5-session-copy"><strong>{session.summary || session.id}</strong><small>{session.agent_id ?? "Unavailable"} · {session.loop_id || "Source inspection"} · {formatTime(session.started_at_ms)}</small></span><Status state={sessionState(session.status)} label={session.status} /><span className="v5-effect">Effect: {session.effect || "Unavailable"}</span><ChevronRight className="v5-row-chevron" size={15} />
+    <span className="v5-session-icon"><FileText size={16} /></span><span className="v5-session-copy"><strong>{sessionSummaryText(session.summary) || session.id}</strong><small>{session.agent_id ?? "Unavailable"} · {sessionKindLabel(session)} · {formatTime(session.started_at_ms)}</small></span><Status state={sessionState(session.status)} label={session.status} /><span className="v5-effect">Effect: {session.effect || "Unavailable"}</span><ChevronRight className="v5-row-chevron" size={15} />
   </Link>)}</div>;
 }
 
@@ -438,13 +439,13 @@ export function SessionDetailPage() {
   const session = query.data;
   const reportText = session.ticks?.flatMap((tick) => tick.report == null ? [] : [typeof tick.report === "string" ? tick.report : JSON.stringify(tick.report, null, 2)]).join("\n\n") ?? "";
   return <><div className="v5-back-row"><Link to="/sessions">Sessions</Link><ChevronRight size={14} /><span>{session.id}</span></div>
-    <PageHeading title={session.summary || "Session record"} description={`${session.agent_id ?? "Unavailable"} · ${session.loop_id || "Source inspection"}`} actions={<Status state={sessionState(session.status)} label={session.status} />} />
+    <PageHeading title={sessionSummaryText(session.summary) || "Session record"} description={`${session.agent_id ?? "Unavailable"} · ${sessionKindLabel(session)}`} actions={<Status state={sessionState(session.status)} label={session.status} />} />
     <p className="v5-muted">A request and a result are separate records. An interrupted or failed request does not prove no provider charge. Reconcile unknown charges in the advisor journal before retry.</p>
     <div className="v5-session-meta"><DataValue label="Started" value={formatTime(session.started_at_ms)} /><DataValue label="Finished" value={formatTime(session.finished_at_ms)} /><DataValue label="Effect" value={session.effect || "Unavailable"} /><DataValue label="Session ID" value={session.id} /></div>
     {stop.error && <div className="v5-action-error" role="alert"><AlertTriangle size={15} />{stop.error.message}</div>}
     {session.status.toUpperCase() === "RUNNING" && session.loop_id && <div className="v5-session-stop"><span>This report loop is running. Stopping it records the owner service response.</span><button className="v5-button v5-button-danger" onClick={() => stop.mutate()} disabled={stop.isPending}><Square size={14} />{stop.isPending ? "Stopping…" : "Stop report loop"}</button></div>}
     <div className="v5-session-detail-grid"><section className="v5-panel"><div className="v5-section-heading"><div><h2>Tick journal</h2><p>Chronological work recorded by the owner service</p></div></div>
-      {session.ticks?.length ? <ol className="v5-tick-list">{session.ticks.map((tick) => <li key={tick.id}><div className="v5-tick-marker" /><div className="v5-tick-content"><div className="v5-tick-header"><strong>{tick.summary || tick.id}</strong><Status state={sessionState(tick.status)} label={tick.status} /></div><span>{formatTime(tick.at_ms)}</span>{tick.error && <div className="v5-source-warning"><AlertTriangle size={14} />{tick.error}</div>}{tick.evidence_refs.length > 0 && <div className="v5-evidence-refs"><strong>Evidence references</strong>{tick.evidence_refs.map((ref) => <code key={ref}>{ref}</code>)}</div>}</div></li>)}</ol> : <EmptyState title="No ticks recorded" body="The owner service has not recorded a tick for this session." />}
+      {session.ticks?.length ? <ol className="v5-tick-list">{session.ticks.map((tick) => <li key={tick.id}><div className="v5-tick-marker" /><div className="v5-tick-content"><div className="v5-tick-header"><strong>{sessionSummaryText(tick.summary) || tick.id}</strong><Status state={sessionState(tick.status)} label={tick.status} /></div><span>{formatTime(tick.at_ms)}</span>{tick.error && <div className="v5-source-warning"><AlertTriangle size={14} />{tick.error}</div>}{tick.evidence_refs.length > 0 && <div className="v5-evidence-refs"><strong>Evidence references</strong>{tick.evidence_refs.map((ref) => <code key={ref}>{ref}</code>)}</div>}</div></li>)}</ol> : <EmptyState title="No ticks recorded" body="The owner service has not recorded a tick for this session." />}
     </section><aside className="v5-session-side">
       <div className="v5-panel"><div className="v5-section-heading"><div><h2>Report output</h2><p>Returned by the bounded report task</p></div></div>{reportText ? <MarkdownContent value={reportText} empty="" /> : <p className="v5-muted">No report output is attached to this session.</p>}</div>
       <div className="v5-panel"><div className="v5-section-heading"><div><h2>Session journal</h2><p>Owner record text</p></div></div>{session.journal ? <pre className="v5-journal">{session.journal}</pre> : <p className="v5-muted">No journal text was returned.</p>}</div>

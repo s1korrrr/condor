@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from condor.v5.app import _safe_feed_refresh, _safe_task_latest, create_app
@@ -717,7 +719,27 @@ def test_source_inspection_uses_real_available_at_ms_field(tmp_path):
             "/api/v5/agents/market_analyst/inspect", headers={"Origin": ORIGIN}
         )
         assert response.status_code == 200
-        assert "availability=123456" in str(response.json())
+        summary = response.json()["summary"]
+        # 123456 ms after the epoch, written as a UTC time, never as `availability=<epoch ms>`.
+        assert summary == "Inspected source snapshot snapshot-1; available 1 Jan 1970 00:02 UTC"
+        assert response.json()["ticks"][0]["summary"] == summary
+
+
+@pytest.mark.parametrize("value", [None, "123456", True, 1e400, 10**30, -(10**30)])
+def test_source_inspection_never_echoes_an_unusable_availability(tmp_path, value):
+    api = FakeUpstream()
+    api.context = {"snapshot_id": "snapshot-1", "available_at_ms": value}
+    app = create_app(settings=settings(tmp_path), upstream=api)
+    with TestClient(app) as client:
+        login(client)
+        response = client.post(
+            "/api/v5/agents/market_analyst/inspect", headers={"Origin": ORIGIN}
+        )
+        assert response.status_code == 200
+        assert (
+            response.json()["summary"]
+            == "Inspected source snapshot snapshot-1; availability not reported"
+        )
 
 
 def test_loop_refuses_disabled_task_or_unavailable_source(tmp_path):

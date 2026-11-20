@@ -30,11 +30,8 @@ test('published signal uses owner parameters, exact distance, decision and its o
 
 test('unpublished signal has no invented parameters or decision and still shows a published bag', () => {
   const shown = row(null, {}, { bag: { held_amount: '0.123456789012345678901234567890', breakeven_price: '640.000000000000000000000000000001' } });
-  assert.equal(shown.rule, 'Rule not published by Helm');
-  assert.equal(shown.rsi, '— · Signal not published by Helm');
-  assert.equal(shown.atr, '— · Signal not published by Helm');
-  assert.equal(shown.decision, '— · Signal not published by Helm');
-  assert.equal(shown.sample, 'Signal time not published');
+  assert.equal(shown.signalPublished, false);
+  for (const cell of ['rule', 'rsi', 'atr', 'decision', 'sample']) assert.equal(shown[cell], '—', cell);
   assert.equal(shown.held, '0.123457 BNB');
   assert.equal(shown.breakeven, '640.00');
 });
@@ -114,4 +111,23 @@ test('missing bags and incomplete breakevens have a reason, zero bags have no in
   assert.equal(row(signal(), {}, { bag: { held_amount: null, breakeven_price: '640' } }).breakeven, '—');
   assert.equal(row(signal(), {}, { bag: { held_amount: '2', breakeven_price: null } }).bagNote, 'Breakeven not published by Helm');
   assert.equal(row(signal(), {}, { bag: { held_amount: '0.000', breakeven_price: '640' } }).breakeven, '—');
+});
+
+const NONE = 'Helm does not publish its buy rule or signal values; the state and hold reason below are Helm\'s own';
+
+test('the unpublished-signal note is one table-level sentence, and only for coins without a signal', () => {
+  const rows = (...signals) => signals.map((published, index) => helm.helmCoinRow(coin(published, { pair: `C${index}-USDC` }), { fresh: true, nowS }));
+  assert.equal(helm.helmCoinsNote(rows(null, null, null)), NONE);
+  assert.equal(helm.helmCoinsNote(rows(signal(), signal())), null);
+  assert.equal(helm.helmCoinsNote([]), null);
+  assert.equal(helm.helmCoinsNote(rows(signal(), null)), 'A — means Helm has not published that coin\'s buy rule or signal values.');
+});
+
+test('a coin whose signal is published still shows every published value beside an unpublished coin', () => {
+  const [published, missing] = [signal(), null].map(value => helm.helmCoinRow(coin(value), { fresh: true, nowS }));
+  assert.equal(published.signalPublished, true);
+  assert.equal(published.rule, 'Buys when RSI(17) crosses up through 29');
+  assert.equal(published.rsi, 'RSI 41.2, 12.2 points above the line');
+  assert.equal(missing.rule, '—');
+  assert.equal(JSON.stringify(missing).match(/not published/g), null);
 });

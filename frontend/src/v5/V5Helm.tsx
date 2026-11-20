@@ -4,7 +4,7 @@ import { RotateCw } from "lucide-react";
 import { ownerTitleText, age, count, usdc, utcMin } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { tri } from "./shown.mjs";
-import { helmCoinRow, helmHeadline } from "./helm-model.mjs";
+import { helmCoinRow, helmCoinsNote, helmHeadline } from "./helm-model.mjs";
 import "./market.css";
 
 type Amount = number | string | null;
@@ -49,6 +49,7 @@ export function V5Helm() {
   const ageS = status ? status.age_s + Math.max(0, now - helm.dataUpdatedAt) / 1000 : null;
   const fresh = read?.state === "FRESH";
   const coins = status?.symbols.map(row => helmCoinRow(row, { fresh: fresh && ageS != null && ageS <= 30, nowS: status.generated_at + (ageS ?? status.age_s) })) ?? [];
+  const coinsNote = helmCoinsNote(coins);
   const rejectionCount = status?.control_rejections?.count;
   const noRejections = rejectionCount === 0 || typeof rejectionCount === "string" && /^-?0+(?:\.0+)?$/.test(rejectionCount);
   const lastAt = at(status ? status.generated_at * 1000 : null);
@@ -83,12 +84,13 @@ export function V5Helm() {
         </div>
         <section className="v5m-section"><header><h2>Coins</h2><span>Why each coin is or is not buying, and its bag</span></header>
           {coins.length ? <>
+            {coinsNote && <p className="v5m-hint" role="note">{coinsNote}</p>}
             <div className="v5m-card v5m-helm-table"><table className="v5m-heat v5m-helm-coins"><thead><tr><th>Pair</th><th>Buy rule</th><th>Where it is now</th><th className="is-number">Held</th><th className="is-number">Breakeven</th></tr></thead><tbody>{coins.map(row => <tr key={row.pair}>
               <td>{row.pair}</td><td>{row.rule}</td><td><CoinSignal row={row} /></td>
               <td className="is-number">{row.held}{row.bagNote && <small>{row.bagNote}</small>}</td><td className="is-number">{row.breakeven}</td>
             </tr>)}</tbody></table></div>
             <div className="v5m-helm-mobile">{coins.map(row => <article className="v5m-card v5m-helm-coin" key={row.pair}>
-              <h3>{row.pair}</h3><p>{row.rule}</p><CoinSignal row={row} />
+              <h3>{row.pair}</h3>{row.signalPublished && <p>{row.rule}</p>}<CoinSignal row={row} />
               <dl className="v5m-kv"><dt>Held</dt><dd>{row.held}</dd><dt>Breakeven</dt><dd>{row.breakeven}</dd></dl>
               {row.bagNote && <small>{row.bagNote}</small>}
             </article>)}</div>
@@ -104,6 +106,7 @@ export function V5Helm() {
 }
 
 function CoinSignal({ row }: { row: ReturnType<typeof helmCoinRow> }) {
+  if (!row.signalPublished) return <div className="v5m-helm-signal"><span className="v5m-muted">—</span><small>{row.owner}</small></div>;
   return <div className="v5m-helm-signal"><span className={row.rsi.startsWith("—") ? "v5m-muted" : undefined} title={ownerTitleText(row.rsiTitle)}>{row.rsi}</span><span className={row.atr.startsWith("—") ? "v5m-muted" : undefined}>{row.atr}</span><small>{row.decision}</small><small>{row.owner}</small><small>{row.sample}</small></div>;
 }
 

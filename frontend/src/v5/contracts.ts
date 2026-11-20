@@ -61,6 +61,8 @@ export interface V5Session {
   id: string;
   agent_id: string | null;
   loop_id: string | null;
+  /** The action that started the row: "inspect", "report" or "loop". */
+  kind?: string;
   status: string;
   started_at_ms: number;
   finished_at_ms: number | null;

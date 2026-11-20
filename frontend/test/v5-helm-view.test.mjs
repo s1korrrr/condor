@@ -42,8 +42,8 @@ test('Helm daily loss keeps its owner title off the phone helper and formats eve
 
 test('unpublished signals have no default recipe numbers and render table and narrow-screen cards', () => {
   const html = render();
-  assert.match(html, /Rule not published by Helm/);
-  assert.match(html, /class="v5m-muted">— · Signal not published by Helm/);
+  assert.equal(html.match(/not published by Helm|Signal time not published/g), null, 'no per-row repeats of "not published"');
+  assert.equal(html.match(/Helm does not publish its buy rule or signal values; the state and hold reason below are Helm&#x27;s own/g)?.length, 1);
   assert.doesNotMatch(html, /RSI\(17\)|through 29|by default|Current RSI values are not published/);
   assert.match(html, /class="v5m-card v5m-helm-table"/);
   assert.match(html, /class="v5m-helm-mobile"/);
@@ -94,4 +94,17 @@ test('rounded Helm figures retain exact owner inputs and RSI distance', context 
   assert.match(html, /<span>Daily loss used<\/span><strong><span class="owner-value" title="-0\.004" data-tone="zero">0\.00<\/span><\/strong>/);
   assert.match(html, /title="RSI 28\.9999999 − line 29 = −0\.0000001"[^>]*>RSI 29, 0 points below the line/);
   assert.match(html, /title="200\.00001"/);
+});
+
+test('one published coin keeps its values; the unpublished one shows plain dashes under a single note', context => {
+  context.mock.method(Date, 'now', () => 1793929900000);
+  const html = render({ extra: { symbols: [
+    { pair: 'BNB-USDC', signal: { at: 1793929890, rsi: '40.5', oversold: '31', rsi_length: 21, atr_fraction: null, decision: null }, bag: null },
+    { pair: 'ETH-USDC', signal: null, bag: null },
+    { pair: 'SOL-USDC', signal: null, bag: null },
+  ] } });
+  assert.match(html, /Buys when RSI\(21\) crosses up through 31/);
+  assert.match(html, /RSI 40.5, 9.5 points above the line/);
+  assert.equal(html.match(/A — means Helm has not published that coin&#x27;s buy rule or signal values\./g)?.length, 1);
+  assert.equal(html.match(/Rule not published by Helm|Signal not published by Helm/g), null);
 });

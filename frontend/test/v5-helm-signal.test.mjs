@@ -30,11 +30,8 @@ test('published signal uses owner parameters, exact distance, decision and its o
 
 test('unpublished signal has no invented parameters or decision and still shows a published bag', () => {
   const shown = row(null, {}, { bag: { held_amount: '0.123456789012345678901234567890', breakeven_price: '640.000000000000000000000000000001' } });
-  assert.equal(shown.rule, 'Rule not published by Helm');
-  assert.equal(shown.rsi, '— · Signal not published by Helm');
-  assert.equal(shown.atr, '— · Signal not published by Helm');
-  assert.equal(shown.decision, '— · Signal not published by Helm');
-  assert.equal(shown.sample, 'Signal time not published');
+  assert.equal(shown.signalPublished, false);
+  for (const cell of ['rule', 'rsi', 'atr', 'decision', 'sample']) assert.equal(shown[cell], '—', cell);
   assert.equal(shown.held, '0.123457 BNB');
   assert.equal(shown.breakeven, '640.00');
 });
@@ -114,4 +111,35 @@ test('missing bags and incomplete breakevens have a reason, zero bags have no in
   assert.equal(row(signal(), {}, { bag: { held_amount: null, breakeven_price: '640' } }).breakeven, '—');
   assert.equal(row(signal(), {}, { bag: { held_amount: '2', breakeven_price: null } }).bagNote, 'Breakeven not published by Helm');
   assert.equal(row(signal(), {}, { bag: { held_amount: '0.000', breakeven_price: '640' } }).breakeven, '—');
+});
+
+test('the note points to the state and hold reason only when the rows show both values', () => {
+  assert.match(helm.helmCoinsNote([row(null)], 0), /state and hold reason below/i);
+  for (const missing of [
+    row(null, { fresh: false }),
+    row(null, {}, { status: null }),
+    row(null, {}, { candidate_hold: null }),
+  ]) {
+    assert.doesNotMatch(helm.helmCoinsNote([missing], 0), /hold reason below/i);
+  }
+});
+
+test('missing signals have one table note that accounts for withheld values', () => {
+  assert.equal(helm.helmCoinsNote([row(signal())]), null);
+  assert.equal(helm.helmCoinsNote([]), null);
+  for (const rows of [[row(null)], [row(signal()), row(null)]]) {
+    assert.doesNotMatch(helm.helmCoinsNote(rows, 0), /invalid/);
+    const note = helm.helmCoinsNote(rows, 1);
+    assert.match(note, /or Condor withheld them as invalid/);
+    assert.doesNotMatch(note, /does not publish/);
+  }
+});
+
+test('a coin whose signal is published still shows every published value beside an unpublished coin', () => {
+  const [published, missing] = [signal(), null].map(value => helm.helmCoinRow(coin(value), { fresh: true, nowS }));
+  assert.equal(published.signalPublished, true);
+  assert.equal(published.rule, 'Buys when RSI(17) crosses up through 29');
+  assert.equal(published.rsi, 'RSI 41.2, 12.2 points above the line');
+  assert.equal(missing.rule, '—');
+  assert.equal(JSON.stringify(missing).match(/not published/g), null);
 });

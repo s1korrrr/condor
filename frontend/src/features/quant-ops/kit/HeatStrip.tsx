@@ -74,7 +74,7 @@ export function HeatStrip({ cells, ariaLabel, renderTooltip, onSelect, height = 
       {cells.map((cell, index) => <i key={cell.key} data-i={index} data-empty={cell.empty ? '' : undefined} data-active={index === shown ? '' : undefined} aria-hidden="true"
         style={cell.empty ? undefined : { background: cell.color }} />)}
     </div>
-    <span id={tipId} className="q-heat-sr" role="status" aria-live="polite">{shown !== null ? cells[shown].label : ''}</span>
+    <span id={tipId} className="q-heat-sr" aria-live="polite" aria-atomic="true">{shown === null ? '' : cells[shown].label}</span>
     {shown !== null && createPortal(
       <div ref={tipRef} className="q-heat-tip" data-side={place?.side} style={place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: 'hidden' }}>{renderTooltip(shown)}</div>,
       document.body)}

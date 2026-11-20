@@ -8,6 +8,7 @@ No network, no order path, no paid call.
 from __future__ import annotations
 
 import json
+import re
 import os
 from pathlib import Path
 
@@ -786,6 +787,12 @@ def test_bound_and_enabled_reviewer_requests_only_its_fixed_task(tmp_path):
     assert inspected["status"] == "COMPLETED" and inspected["ticks"][0][
         "evidence_refs"
     ] == [f"paper:{BOT}:{BOOT}"]
+    # The default status fixture publishes ready=True.
+    assert "ready=" not in inspected["summary"]
+    assert re.search(
+        rf"^Inspected paper status {BOT}; ready; controllers=\d+; ",
+        inspected["summary"],
+    )
 
 
 def test_app_profile_and_bots_read_the_configured_status(tmp_path):

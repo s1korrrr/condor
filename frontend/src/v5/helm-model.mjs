@@ -20,14 +20,20 @@ export function helmCoinRow(row, { fresh, nowS }) {
   const signal = row.signal;
   const time = utcMin(signal?.at == null ? null : signal.at * 1000, nowS * 1000);
   const ageS = time == null ? null : nowS - signal.at;
-  const problem = !signal ? 'Signal not published by Helm' : !fresh ? 'Helm status is stale'
+  const problem = !fresh ? 'Helm status is stale'
     : ageS == null ? 'Signal time not published' : ageS < 0 ? 'Signal time is in the future'
     : ageS > 30 ? 'Signal is stale' : null;
   const line = decimal(signal?.oversold), rsi = decimal(signal?.rsi);
   const lineKnown = line != null && line <= 100n * SCALE;
-  const result = {
-    pair: row.pair,
-    rule: !signal ? 'Rule not published by Helm' : problem ? `Rule unavailable · ${problem}`
+  // A null signal gets plain dashes and one explanation above the table.
+  const result = !signal ? {
+    pair: row.pair, signalPublished: false, rule: '—', rsi: '—', atr: '—', decision: '—', sample: '—', rsiTitle: undefined,
+    showsStateAndHold: Boolean(fresh && row.status && row.candidate_hold),
+    owner: fresh ? `State: ${words(row.status)} · entry hold: ${words(row.candidate_hold)}` : '— · Helm status is stale',
+    held: '—', breakeven: '—', bagNote: !fresh ? 'Helm status is stale' : 'Bag not published by Helm',
+  } : {
+    pair: row.pair, signalPublished: true,
+    rule: problem ? `Rule unavailable · ${problem}`
       : !Number.isSafeInteger(signal.rsi_length) || signal.rsi_length <= 0 || !lineKnown ? 'Rule not published by Helm'
       : `Buys when RSI(${count(signal.rsi_length)}) crosses up through ${coin(signal.oversold)}`,
     rsi: `— · ${problem ?? 'RSI or line not published by Helm'}`, rsiTitle: undefined,
@@ -37,7 +43,7 @@ export function helmCoinRow(row, { fresh, nowS }) {
     owner: fresh ? `State: ${words(row.status)} · entry hold: ${words(row.candidate_hold)}` : '— · Helm status is stale',
     held: '—', breakeven: '—', bagNote: !fresh ? 'Helm status is stale' : 'Bag not published by Helm',
   };
-  if (!problem) {
+  if (signal && !problem) {
     if (rsi != null && rsi <= 100n * SCALE && lineKnown) {
       const distance = rsi - line;
       result.rsiTitle = `RSI ${ownerTitleText(signal.rsi)} − line ${ownerTitleText(signal.oversold)} = ${ownerTitleText(`${distance < 0n ? '−' : ''}${points(distance < 0n ? -distance : distance)}`)}`;
@@ -65,6 +71,17 @@ export function helmCoinRow(row, { fresh, nowS }) {
     }
   }
   return result;
+}
+
+/** The one note above the coins table when some or all coins have no published buy rule or signal. */
+export function helmCoinsNote(rows, withheld) {
+  const missing = rows.filter(row => !row.signalPublished).length;
+  if (!missing) return null;
+  // The withheld count covers the whole read. Only zero rules out an invalid signal.
+  const reason = withheld === 0 ? 'Helm did not publish them.' : 'Helm did not publish them, or Condor withheld them as invalid.';
+  if (missing < rows.length) return `A dash in place of a coin’s buy rule and signal means its signal values are unavailable. ${reason}`;
+  const owner = rows.every(row => row.showsStateAndHold) ? ' The state and hold reason below come from Helm.' : '';
+  return `No signal values are shown. ${reason}${owner}`;
 }
 
 /**

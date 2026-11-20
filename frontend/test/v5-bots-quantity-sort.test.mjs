@@ -21,8 +21,8 @@ const now = fixture.wallet.generated_at_ms;
 const idKeys = { fills: 'trade_id', positions: 'position_id', executors: 'executor_id' };
 const quantityField = { fills: 'quantity', positions: 'quantity', executors: 'remaining_close_quantity' };
 
-/** Quantity cells of the real DataTable, in the order it shows them, for the real Bots column definition. */
-function shown(section, amounts, desc, tables = botsTables()) {
+/** Quantity cells and owner IDs in the real Bots DataTable's rendered row order. */
+function shown(section, amounts, desc, { tables = botsTables(), filter, search } = {}) {
   const { captured, PaperWorkspace } = tables;
   const read = structuredClone(fixture[section]);
   read.next_cursor = null;
@@ -31,9 +31,21 @@ function shown(section, amounts, desc, tables = botsTables()) {
   renderToStaticMarkup(React.createElement(PaperWorkspace, { reads, accountingRead: fixture.accounting, now, reportAt: now, heartbeat: 'Fresh', bot: fixture.status.bot_id }));
   const props = captured[`Paper ${section}`];
   assert.ok(props, `Paper ${section} table rendered`);
-  const html = renderToStaticMarkup(React.createElement(DataTable, { ...props, initialSort: { id: 'quantity', desc } }));
+  let Table = DataTable;
+  if (filter !== undefined || search !== undefined) {
+    let stateIndex = 0;
+    const react = { ...React, useState(initial) {
+      const index = stateIndex++;
+      return React.useState(index === 1 && filter !== undefined ? [{ id: 'quantity', value: filter }] : index === 2 && search !== undefined ? search : initial);
+    } };
+    Table = frontendModules({ ...stubs, react }).load('features/quant-ops/kit/DataTable.tsx').DataTable;
+  }
+  const html = renderToStaticMarkup(React.createElement(Table, { ...props, initialSort: { id: 'quantity', desc } }));
   const table = html.slice(html.indexOf('<table'), html.indexOf('</table>'));
-  return [...table.matchAll(/<td[^>]*><span(?: title="[^"]*")?>([^<]* BNB)<\/span>/g)].map(match => match[1]);
+  return {
+    quantities: [...table.matchAll(/<td[^>]*><span(?: title="[^"]*")?>([^<]* BNB)<\/span>/g)].map(match => match[1]),
+    ids: [...table.matchAll(/<button[^>]*title="Copy full owner ID"[^>]*>([^<]+)<\/button>/g)].map(match => match[1]),
+  };
 }
 
 const amounts = ['0.1', '12.5', '0.00000001', '0.09'];
@@ -41,22 +53,49 @@ const ascending = ['0.00000001 BNB', '0.09 BNB', '0.1 BNB', '12.5 BNB'];
 
 for (const section of ['fills', 'positions', 'executors']) {
   test(`Bots ${section} quantity sorts by the owner decimal, ascending and descending`, () => {
-    assert.deepEqual(shown(section, amounts, false), ascending);
-    assert.deepEqual(shown(section, amounts, true), [...ascending].reverse());
+    assert.deepEqual(shown(section, amounts, false).quantities, ascending);
+    assert.deepEqual(shown(section, amounts, true).quantities, [...ascending].reverse());
   });
 }
 
 test('Bots quantity sort keeps 18-decimal owner values apart and gives an unpublished amount no sort value', () => {
   const tables = botsTables();
-  assert.deepEqual(shown('fills', ['0.016245819000000002', '0.016245819000000001', '0.016245819000000000'], false, tables), ['0.016246 BNB', '0.016246 BNB', '0.016246 BNB']);
+  const precise = ['0.016245819000000002', '0.016245819000000000', '0.016245819000000001'];
+  const sorted = shown('fills', precise, false, { tables });
+  assert.deepEqual(sorted.quantities, ['0.016246 BNB', '0.016246 BNB', '0.016246 BNB']);
+  assert.deepEqual(sorted.ids, ['row-1', 'row-2', 'row-0']);
+  assert.deepEqual(shown('fills', precise, true).ids, ['row-0', 'row-2', 'row-1']);
   const read = tables.captured['Paper fills'];
   const rows = read.rows, value = read.columns.find(column => column.id === 'quantity').value;
-  assert.deepEqual(rows.map(value), ['0.016245819000000002', '0.016245819000000001', '0.016245819000000000']);
-  const sorted = [...rows].sort((left, right) => compareDecimal(value(left), value(right)));
-  assert.deepEqual(sorted.map(value), ['0.016245819000000000', '0.016245819000000001', '0.016245819000000002']);
+  assert.deepEqual(rows.map(value), precise);
   assert.equal(read.columns.find(column => column.id === 'quantity').kind, 'number');
   for (const invalid of ['not a number', '1e-8', '', undefined, null, 1]) assert.equal(value({ ...rows[0], quantity: invalid }), undefined, String(invalid));
 });
+
+const adjacent = ['0.100000000000000000', '0.100000000000000001'];
+for (const [filter, values, ids] of [
+  ['>0.1', adjacent, ['row-1']],
+  ['=0.100000000000000001', adjacent, ['row-1']],
+  ['0.09..0.1', adjacent, ['row-0']],
+  ['<=0.09', [...adjacent, '0.090000000000000000', '0.090000000000000001'], ['row-2']],
+  ['0.01..1', [...adjacent, '0.009999999999999999', '0.01', '1', '1.000000000000000001'], ['row-3', 'row-0', 'row-1', 'row-4']],
+  ['>0', [...adjacent, '0', `0.${'0'.repeat(125)}1`], ['row-3', 'row-0', 'row-1']],
+  ['>0.1oops', adjacent, []],
+]) {
+  test(`Bots Recent fills filters exact quantity with ${filter}`, () => {
+    assert.deepEqual(shown('fills', values, false, { filter }).ids, ids);
+  });
+}
+
+for (const [search, ids] of [
+  ['0.016246', ['row-2']],
+  ['0.1 BNB', ['row-0', 'row-1']],
+  ['0.100000000000000001', ['row-1']],
+]) {
+  test(`Bots Recent fills search finds quantity ${search}`, () => {
+    assert.deepEqual(shown('fills', [...adjacent, '0.016245819000000001'], false, { search }).ids, ids);
+  });
+}
 
 test('compareDecimal compares exact decimal strings and declines anything else', () => {
   assert.equal(compareDecimal('0.09', '0.1'), -1);

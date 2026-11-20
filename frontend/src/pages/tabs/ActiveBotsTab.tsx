@@ -751,7 +751,8 @@ function PaperRecords({ read, positions, executors, now, valuesAt = now, kind }:
   const unit = (row: PaperRow) => typeof row.unit === "string" ? row.unit : "USDC";
   const base = (row: PaperRow) => String(row.trading_pair ?? "").split("-")[0] || "base units";
   const exactAmount = (value: unknown, denomination: string, places = 4) => <span title={ownerTitleText(typeof value === "string" ? value : undefined)}>{paperAmount(value, denomination, places)}</span>;
-  const exactQuantity = (value: unknown, denomination: string) => <span title={ownerTitleText(typeof value === "string" ? value : undefined)}>{paperQuantity(value, denomination)}</span>;
+  const rowQuantity = (row: PaperRow) => kind === "executors" ? row.remaining_close_quantity : row.quantity;
+  const quantityText = (row: PaperRow) => paperQuantity(rowQuantity(row), base(row));
   const detailAmount = (value: unknown, denomination: string, isQuantity = false) => {
     const exact = paperExactAmount(value, denomination);
     return exact === "Not published" ? exact : <span title={ownerTitleText(String(value))}>{isQuantity ? quantity(value, denomination) : usdc(value, denomination)}</span>;
@@ -760,7 +761,10 @@ function PaperRecords({ read, positions, executors, now, valuesAt = now, kind }:
     { id: "id", header: kind === "fills" ? "Fill ID" : kind === "positions" ? "Position ID" : "Executor ID", value: row => String(row[idKey] ?? "Not published"), size: 180, cell: row => <button className="paper-copy" onClick={() => { const id = String(row[idKey] ?? ""); void navigator.clipboard.writeText(id).then(() => { setCopied(id); setCopyError(false); }, () => setCopyError(true)); }} title="Copy full owner ID">{copied === row[idKey] ? "Copied" : String(row[idKey] ?? "Not published")}</button> },
     { id: "pair", header: "Pair", value: row => String(row.trading_pair ?? "Not published"), size: 130 },
     { id: "state", header: kind === "fills" ? "Side" : "State", value: row => paperWords(row.side ?? row.state), size: 150 },
-    { id: "quantity", header: kind === "executors" ? "Remaining close" : "Quantity", kind: "number", value: row => paperQuantityValue(kind === "executors" ? row.remaining_close_quantity : row.quantity), cell: row => exactQuantity(kind === "executors" ? row.remaining_close_quantity : row.quantity, base(row)), size: 180 },
+    { id: "quantity", header: kind === "executors" ? "Remaining close" : "Quantity", kind: "number", value: row => paperQuantityValue(rowQuantity(row)), searchText: quantityText, cell: row => {
+      const raw = rowQuantity(row);
+      return <span title={ownerTitleText(typeof raw === "string" ? raw : undefined)}>{quantityText(row)}</span>;
+    }, size: 180 },
     ...(kind === "fills" ? [
       { id: "price", header: "Fill price", value: (row: PaperRow) => paperAmount(row.price, "USDC"), cell: (row: PaperRow) => exactAmount(row.price, "USDC"), size: 160 },
       { id: "fee", header: "Fee", value: (row: PaperRow) => paperAmount(row.fee_amount, String(row.fee_currency ?? "unit not published")), cell: (row: PaperRow) => exactAmount(row.fee_amount, String(row.fee_currency ?? "unit not published")), size: 160 },

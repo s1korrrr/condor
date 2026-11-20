@@ -20,6 +20,7 @@ export type TableColumn<T> = {
   value: (row: T) => string | number | null | undefined;
   /** Rendered cell; defaults to the raw value. */
   cell?: (row: T) => ReactNode;
+  searchText?: (row: T) => string;
   /** `number` right-aligns, sorts numerically and accepts comparison filters. */
   kind?: 'text' | 'number';
   ownerValue?: boolean;
@@ -146,7 +147,7 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, phoneNe
   ], [columns, selectable, sorting]);
   // Search runs before the table so it can match displayed text as well as raw values.
   const searched = useMemo(() => effectiveSearch.trim() ? rows.filter(row => searchMatch(columns.flatMap(column => {
-    const shown = column.cell?.(row);
+    const shown = column.searchText?.(row) ?? column.cell?.(row);
     return [column.value(row), typeof shown === 'string' || typeof shown === 'number' ? shown : null];
   }), effectiveSearch)) : rows, [rows, columns, effectiveSearch]);
   const table = useReactTable({

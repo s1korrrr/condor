@@ -31,25 +31,44 @@ const T3 = T2 + 300_000;
 const gapRow = { bot: 'v5', at_ms: T3, gap: 'OWNER_READ_FAILED', unit: null };
 const dayRow = { day: Date.UTC(2026, 10, 19), samples: 3, gaps: 0, valid: 3, equity_start: '199197.63', equity_end: '199057.11', equity_change: '-140.52', realized_change: '114.13', first_at_ms: T1, last_at_ms: T2, equity_valid: 3, equity_first_at_ms: T1, equity_last_at_ms: T2 };
 const moneyBody = (rows, daily = [dayRow]) => ({ sampler: true, started_at_ms: T1, now_ms: T2, range: '7d', rows, daily, recorder_errors: { count: 0, last: null, at_ms: null } });
-const closes = [[1794219300, 100], [1794824100, 86]];
-const candleBody = { state: 'AVAILABLE', reason: null, data: { series: [{ venue: 'binance', lane: 'binance__spot', close: closes }] } };
+const BUCKET_A = 1794219300, BUCKET_B = 1794824100; // seconds: the candle owner's bucket opening times
+const candleBody = { state: 'AVAILABLE', reason: null, data: { series: [{ venue: 'binance', lane: 'binance__spot', close: [[BUCKET_A, 100], [BUCKET_B, 86]] }] } };
 const profile = { candle_store: { configured: true } };
 const reply = body => ({ ok: true, status: 200, json: async () => body });
+const minute = ms => { const date = new Date(ms); return `${date.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()]} ${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')} UTC`; };
+const v5Change = `−${(Math.abs((199057.11379198655820 - 199197.63587918115820) / 199197.63587918115820) * 100).toFixed(2)}%`;
 
-/** Requests resolve only when the test advances the virtual clock to their due time. */
-function network({ money = 40, cross = 250, answer = {} } = {}) {
-  let now = 0, seq = 0;
-  const pending = [], issued = [];
-  const fetch = url => new Promise(resolve => {
+/**
+ * Requests resolve only when the test advances the virtual clock to their due time. With `owner`, price reads go
+ * through the real owner's contract: two shared slots, and a deadline that starts before a slot is taken, so a read
+ * that waits for a slot and then is served for too long is answered `owner_unreachable` at its deadline.
+ */
+function network({ money = 40, cross = 250, answer = {}, owner = null } = {}) {
+  let now = 0, seq = 0, inFlight = 0, maxInFlight = 0; // price reads only
+  const pending = [], issued = [], signals = [], slots = [0, 0];
+  const fetch = (url, init = {}) => new Promise((resolve, reject) => {
     const path = String(url), kind = path.startsWith('/api/v5/money') ? 'money' : path.includes('/candle-store/cross') ? 'cross' : null;
     if (!kind) throw new Error(`Unexpected request ${path}`);
     const coin = new URL(path, 'https://fixture.invalid').searchParams.get('asset');
     issued.push({ kind, coin, at: now });
-    pending.push({ due: now + (kind === 'money' ? money : cross), seq: seq++, resolve: () => resolve(answer[kind === 'money' ? 'money' : coin]?.() ?? reply(kind === 'money' ? moneyBody(liveMoneyRows) : candleBody)) });
+    signals.push(init.signal);
+    let due = now + (kind === 'money' ? money : cross), timedOut = false;
+    if (owner && kind === 'cross') {
+      const slot = slots.indexOf(Math.min(...slots)), start = Math.max(now, slots[slot]);
+      if (start - now >= owner.deadline) { due = now + owner.deadline; timedOut = true; }
+      else if (start + owner.service - now > owner.deadline) { due = slots[slot] = now + owner.deadline; timedOut = true; }
+      else due = slots[slot] = start + owner.service;
+    }
+    const counted = kind === 'cross' ? 1 : 0;
+    inFlight += counted; maxInFlight = Math.max(maxInFlight, inFlight);
+    const entry = { due, seq: seq++, resolve: () => { inFlight -= counted; resolve(timedOut ? reply({ state: 'UNAVAILABLE', reason: 'owner_unreachable', data: null }) : answer[kind === 'money' ? 'money' : coin]?.() ?? reply(kind === 'money' ? moneyBody(liveMoneyRows) : candleBody)); } };
+    pending.push(entry);
+    init.signal?.addEventListener('abort', () => { const index = pending.indexOf(entry); if (index >= 0) { pending.splice(index, 1); inFlight -= counted; reject(init.signal.reason); } });
   });
   return {
-    fetch, issued,
+    fetch, issued, signals,
     get now() { return now; },
+    get maxInFlight() { return maxInFlight; },
     next() { pending.sort((a, b) => a.due - b.due || a.seq - b.seq); const request = pending.shift(); if (request) { now = Math.max(now, request.due); request.resolve(); } return Boolean(request); },
   };
 }
@@ -59,9 +78,11 @@ const flush = () => act(async () => { for (let turn = 0; turn < 4; turn++) await
 const find = (root, selector, test) => [...root.querySelectorAll(selector)].find(test);
 const holdPanel = () => find(browser.document, 'article.v5m-card', card => card.querySelector('h3')?.textContent === 'Against holding the five coins');
 const tile = label => find(holdPanel() ?? browser.document, '.v5m-stat', item => item.firstElementChild.textContent === label);
+const note = label => tile(label)?.querySelector('small')?.textContent;
 const day = () => find(browser.document, 'section.v5m-section', section => section.querySelector('h2')?.textContent === 'Day by day');
 const percent = label => /[−+]?\d[\d,.]*%/.exec(tile(label)?.querySelector('strong')?.textContent ?? '')?.[0] ?? null;
 const hasDays = () => Number(day()?.querySelector('table')?.dataset.rows) > 0;
+const crossReads = net => net.issued.filter(read => read.kind === 'cross');
 
 async function render({ net, seedMoney, profileData = profile }) {
   globalThis.fetch = net.fetch;
@@ -78,17 +99,20 @@ async function render({ net, seedMoney, profileData = profile }) {
     'Holding side of the comparison': () => percent('Holding the five coins') !== null,
   };
   const observe = () => { for (const [name, ready] of Object.entries(watch)) if (!(name in first) && ready()) first[name] = net.now; };
+  let mounted = true;
   await act(async () => { root.render(React.createElement(ReactQuery.QueryClientProvider, { client }, React.createElement(Router.MemoryRouter, null, React.createElement(V5Overview)))); });
   await flush();
   observe();
   return {
-    first, observe, container,
+    first, observe, client,
     async runToEnd() { while (net.next()) { await flush(); observe(); } },
-    async finish() { await act(async () => root.unmount()); client.clear(); container.remove(); },
+    async refresh() { await act(async () => { browser.document.querySelector('.v5m-refresh').click(); }); await flush(); },
+    async leave() { if (mounted) { mounted = false; await act(async () => root.unmount()); } },
+    async finish() { await this.leave(); client.clear(); container.remove(); },
   };
 }
 
-test('cold start: Day by day and the V5 side paint when Money arrives, the price reads run in parallel', async t => {
+test('cold start: Day by day and the V5 side paint when Money arrives; the price reads go two at a time', async t => {
   const net = network({ money: 40, cross: 250 });
   const page = await render({ net });
   try {
@@ -96,10 +120,24 @@ test('cold start: Day by day and the V5 side paint when Money arrives, the price
     assert.equal(day(), undefined, 'nothing is available yet, so only the loading line is shown');
     await page.runToEnd();
     t.diagnostic(`cold start, first content in virtual ms (Money 40 ms, each price read 250 ms): ${JSON.stringify(page.first)}`);
-    assert.deepEqual(page.first, { 'Day by day rows': 40, 'V5 side of the comparison': 40, 'Holding side of the comparison': 250 });
-    const crossReads = net.issued.filter(read => read.kind === 'cross');
-    assert.deepEqual(crossReads.map(read => read.coin).sort(), [...COINS].sort());
-    assert.ok(crossReads.every(read => read.at === crossReads[0].at), `price reads must start together, started at ${crossReads.map(read => read.at)}`);
+    assert.deepEqual(page.first, { 'Day by day rows': 40, 'V5 side of the comparison': 40, 'Holding side of the comparison': 750 });
+    assert.deepEqual(crossReads(net).map(read => read.coin).sort(), [...COINS].sort());
+    assert.deepEqual(crossReads(net).map(read => read.at), [0, 0, 250, 250, 500], 'the first two start together, each next one when a slot frees');
+    assert.ok(net.maxInFlight <= 2, `at most two price reads at once, saw ${net.maxInFlight}`);
+  } finally { await page.finish(); }
+});
+
+test('the owner serves two reads at a time: five slow price reads all complete and no coin is dropped', async t => {
+  // Each read takes 5 s; the owner times a read out 12 s after it was asked for, whether or not it has a slot yet.
+  const net = network({ cross: 5000, owner: { service: 5000, deadline: 12_000 } });
+  const page = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
+  try {
+    await page.runToEnd();
+    t.diagnostic(`slow owner reads, first content in virtual ms: ${JSON.stringify(page.first)}`);
+    assert.equal(page.first['Holding side of the comparison'], 15_000);
+    assert.equal(percent('Holding the five coins'), '−14.00%');
+    assert.doesNotMatch(holdPanel().textContent, /could not read|owner_unreachable/);
+    assert.ok(net.maxInFlight <= 2);
   } finally { await page.finish(); }
 });
 
@@ -108,18 +146,28 @@ test('cached Money paints Day by day and the V5 side at once with their times; o
   const page = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
   try {
     t.diagnostic(`cached Money, content already on screen at paint (virtual ms): ${JSON.stringify(page.first)}`);
-    const text = browser.document.body.textContent;
-    assert.doesNotMatch(text, /Reading money samples…/);
+    assert.doesNotMatch(browser.document.body.textContent, /Reading money samples…/);
     assert.deepEqual(page.first, { 'Day by day rows': 0, 'V5 side of the comparison': 0 });
-    const note = tile('V5 wallet equity').querySelector('small').textContent;
-    assert.match(note, new RegExp(`from ${new Date(T1).toISOString().slice(0, 16).replace('T', ' ')}.* to ${new Date(T2).toISOString().slice(0, 16).replace('T', ' ')}`));
-    assert.equal(percent('V5 wallet equity'), `−${(Math.abs((199057.11379198655820 - 199197.63587918115820) / 199197.63587918115820) * 100).toFixed(2)}%`);
+    assert.match(note('V5 wallet equity'), new RegExp(`^from ${new Date(T1).toISOString().slice(0, 16).replace('T', ' ')}.* to ${new Date(T2).toISOString().slice(0, 16).replace('T', ' ')}`));
+    assert.equal(percent('V5 wallet equity'), v5Change);
     assert.equal(percent('Holding the five coins'), null);
     assert.match(tile('Holding the five coins').textContent, /Reading 7 days of prices…/);
-    assert.doesNotMatch(note, /same window/, 'sameness is unknown until the prices arrive');
     await page.runToEnd();
-    assert.equal(page.first['Holding side of the comparison'], 250);
-    assert.match(tile('V5 wallet equity').querySelector('small').textContent, /same window|not the same window/);
+    assert.equal(percent('Holding the five coins'), '−14.00%');
+  } finally { await page.finish(); }
+});
+
+test('price times are labelled as 15-minute buckets, and equal labels never claim the same window', async () => {
+  // V5 samples placed exactly on the two bucket opening times: the labels coincide, the windows are still not the same.
+  const rows = [{ bot: 'v5', at_ms: BUCKET_A * 1000, equity: '100', initial_funding: '200000', unit: 'USDC' }, { bot: 'v5', at_ms: BUCKET_B * 1000, equity: '86', initial_funding: '200000', unit: 'USDC' }];
+  const net = network();
+  const page = await render({ net, seedMoney: moneyBody(rows) });
+  try {
+    await page.runToEnd();
+    assert.equal(note('Holding the five coins'), `from the close of the 15-minute bucket opening ${minute(BUCKET_A * 1000)} to the close of the one opening ${minute(BUCKET_B * 1000)}`);
+    assert.match(note('V5 wallet equity'), /^from 2026-.* to 2026-.* · its own samples, not tied to the price buckets$/);
+    assert.equal(percent('V5 wallet equity'), '−14.00%');
+    assert.doesNotMatch(holdPanel().textContent, /same window/);
   } finally { await page.finish(); }
 });
 
@@ -128,13 +176,11 @@ test('a newer gap row is never carried into the comparison; its own end time is 
   const page = await render({ net, seedMoney: moneyBody([...liveMoneyRows, gapRow]) });
   try {
     await page.runToEnd();
-    const end = new Date(T2).toISOString().slice(0, 16).replace('T', ' ');
-    const note = tile('V5 wallet equity').querySelector('small').textContent;
-    assert.match(note, new RegExp(` to ${end}`));
-    assert.doesNotMatch(note, new RegExp(new Date(T3).toISOString().slice(0, 16).replace('T', ' ')));
+    assert.match(note('V5 wallet equity'), new RegExp(` to ${new Date(T2).toISOString().slice(0, 16).replace('T', ' ')}`));
+    assert.doesNotMatch(note('V5 wallet equity'), new RegExp(new Date(T3).toISOString().slice(0, 16).replace('T', ' ')));
     assert.match(browser.document.body.textContent, /Latest V5 sample at .* is a gap: OWNER_READ_FAILED/);
     assert.match(browser.document.body.textContent, /The newest sample had no values \(OWNER READ FAILED\)/);
-    assert.equal(percent('V5 wallet equity'), `−${(Math.abs((199057.11379198655820 - 199197.63587918115820) / 199197.63587918115820) * 100).toFixed(2)}%`);
+    assert.equal(percent('V5 wallet equity'), v5Change);
   } finally { await page.finish(); }
 });
 
@@ -145,20 +191,36 @@ test('no recorded samples: Day by day says so, the V5 side is blank, the prices 
     assert.match(day().textContent, /No samples yet\./);
     assert.equal(day().querySelector('table'), null);
     assert.equal(percent('V5 wallet equity'), null);
-    assert.match(tile('V5 wallet equity').textContent, /fewer than two samples with values in 7 days/);
+    assert.match(note('V5 wallet equity'), /fewer than two samples with values in 7 days/);
     await page.runToEnd();
-    assert.equal(page.first['Holding side of the comparison'], 250);
+    assert.equal(page.first['Holding side of the comparison'], 750);
     assert.equal(percent('V5 wallet equity'), null);
   } finally { await page.finish(); }
 });
 
-test('no candle store: the comparison says so and reads no prices', async () => {
+test('no candle store: the V5 side still shows, and Refresh sends no price reads', async () => {
   const net = network();
   const page = await render({ net, seedMoney: moneyBody(liveMoneyRows), profileData: { candle_store: { configured: false } } });
   try {
+    assert.equal(percent('V5 wallet equity'), v5Change);
+    assert.match(note('Holding the five coins'), /No candle store in this deployment/);
     await page.runToEnd();
-    assert.match(holdPanel().textContent, /No candle store in this deployment/);
-    assert.equal(net.issued.filter(read => read.kind === 'cross').length, 0);
+    await page.refresh();
+    await page.runToEnd();
+    assert.equal(net.issued.filter(read => read.kind === 'money').length, 1, 'Refresh still re-reads Money');
+    assert.equal(crossReads(net).length, 0, 'no price request without a candle store');
+    assert.equal(percent('V5 wallet equity'), v5Change);
+  } finally { await page.finish(); }
+});
+
+test('with a candle store, Refresh re-reads the five prices again', async () => {
+  const net = network();
+  const page = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
+  try {
+    await page.runToEnd();
+    await page.refresh();
+    await page.runToEnd();
+    assert.equal(crossReads(net).length, 10);
   } finally { await page.finish(); }
 });
 
@@ -172,6 +234,35 @@ test('a failed price read names the coin and the owner reason; the basket is nev
     assert.doesNotMatch(text, /no 7-day closes for SOL/);
     assert.match(text, /never reduced to fewer coins/);
     assert.equal(percent('Holding the five coins'), null);
-    assert.notEqual(percent('V5 wallet equity'), null);
+    assert.equal(percent('V5 wallet equity'), v5Change);
+  } finally { await page.finish(); }
+});
+
+test('leaving the page mid-batch aborts every price read, sends no more, and caches nothing', async () => {
+  const net = network({ cross: 250 });
+  const page = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
+  try {
+    net.next();
+    await flush();
+    const sent = crossReads(net).length;
+    assert.equal(sent, 3, 'two started together, a third when the first finished');
+    await page.leave();
+    await page.runToEnd();
+    assert.equal(net.signals.length, sent);
+    assert.ok(net.signals.every(signal => signal instanceof AbortSignal));
+    assert.ok(net.signals.slice(1).every(signal => signal.aborted), 'every read still in flight was aborted (the first had finished)');
+    assert.equal(crossReads(net).length, sent, 'no queued coin is dispatched after leaving');
+    assert.equal(page.client.getQueryData(['v5-money-hold']), undefined);
+  } finally { await page.finish(); }
+});
+
+test('leaving the page while Money is in flight aborts that read too', async () => {
+  const net = network();
+  const page = await render({ net });
+  try {
+    assert.equal(net.issued.filter(read => read.kind === 'money').length, 1);
+    await page.leave();
+    assert.ok(net.signals[0].aborted);
+    assert.equal(page.client.getQueryData(['v5-money', '7d']), undefined);
   } finally { await page.finish(); }
 });

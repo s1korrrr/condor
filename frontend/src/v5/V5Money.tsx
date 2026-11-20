@@ -20,20 +20,31 @@ type CrossLine = { venue: string; lane: string; close: [number, number][] };
 type Hold = { closes: Record<string, [number, number][] | undefined>; failures: Record<string, string> };
 const RANGES = ["24h", "7d"] as const;
 
+// The candle owner serves each read through two shared slots and starts its 12 s deadline before it gets one, so a
+// third concurrent read can time out while it only waits. Two in flight is what the owner can serve.
+const HOLD_READS_IN_FLIGHT = 2;
+
 /**
- * The reference spot lane's closes for each coin over the candle store's 7 days. The five reads are independent, so
- * they run together; a coin whose read fails keeps the owner's reason rather than passing for a coin with no closes.
+ * The reference spot lane's closes for each coin over the candle store's 7 days, two reads at a time. A coin whose
+ * read fails keeps the owner's reason rather than passing for a coin with no closes. Leaving the page aborts the
+ * reads in flight and dispatches no more; an aborted batch yields nothing.
  */
-async function readHold(): Promise<Hold> {
-  const reads = await Promise.allSettled(MARKET_COINS.map(async coin =>
-    (await readCandleStore<{ series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" })).series.find(line => line.lane === REFERENCE.spot)?.close));
-  const closes: Hold["closes"] = {}, failures: Hold["failures"] = {};
-  MARKET_COINS.forEach((coin, index) => {
-    const read = reads[index];
-    // A failed coin keeps its key with no closes, so the basket is never quietly reduced to fewer coins.
-    closes[coin] = read.status === "fulfilled" ? read.value : undefined;
-    if (read.status === "rejected") failures[coin] = read.reason instanceof Error ? read.reason.message : String(read.reason);
-  });
+async function readHold(signal: AbortSignal): Promise<Hold> {
+  // A failed coin keeps its key with no closes, so the basket is never quietly reduced to fewer coins.
+  const closes: Hold["closes"] = Object.fromEntries(MARKET_COINS.map(coin => [coin, undefined])), failures: Hold["failures"] = {};
+  const queue = [...MARKET_COINS];
+  const worker = async () => {
+    for (let coin = queue.shift(); coin; coin = queue.shift()) {
+      signal.throwIfAborted();
+      try {
+        closes[coin] = (await readCandleStore<{ series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" }, signal)).series.find(line => line.lane === REFERENCE.spot)?.close;
+      } catch (error) {
+        signal.throwIfAborted();
+        failures[coin] = error instanceof Error ? error.message : String(error);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: HOLD_READS_IN_FLIGHT }, worker));
   return { closes, failures };
 }
 
@@ -59,11 +70,11 @@ const dailyColumns: TableColumn<DailyRow>[] = [
 /** The Money view; on Overview it is embedded under the bot cards (`embedded` turns its title into a section heading). */
 export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const [range, setRange] = useState<(typeof RANGES)[number]>("7d");
-  const money = useQuery({ queryKey: ["v5-money", range], queryFn: () => readMoney(range), retry: false, refetchInterval: 60_000 });
+  const money = useQuery({ queryKey: ["v5-money", range], queryFn: ({ signal }) => readMoney(range, signal), retry: false, refetchInterval: 60_000 });
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
   // Prices come from the candle store only where this deployment has one; otherwise the comparison says so.
   const candleConfigured = profile.data?.candle_store?.configured === true;
-  const hold = useQuery({ queryKey: ["v5-money-hold"], queryFn: readHold, retry: false, refetchInterval: 15 * 60_000, enabled: candleConfigured });
+  const hold = useQuery({ queryKey: ["v5-money-hold"], queryFn: ({ signal }) => readHold(signal), retry: false, refetchInterval: 15 * 60_000, enabled: candleConfigured });
   const rows = money.data?.rows ?? [];
   const v5 = latest(rows, "v5"), helm = latest(rows, "helm");
   const now = v5.withValues;
@@ -82,19 +93,23 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), realizedExact: values.realized, unrealized: num(values.unrealized), unrealizedExact: values.unrealized }));
   const days = money.data?.daily ?? [];
   const holdView = hold.data ? holdReturn(hold.data.closes) : null;
-  // V5 over its own first and last sample in the 7-day rows; it is "the same window" only if both ends match exactly.
+  // V5 over its own first and last sample in the 7-day rows. Its times are sample times; the price side is on 15-minute buckets.
   const v5View = money.data?.range === "7d" ? equityChange(rows, "v5") : null;
   const holdFailures = Object.entries(hold.data?.failures ?? {});
   const holdEmpty = holdView?.missing.filter(coin => !hold.data?.failures[coin]) ?? [];
   const holdUnavailable = [holdFailures.length ? `could not read 7-day closes for ${holdFailures.map(([coin, reason]) => `${coin} (${reason})`).join(", ")}` : "", holdEmpty.length ? `no 7-day closes for ${holdEmpty.join(", ")}` : ""].filter(Boolean).join("; ") || "the five coins share no first and last minute";
-  const sameWindow = holdView?.pct != null && v5View?.pct != null && holdView.startS! * 1000 === v5View.startMs && holdView.endS! * 1000 === v5View.endMs;
+  // The owner publishes each 15-minute bucket under its opening time, with the bucket's last close.
+  const holdNote: ReactNode = !candleConfigured ? (profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced.")
+    : hold.isPending ? <span role="status">Reading 7 days of prices…</span>
+    : holdView?.pct == null ? `Holding comparison unavailable: ${holdUnavailable}. The basket is never reduced to fewer coins.`
+    : `from the close of the 15-minute bucket opening ${at(holdView.startS! * 1000)} to the close of the one opening ${at(holdView.endS! * 1000)}`;
 
   return <div className="v5m">
     <header className="v5m-head">
       <div>{embedded ? <h2>Money</h2> : <h1>Money</h1>}<p>Paper money for V5 and Helm at a glance. Recorded by this dashboard every 5 minutes{money.data?.started_at_ms ? ` since ${at(money.data.started_at_ms)}` : ""}; there is no record before that.</p></div>
       <div className="v5m-chips">
         <div role="group" aria-label="Range" className="v5m-seg">{RANGES.map(item => <button key={item} type="button" aria-pressed={range === item} onClick={() => setRange(item)}>{item}</button>)}</div>
-        <button className="v5m-refresh" onClick={() => { void money.refetch(); void hold.refetch(); }}><RotateCw size={14} />Refresh</button>
+        <button className="v5m-refresh" onClick={() => { void money.refetch(); if (candleConfigured) void hold.refetch(); }}><RotateCw size={14} />Refresh</button>
       </div>
     </header>
     {money.isPending ? <p role="status" className="v5m-status">Reading money samples…</p> : money.isError ? <p role="alert" className="v5m-status">{money.error.message}. Nothing older is shown.</p> : <>
@@ -122,10 +137,10 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
         <article className="v5m-card"><h3>By coin</h3><p className="v5m-hint">Lifetime closed-trade profit and held-coin gain or loss per coin, latest sample</p>
           <BarsChart rows={coinRows} bars={[{ id: "realized", label: "Closed-trade profit", color: CHART.positive }, { id: "unrealized", label: "Held-coin gain or loss", color: CHART.negative }]} height={200} ariaLabel="V5 P&L by coin" emptyText="No per-coin values in the latest sample." /></article>
         <article className="v5m-card"><h3>Against holding the five coins</h3><p className="v5m-hint">Equal weights in {MARKET_COINS.join(", ")} over the candle store's 7 days ({REFERENCE.venue} spot {REFERENCE.quote})</p>
-          {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : <div className="v5m-stats">
-            <Stat label="Holding the five coins" value={hold.isPending ? "—" : pct(holdView?.pct)} title={holdView?.title} note={hold.isPending ? <span role="status">Reading 7 days of prices…</span> : holdView?.pct == null ? `Holding comparison unavailable: ${holdUnavailable}. The basket is never reduced to fewer coins.` : `from ${at(holdView.startS! * 1000)} to ${at(holdView.endS! * 1000)}`} />
-            <Stat label="V5 wallet equity" value={pct(v5View?.pct)} title={v5View?.title} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${utcExact(v5View.startMs) ?? "unknown time"} to ${utcExact(v5View.endMs) ?? "unknown time"}${hold.isPending ? " · compared once the prices arrive" : sameWindow ? " · same window" : " · its own record, not the same window"}`} />
-          </div>}
+          <div className="v5m-stats">
+            <Stat label="Holding the five coins" value={pct(holdView?.pct)} title={holdView?.title} note={holdNote} />
+            <Stat label="V5 wallet equity" value={pct(v5View?.pct)} title={v5View?.title} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${utcExact(v5View.startMs) ?? "unknown time"} to ${utcExact(v5View.endMs) ?? "unknown time"} · its own samples, not tied to the price buckets`} />
+          </div>
           <p className="v5m-hint">Only the candle store's 7 days can be priced, so the comparison never reaches the trial start (2026-10-29).</p></article>
       </div>
 

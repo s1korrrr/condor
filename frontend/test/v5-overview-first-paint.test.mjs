@@ -40,12 +40,13 @@ const v5Change = `−${(Math.abs((199057.11379198655820 - 199197.63587918115820)
 
 /**
  * Requests resolve only when the test advances the virtual clock to their due time. With `owner`, price reads go
- * through the real owner's contract: two shared slots, and a deadline that starts before a slot is taken, so a read
- * that waits for a slot and then is served for too long is answered `owner_unreachable` at its deadline.
+ * through two shared slots with a caller deadline taken before admission. Browser abort and an expired caller
+ * deadline do not release a slot held by the owner.
  */
 function network({ money = 40, cross = 250, answer = {}, owner = null } = {}) {
   let now = 0, seq = 0, inFlight = 0, maxInFlight = 0; // price reads only
-  const pending = [], issued = [], signals = [], slots = [0, 0];
+  const pending = [], issued = [], signals = [], slots = [0, 0], ownerReads = [];
+  const activeAt = time => ownerReads.filter(({ start, finish }) => start <= time && time < finish).length;
   const fetch = (url, init = {}) => new Promise((resolve, reject) => {
     const path = String(url), kind = path.startsWith('/api/v5/money') ? 'money' : path.includes('/candle-store/cross') ? 'cross' : null;
     if (!kind) throw new Error(`Unexpected request ${path}`);
@@ -56,8 +57,13 @@ function network({ money = 40, cross = 250, answer = {}, owner = null } = {}) {
     if (owner && kind === 'cross') {
       const slot = slots.indexOf(Math.min(...slots)), start = Math.max(now, slots[slot]);
       if (start - now >= owner.deadline) { due = now + owner.deadline; timedOut = true; }
-      else if (start + owner.service - now > owner.deadline) { due = slots[slot] = now + owner.deadline; timedOut = true; }
-      else due = slots[slot] = start + owner.service;
+      else {
+        const finish = slots[slot] = start + owner.service;
+        ownerReads.push({ start, finish });
+        pending.push({ due: finish, seq: seq++, resolve() {} });
+        due = Math.min(finish, now + owner.deadline);
+        timedOut = due < finish;
+      }
     }
     const counted = kind === 'cross' ? 1 : 0;
     inFlight += counted; maxInFlight = Math.max(maxInFlight, inFlight);
@@ -69,6 +75,8 @@ function network({ money = 40, cross = 250, answer = {}, owner = null } = {}) {
     fetch, issued, signals,
     get now() { return now; },
     get maxInFlight() { return maxInFlight; },
+    get ownerInFlight() { return activeAt(now); },
+    get maxOwnerInFlight() { return Math.max(0, ...ownerReads.map(({ start }) => activeAt(start))); },
     next() { pending.sort((a, b) => a.due - b.due || a.seq - b.seq); const request = pending.shift(); if (request) { now = Math.max(now, request.due); request.resolve(); } return Boolean(request); },
   };
 }
@@ -84,9 +92,9 @@ const percent = label => /[−+]?\d[\d,.]*%/.exec(tile(label)?.querySelector('st
 const hasDays = () => Number(day()?.querySelector('table')?.dataset.rows) > 0;
 const crossReads = net => net.issued.filter(read => read.kind === 'cross');
 
-async function render({ net, seedMoney, profileData = profile }) {
+async function render({ net, seedMoney, profileData = profile, existingClient }) {
   globalThis.fetch = net.fetch;
-  const client = new ReactQuery.QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 15_000 } } });
+  const client = existingClient ?? new ReactQuery.QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 15_000 } } });
   client.setQueryData(['v5-profile'], profileData);
   if (seedMoney) client.setQueryData(['v5-money', '7d'], seedMoney);
   const container = browser.document.createElement('div');
@@ -164,7 +172,8 @@ test('price times are labelled as 15-minute buckets, and equal labels never clai
   const page = await render({ net, seedMoney: moneyBody(rows) });
   try {
     await page.runToEnd();
-    assert.equal(note('Holding the five coins'), `from the close of the 15-minute bucket opening ${minute(BUCKET_A * 1000)} to the close of the one opening ${minute(BUCKET_B * 1000)}`);
+    const holdingNote = note('Holding the five coins');
+    assert.match(holdingNote, new RegExp(`${minute(BUCKET_A * 1000)}.*${minute(BUCKET_B * 1000)}`));
     assert.match(note('V5 wallet equity'), /^from 2026-.* to 2026-.* · its own samples, not tied to the price buckets$/);
     assert.equal(percent('V5 wallet equity'), '−14.00%');
     assert.doesNotMatch(holdPanel().textContent, /same window/);
@@ -224,6 +233,49 @@ test('with a candle store, Refresh re-reads the five prices again', async () => 
   } finally { await page.finish(); }
 });
 
+test('three rapid Refreshes after loading keep one batch and retain the comparison', async () => {
+  const net = network({ owner: { deadline: 12_000, service: 5_000 } });
+  const page = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
+  try {
+    await page.runToEnd();
+    assert.equal(percent('Holding the five coins'), '−14.00%');
+    for (let click = 0; click < 3; click++) await page.refresh();
+    const refreshDispatches = crossReads(net).length - 5;
+    assert.equal(percent('Holding the five coins'), '−14.00%');
+    await page.runToEnd();
+    assert.deepEqual({ refreshDispatches, ownerPeak: net.maxOwnerInFlight, total: crossReads(net).length, holding: percent('Holding the five coins') },
+      { refreshDispatches: 2, ownerPeak: 2, total: 10, holding: '−14.00%' });
+  } finally { await page.finish(); }
+});
+
+test('turning off the candle store blanks a previously priced holding tile, not V5', async () => {
+  const net = network();
+  const page = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
+  try {
+    await page.runToEnd();
+    assert.equal(percent('Holding the five coins'), '−14.00%');
+    await act(async () => page.client.setQueryData(['v5-profile'], { candle_store: { configured: false } }));
+    await flush();
+    assert.match(note('Holding the five coins'), /No candle store in this deployment/);
+    assert.equal(percent('V5 wallet equity'), v5Change);
+    assert.equal(percent('Holding the five coins'), null);
+  } finally { await page.finish(); }
+});
+
+test('the 10:15 bucket priced by its 10:20 minute close is not described as a closed bucket', async () => {
+  const latestBucket = Date.UTC(2026, 10, 19, 10, 15) / 1000;
+  const net = network({ answer: Object.fromEntries(COINS.map(coin => [coin, () => reply({
+    ...candleBody,
+    data: { res_s: 900, now: latestBucket + 300, end: latestBucket + 240, series: [{ ...candleBody.data.series[0], close: [[BUCKET_A, 100], [latestBucket, 86]] }] },
+  })])) });
+  const page = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
+  try {
+    await page.runToEnd();
+    assert.equal(percent('Holding the five coins'), '−14.00%');
+    assert.match(note('Holding the five coins'), /last minute close available.*19 Nov 10:15 UTC.*bucket may still be open/);
+  } finally { await page.finish(); }
+});
+
 test('a failed price read names the coin and the owner reason; the basket is never reduced and the V5 side stays', async () => {
   const net = network({ answer: { SOL: () => reply({ state: 'UNAVAILABLE', reason: 'owner read timed out', data: null }) } });
   const page = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
@@ -238,22 +290,24 @@ test('a failed price read names the coin and the owner reason; the basket is nev
   } finally { await page.finish(); }
 });
 
-test('leaving the page mid-batch aborts every price read, sends no more, and caches nothing', async () => {
-  const net = network({ cross: 250 });
-  const page = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
+test('a quick remount rejoins the active price batch and gets the full comparison', async () => {
+  const net = network({ owner: { deadline: 12_000, service: 5_000 } });
+  const first = await render({ net, seedMoney: moneyBody(liveMoneyRows) });
+  let second;
   try {
-    net.next();
-    await flush();
-    const sent = crossReads(net).length;
-    assert.equal(sent, 3, 'two started together, a third when the first finished');
-    await page.leave();
-    await page.runToEnd();
-    assert.equal(net.signals.length, sent);
-    assert.ok(net.signals.every(signal => signal instanceof AbortSignal));
-    assert.ok(net.signals.slice(1).every(signal => signal.aborted), 'every read still in flight was aborted (the first had finished)');
-    assert.equal(crossReads(net).length, sent, 'no queued coin is dispatched after leaving');
-    assert.equal(page.client.getQueryData(['v5-money-hold']), undefined);
-  } finally { await page.finish(); }
+    assert.equal(crossReads(net).length, 2);
+    await first.leave();
+    assert.equal(net.ownerInFlight, 2, 'unmount cannot free an occupied owner slot');
+    second = await render({ net, seedMoney: moneyBody(liveMoneyRows), existingClient: first.client });
+    const dispatchesAtRemount = crossReads(net).length;
+    await second.runToEnd();
+    assert.deepEqual({ dispatchesAtRemount, ownerPeak: net.maxOwnerInFlight, total: crossReads(net).length,
+      elapsed: net.now, holding: percent('Holding the five coins') },
+      { dispatchesAtRemount: 2, ownerPeak: 2, total: 5, elapsed: 15_000, holding: '−14.00%' });
+  } finally {
+    if (second) await second.finish();
+    await first.finish();
+  }
 });
 
 test('leaving the page while Money is in flight aborts that read too', async () => {

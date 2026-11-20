@@ -20,26 +20,18 @@ type CrossLine = { venue: string; lane: string; close: [number, number][] };
 type Hold = { closes: Record<string, [number, number][] | undefined>; failures: Record<string, string> };
 const RANGES = ["24h", "7d"] as const;
 
-// The candle owner serves each read through two shared slots and starts its 12 s deadline before it gets one, so a
-// third concurrent read can time out while it only waits. Two in flight is what the owner can serve.
 const HOLD_READS_IN_FLIGHT = 2;
 
-/**
- * The reference spot lane's closes for each coin over the candle store's 7 days, two reads at a time. A coin whose
- * read fails keeps the owner's reason rather than passing for a coin with no closes. Leaving the page aborts the
- * reads in flight and dispatches no more; an aborted batch yields nothing.
- */
-async function readHold(signal: AbortSignal): Promise<Hold> {
+/** Read the basket two at a time; a remounted observer rejoins the same in-flight query. */
+async function readHold(): Promise<Hold> {
   // A failed coin keeps its key with no closes, so the basket is never quietly reduced to fewer coins.
   const closes: Hold["closes"] = Object.fromEntries(MARKET_COINS.map(coin => [coin, undefined])), failures: Hold["failures"] = {};
   const queue = [...MARKET_COINS];
   const worker = async () => {
     for (let coin = queue.shift(); coin; coin = queue.shift()) {
-      signal.throwIfAborted();
       try {
-        closes[coin] = (await readCandleStore<{ series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" }, signal)).series.find(line => line.lane === REFERENCE.spot)?.close;
+        closes[coin] = (await readCandleStore<{ series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" })).series.find(line => line.lane === REFERENCE.spot)?.close;
       } catch (error) {
-        signal.throwIfAborted();
         failures[coin] = error instanceof Error ? error.message : String(error);
       }
     }
@@ -74,7 +66,7 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
   // Prices come from the candle store only where this deployment has one; otherwise the comparison says so.
   const candleConfigured = profile.data?.candle_store?.configured === true;
-  const hold = useQuery({ queryKey: ["v5-money-hold"], queryFn: ({ signal }) => readHold(signal), retry: false, refetchInterval: 15 * 60_000, enabled: candleConfigured });
+  const hold = useQuery({ queryKey: ["v5-money-hold"], queryFn: readHold, retry: false, refetchInterval: 15 * 60_000, enabled: candleConfigured });
   const rows = money.data?.rows ?? [];
   const v5 = latest(rows, "v5"), helm = latest(rows, "helm");
   const now = v5.withValues;
@@ -92,24 +84,25 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const coins = (now?.coins ?? {}) as Record<string, { realized: string | null; unrealized: string | null }>;
   const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), realizedExact: values.realized, unrealized: num(values.unrealized), unrealizedExact: values.unrealized }));
   const days = money.data?.daily ?? [];
-  const holdView = hold.data ? holdReturn(hold.data.closes) : null;
+  const holdData = candleConfigured ? hold.data : undefined;
+  const holdView = holdData ? holdReturn(holdData.closes) : null;
   // V5 over its own first and last sample in the 7-day rows. Its times are sample times; the price side is on 15-minute buckets.
   const v5View = money.data?.range === "7d" ? equityChange(rows, "v5") : null;
-  const holdFailures = Object.entries(hold.data?.failures ?? {});
-  const holdEmpty = holdView?.missing.filter(coin => !hold.data?.failures[coin]) ?? [];
+  const holdFailures = Object.entries(holdData?.failures ?? {});
+  const holdEmpty = holdView?.missing.filter(coin => !holdData?.failures[coin]) ?? [];
   const holdUnavailable = [holdFailures.length ? `could not read 7-day closes for ${holdFailures.map(([coin, reason]) => `${coin} (${reason})`).join(", ")}` : "", holdEmpty.length ? `no 7-day closes for ${holdEmpty.join(", ")}` : ""].filter(Boolean).join("; ") || "the five coins share no first and last minute";
   // The owner publishes each 15-minute bucket under its opening time, with the bucket's last close.
   const holdNote: ReactNode = !candleConfigured ? (profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced.")
     : hold.isPending ? <span role="status">Reading 7 days of prices…</span>
     : holdView?.pct == null ? `Holding comparison unavailable: ${holdUnavailable}. The basket is never reduced to fewer coins.`
-    : `from the close of the 15-minute bucket opening ${at(holdView.startS! * 1000)} to the close of the one opening ${at(holdView.endS! * 1000)}`;
+    : `from the last minute close available in the 15-minute bucket opening ${at(holdView.startS! * 1000)} to the last minute close available in the one opening ${at(holdView.endS! * 1000)}; the latest bucket may still be open.`;
 
   return <div className="v5m">
     <header className="v5m-head">
       <div>{embedded ? <h2>Money</h2> : <h1>Money</h1>}<p>Paper money for V5 and Helm at a glance. Recorded by this dashboard every 5 minutes{money.data?.started_at_ms ? ` since ${at(money.data.started_at_ms)}` : ""}; there is no record before that.</p></div>
       <div className="v5m-chips">
         <div role="group" aria-label="Range" className="v5m-seg">{RANGES.map(item => <button key={item} type="button" aria-pressed={range === item} onClick={() => setRange(item)}>{item}</button>)}</div>
-        <button className="v5m-refresh" onClick={() => { void money.refetch(); if (candleConfigured) void hold.refetch(); }}><RotateCw size={14} />Refresh</button>
+        <button className="v5m-refresh" onClick={() => { void money.refetch(); if (candleConfigured) void hold.refetch({ cancelRefetch: false }); }}><RotateCw size={14} />Refresh</button>
       </div>
     </header>
     {money.isPending ? <p role="status" className="v5m-status">Reading money samples…</p> : money.isError ? <p role="alert" className="v5m-status">{money.error.message}. Nothing older is shown.</p> : <>

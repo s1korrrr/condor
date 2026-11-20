@@ -464,6 +464,7 @@ class CandleOwner:
         self.socket_path = str(socket_path)
         self.session_factory = session_factory
         self._slots = asyncio.Semaphore(2)
+        self._active_reads: set[asyncio.Task[dict]] = set()
 
     async def read_summary(self) -> dict:
         """Overview and symbols from one owner pass; an owner without ``summary`` is read view by view."""
@@ -483,36 +484,57 @@ class CandleOwner:
         return {**overview, "rows": symbols["rows"]}
 
     async def read(self, view: str, query: dict[str, str]) -> dict:
+        """Bound the caller's wait without interrupting an admitted owner read."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 12
         try:
-            async with asyncio.timeout(12):
-                async with self._slots:
-                    connector = aiohttp.UnixConnector(path=self.socket_path, limit=2)
-                    async with self.session_factory(
-                        connector=connector,
-                        timeout=aiohttp.ClientTimeout(total=10),
-                        trust_env=False,
-                        auto_decompress=False,
-                    ) as session:
-                        async with session.get(
-                            f"http://owner/api/{view}",
-                            params=query,
-                            allow_redirects=False,
-                        ) as response:
-                            if response.status != 200:
-                                # Read through EOF (bounded): one read() can return only the part already received.
-                                body = bytearray()
-                                async for chunk in response.content.iter_chunked(1024):
-                                    body.extend(chunk)
-                                    if len(body) > MAX_ERROR_BYTES:
-                                        break
-                                raise OwnerUnavailable(
-                                    owner_error_code(response.status, bytes(body))
-                                )
-                            raw = bytearray()
-                            async for chunk in response.content.iter_chunked(65536):
-                                raw.extend(chunk)
-                                if len(raw) > MAX_BYTES:
-                                    raise OwnerUnavailable("owner_response_too_large")
+            async with asyncio.timeout_at(deadline):
+                await self._slots.acquire()
+                if loop.time() >= deadline:
+                    self._slots.release()
+                    raise TimeoutError
+                task = asyncio.create_task(self._read_owner(view, query))
+                self._active_reads.add(task)
+                task.add_done_callback(self._finish_read)
+                return await asyncio.shield(task)
+        except TimeoutError as exc:
+            raise OwnerUnavailable("owner_unreachable") from exc
+
+    def _finish_read(self, task: asyncio.Task[dict]) -> None:
+        self._active_reads.discard(task)
+        self._slots.release()
+        if not task.cancelled():
+            task.exception()
+
+    async def _read_owner(self, view: str, query: dict[str, str]) -> dict:
+        try:
+            connector = aiohttp.UnixConnector(path=self.socket_path, limit=2)
+            async with self.session_factory(
+                connector=connector,
+                timeout=aiohttp.ClientTimeout(total=10),
+                trust_env=False,
+                auto_decompress=False,
+            ) as session:
+                async with session.get(
+                    f"http://owner/api/{view}",
+                    params=query,
+                    allow_redirects=False,
+                ) as response:
+                    if response.status != 200:
+                        # Read through EOF (bounded): one read() can return only the part already received.
+                        body = bytearray()
+                        async for chunk in response.content.iter_chunked(1024):
+                            body.extend(chunk)
+                            if len(body) > MAX_ERROR_BYTES:
+                                break
+                        raise OwnerUnavailable(
+                            owner_error_code(response.status, bytes(body))
+                        )
+                    raw = bytearray()
+                    async for chunk in response.content.iter_chunked(65536):
+                        raw.extend(chunk)
+                        if len(raw) > MAX_BYTES:
+                            raise OwnerUnavailable("owner_response_too_large")
             payload = _decode_payload(raw)
             if view in STOCK_VIEWS:
                 return validate_stock_payload(view, payload, query)

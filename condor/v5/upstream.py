@@ -82,7 +82,9 @@ class V5Upstream:
         try:
             async with asyncio.timeout(timeout_sec):
                 timeout = aiohttp.ClientTimeout(total=timeout_sec)
-                async with lease(self._shared, self.session_factory, timeout) as (session, extra):
+                shared = self._shared if method == "GET" else None
+                factory = self.session_factory if self.session_factory is not None else aiohttp.ClientSession
+                async with lease(shared, factory, timeout) as (session, extra):
                     async with session.request(
                         method,
                         base_url + path,

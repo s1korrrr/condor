@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
@@ -404,13 +404,17 @@ def create_app(
                 except asyncio.CancelledError:
                     pass
             close = getattr(store, "close", None)
-            if callable(close):
-                close()
-            if bridge_session is not None:
-                await bridge_session.close()
-            api_close = getattr(api, "close", None)  # V5Upstream owns a shared session; test doubles have none
-            if api_close is not None:
-                await api_close()
+            try:
+                if callable(close):
+                    close()
+            finally:
+                try:
+                    if bridge_session is not None:
+                        await bridge_session.close()
+                finally:
+                    api_close = getattr(api, "close", None)  # V5Upstream owns a shared session; test doubles have none
+                    if api_close is not None:
+                        await api_close()
 
     app = FastAPI(
         title="RSI V5 Workspace",
@@ -431,6 +435,11 @@ def create_app(
         timed, token = timing.begin() if request.scope["path"].startswith("/api/v5/") else (None, None)
         try:
             response = await call_next(request)
+        except Exception:
+            if timed is None:
+                raise
+            logger.exception("Unhandled V5 request error")
+            response = PlainTextResponse("Internal Server Error", status_code=500)
         finally:
             if token is not None:
                 timing.end(token)

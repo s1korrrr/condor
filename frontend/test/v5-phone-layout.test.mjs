@@ -136,6 +136,7 @@ test('Overview values use the tile value element and inherit their rounded tone'
   assert.match(marketCss, /\.v5m-stat strong \.v5-desktop-unit\s*\{[^}]*font-size:\s*\.7em/);
   const {load} = frontendModules({
     '@tanstack/react-query': {useQuery: ({queryKey}) => ({data:queryKey[0] === 'v5-money' ? {rows:liveMoneyRows} : undefined})},
+    './usePaperClock': {usePaperClock:() => liveMoneyRows.at(-1).at_ms},
     './V5Money': {V5Money:() => null, readMoney() {}}, './V5Helm': {readHelm() {}},
   });
   const window = new Window();

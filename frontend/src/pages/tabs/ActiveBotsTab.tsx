@@ -29,7 +29,7 @@ import { paperReadFailureMessage } from "@/v5/policy";
 import { paperCompleteRead, paperNativeHolds, paperSnapshotsAgree } from "@/v5/policy";
 import { utcExact } from "@/v5/shown.mjs";
 import { ownerTitleText, coin, usdc } from '@/v5/format.mjs';
-import { hasZeroExternalFlows, latest, MONEY_SAMPLE_MAX_AGE_MS, SAMPLE_MS } from "@/v5/money-model.mjs";
+import { hasZeroExternalFlows, latest, moneySampleTimeState, SAMPLE_MS } from "@/v5/money-model.mjs";
 import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionAdmissionError, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
 import { phoneRecordTime } from "@/v5/phone-records";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
@@ -673,8 +673,8 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
   const ownerAt = snapshot?.generated_at_ms;
   const staleOwner = typeof ownerAt === "number" && now - ownerAt > PAPER_SNAPSHOT_FRESH_MS;
   const recorded = money?.range === "7d" ? latest(money.rows ?? [], "v5").newest : null;
-  const sample = recorded && !recorded.gap && recorded.unit === "USDC" && recorded.at_ms > 0 &&
-    recorded.at_ms <= now && now - recorded.at_ms <= MONEY_SAMPLE_MAX_AGE_MS && utcExact(recorded.at_ms) ? recorded : null;
+  const sample = recorded && !recorded.gap && recorded.unit === "USDC" &&
+    moneySampleTimeState(recorded.at_ms, now) === "current" ? recorded : null;
   const useMoney = !complete || (sample !== null && staleOwner && sample.at_ms > ownerAt);
   const wallet = useMoney ? sample && {
     equity_quote: sample.equity, initial_funding_quote: sample.initial_funding, external_cash_flows_quote: sample.external_flows,

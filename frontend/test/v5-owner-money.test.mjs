@@ -5,7 +5,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { Window } from 'happy-dom';
-import { frontendModules } from './helpers/frontend-module.mjs';
+import { frontendModules, paperWorkspaceModules } from './helpers/frontend-module.mjs';
 import { liveMoneyRows } from './helpers/v5-live-money.mjs';
 
 test('wallet equity note keeps one inline text flow at desktop and phone widths', () => {
@@ -84,18 +84,20 @@ test('Money retains exact owner values behind rounded zero tiles', () => {
 });
 
 const sampleAt = Date.UTC(2026, 10, 15, 12, 0, 0);
+const moneyRead = (rows, now) => ({ rows, now_ms: now, daily: [], range: '7d', sampler: true });
 
 function renderMoneyFixture(window, row, now, view, newest) {
   const rows = newest ? [row, newest] : [row];
   const { load } = frontendModules({
-    '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: queryKey[0] === 'v5-money' ? { rows, daily: [], range: '7d', sampler: true } : undefined }) },
+    '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: queryKey[0] === 'v5-money' ? moneyRead(rows, now) : undefined }) },
     '@/features/quant-ops/kit/charts': { BarsChart: () => null, TimeSeriesChart: () => null },
     '@/features/quant-ops/kit/DataTable': { DataTable: () => null },
     './V5Helm': { readHelm() {} },
     './usePaperClock': { usePaperClock: () => now },
   });
   window.document.body.innerHTML = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(load(`v5/${view}.tsx`)[view])));
-  return label => [...window.document.querySelectorAll('.v5m-stat')].find(tile => tile.firstElementChild.textContent.startsWith(label));
+  const scope = view === 'V5Overview' ? window.document.querySelector('.v5-overview article') : window.document;
+  return label => [...scope.querySelectorAll('.v5m-stat')].find(tile => tile.firstElementChild.textContent.startsWith(label));
 }
 
 for (const view of ['V5Money', 'V5Overview']) {
@@ -123,5 +125,33 @@ test('Overview dates the held-coin mark to its actual sample and labels it stale
     const note = now => renderMoneyFixture(window, row, now, 'V5Overview', gap)('Coins still held').querySelector('small').textContent;
     assert.equal(note(sampleAt + 360_000), 'gain or loss at the last recorded sample (as of 2026-11-15 12:00:00.000Z)');
     assert.match(note(sampleAt + 360_001), /last recorded sample \(as of 2026-11-15 12:00:00\.000Z\).*stale/i);
+  } finally { window.close(); }
+});
+
+test('Overview withholds the noon held-coin mark when both clocks read 11:59 UTC', () => {
+  const row = { bot: 'v5', unit: 'USDC', at_ms: sampleAt, unrealized: '12' };
+  const window = new Window();
+  try {
+    const held = renderMoneyFixture(window, row, sampleAt - 60_000, 'V5Overview')('Coins still held');
+    assert.equal(held.querySelector('strong').textContent, '—');
+    assert.match(held.querySelector('small').textContent, /future|ahead/i);
+  } finally { window.close(); }
+});
+
+test('Overview and Bots publish the same held-coin mark at the sample time boundaries', () => {
+  const { paperMoneyTiles } = paperWorkspaceModules().load('pages/tabs/ActiveBotsTab.tsx');
+  const window = new Window();
+  try {
+    for (const [atMs, expected] of [
+      [sampleAt, '12'], [sampleAt - 360_000, '12'], [sampleAt - 360_001, null],
+      [sampleAt + 1, null], [undefined, null], ['invalid', null],
+    ]) {
+      const row = { bot: 'v5', unit: 'USDC', unrealized: '12', at_ms: atMs };
+      const bots = paperMoneyTiles({ complete: false, now: sampleAt, money: moneyRead([row], sampleAt) })
+        .find(tile => tile.label === 'Coins still held');
+      const overview = renderMoneyFixture(window, row, sampleAt, 'V5Overview')('Coins still held');
+      assert.equal(bots.exact ?? null, expected, String(atMs));
+      assert.equal(overview?.querySelector('strong [title]')?.title ?? null, bots.exact ?? null, String(atMs));
+    }
   } finally { window.close(); }
 });

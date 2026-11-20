@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
 import { helmHeadline } from "./helm-model.mjs";
-import { latest, MONEY_SAMPLE_MAX_AGE_MS, moneySinceStart } from "./money-model.mjs";
+import { latest, moneySampleTimeState, moneySinceStart, type MoneyRow } from "./money-model.mjs";
 import { ownerTitleText, ownerDisplay, usdc } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
@@ -15,10 +15,16 @@ const tone = (value: unknown) => {
   return shown === "up" ? " is-up" : shown === "down" ? " is-down" : "";
 };
 
-function HeldCoinsSampleNote({ atMs }: { atMs: number }) {
-  const now = usePaperClock();
-  const time = utcExact(atMs);
-  return <small>gain or loss at the last recorded sample ({time ? `as of ${time}` : "sample time unknown"}){time && now - atMs > MONEY_SAMPLE_MAX_AGE_MS ? " · stale sample" : ""}</small>;
+function HeldCoinsStat({ row }: { row: MoneyRow }) {
+  const state = moneySampleTimeState(row.at_ms, usePaperClock());
+  const value = state === "current" ? row.unrealized : null;
+  const time = utcExact(row.at_ms);
+  return <div className={`v5m-stat${tone(value)}`}>
+    <span>Coins still held</span><strong><OwnerValue value={value} kind="signed" /></strong>
+    <small>{state === "unknown" ? "Sample time unknown"
+      : state === "future" ? `Sample time ${time} is ahead of the page clock`
+      : `gain or loss at the last recorded sample (as of ${time})${state === "stale" ? " · stale sample" : ""}`}</small>
+  </div>;
 }
 
 /**
@@ -34,7 +40,7 @@ export function V5Overview() {
   const v5Values = v5.withValues;
   const equity = v5Values?.equity, funding = v5Values?.initial_funding;
   const sinceStart = moneySinceStart(v5Values);
-  const realized = v5Values?.realized, unrealized = v5Values?.unrealized;
+  const realized = v5Values?.realized;
   const headline = helmHeadline(helm.data);
   const helmMoney = helmRow.withValues;
   return <div className="v5m v5-overview">
@@ -50,7 +56,7 @@ export function V5Overview() {
               <div className="v5m-stat"><span>Wallet equity<em className="v5-phone-unit hidden not-italic"> (USDC)</em></span><strong><OwnerValue value={equity} kind="usdc" unit="" />{ownerDisplay(equity, "usdc").tone !== "none" && <em className="v5-desktop-unit not-italic"> USDC</em>}</strong><small>{`as of ${utcExact(v5Values.at_ms)}`}</small></div>
               <div className={`v5m-stat${tone(sinceStart.value)}`}><span>Since start</span><strong><OwnerValue value={sinceStart.value} kind="signed" exact={sinceStart.title} /></strong><small title={sinceStart.value == null ? undefined : ownerTitleText(funding ?? undefined)}>{sinceStart.value == null ? sinceStart.reason : `against ${usdc(funding)} start funding`}</small></div>
               <div className={`v5m-stat${tone(realized)}`}><span>Profit from closed trades</span><strong><OwnerValue value={realized} kind="signed" /></strong><small>lifetime, owner accounting</small></div>
-              <div className={`v5m-stat${tone(unrealized)}`}><span>Coins still held</span><strong><OwnerValue value={unrealized} kind="signed" /></strong><HeldCoinsSampleNote atMs={v5Values.at_ms} /></div>
+              <HeldCoinsStat row={v5Values} />
             </div>
             {v5.newest && v5.newest !== v5Values && <p className="v5m-hint">The newest sample had no values ({String(v5.newest.gap ?? "gap").replaceAll("_", " ")}); figures above are from {utcExact(v5Values.at_ms)}.</p>}
           </>}

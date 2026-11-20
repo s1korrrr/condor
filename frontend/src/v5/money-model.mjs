@@ -6,9 +6,16 @@
 
 import { decimalPercentRatio, ownerTitleText, rationalPercent } from './format.mjs';
 import { exactSignedSum } from './bots-position-model.mjs';
+import { utcExact } from './shown.mjs';
 
 export const SAMPLE_MS = 300_000;
 export const MONEY_SAMPLE_MAX_AGE_MS = SAMPLE_MS + 60_000;
+
+export function moneySampleTimeState(atMs, now) {
+  if (!utcExact(atMs) || atMs <= 0) return 'unknown';
+  if (atMs > now) return 'future';
+  return now - atMs <= MONEY_SAMPLE_MAX_AGE_MS ? 'current' : 'stale';
+}
 
 export function hasZeroExternalFlows(value) {
   return typeof value === 'string' && value.length <= 128 && /^-?0+(\.0{1,30})?$/.test(value);

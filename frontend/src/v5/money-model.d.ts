@@ -2,6 +2,7 @@ import type { SeriesPoint } from "@/features/quant-ops/kit/series";
 
 export const SAMPLE_MS: number;
 export const MONEY_SAMPLE_MAX_AGE_MS: number;
+export function moneySampleTimeState(atMs: unknown, now: number): 'current' | 'future' | 'stale' | 'unknown';
 
 export type MoneyRow = {
   bot: string; at_ms: number; gap?: string; unit?: string | null; snapshot_at_ms?: number | null;

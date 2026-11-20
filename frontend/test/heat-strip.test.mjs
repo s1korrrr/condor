@@ -37,7 +37,7 @@ test('strip renders one cell per entry, newest first, with one tab stop and a te
   assert.match(html,/data-empty/);
 });
 
-test('the live region exists only while a cell is shown, so idle strips add no empty status regions',async()=>{
+test('one live region updates in place on first focus and after Escape then ArrowRight',async()=>{
   const cells=[{key:'0',color:'red',label:'newest'},{key:'1',color:'green',label:'older'}];
   const idle=renderToStaticMarkup(React.createElement(HeatStrip,{cells,ariaLabel:'API',renderTooltip:()=>null}));
   assert.equal((idle.match(/role="status"/g)||[]).length,0,'an idle strip must not render a status region');
@@ -51,12 +51,28 @@ test('the live region exists only while a cell is shown, so idle strips add no e
   const root=createRoot(container);
   try{
     await React.act(async()=>{root.render(React.createElement(HeatStrip,{cells,ariaLabel:'API',renderTooltip:()=>null}));});
-    assert.equal(container.querySelectorAll('[role=status]').length,0);
+    const regions=()=>[...container.querySelectorAll('[aria-live], [role=status], [role=alert], [role=log]')];
+    const [region]=regions();
+    assert.equal(regions().length,1,'the live region exists before the first update');
+    assert.equal(region.getAttribute('aria-live'),'polite');
+    assert.equal(region.getAttribute('aria-atomic'),'true');
+    assert.equal(region.getAttribute('role'),null);
+    assert.equal(region.textContent,'');
     const strip=container.querySelector('[role=group]');
+    const press=key=>React.act(async()=>{strip.dispatchEvent(new browser.KeyboardEvent('keydown',{key,bubbles:true}));});
+    const expectAnnouncement=text=>{
+      assert.equal(regions().length,1);
+      assert.equal(regions()[0],region);
+      assert.equal(region.textContent,text);
+    };
     await React.act(async()=>{strip.focus();});
-    const regions=[...container.querySelectorAll('[role=status]')];
-    assert.equal(regions.length,1,'a shown cell has one status region');
-    assert.equal(regions[0].textContent,'newest');
-    assert.equal(strip.getAttribute('aria-describedby'),regions[0].id);
+    expectAnnouncement('newest');
+    assert.equal(strip.getAttribute('aria-describedby'),region.id);
+    await press('Escape');
+    expectAnnouncement('');
+    assert.equal(strip.hasAttribute('aria-describedby'),false);
+    await press('ArrowRight');
+    expectAnnouncement('older');
+    assert.equal(strip.getAttribute('aria-describedby'),region.id);
   }finally{await React.act(async()=>root.unmount());container.remove();await browser.happyDOM.close();}
 });

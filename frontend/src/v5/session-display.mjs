@@ -1,6 +1,8 @@
 /** How the Sessions page names and words a row of the dashboard's own action journal (workspace.sqlite). */
 import { utcMin } from './format.mjs';
 
+const MAX_ADVISOR_TIME_MS = 4_102_444_800_000;
+
 /** Row kinds the journal writes (condor/v5/state.py). Anything else is shown as unreported, never guessed. */
 const KINDS = { inspect: 'Source inspection', report: 'Report', loop: 'Report loop' };
 
@@ -10,16 +12,16 @@ export function sessionKindLabel(session) {
   return session.kind === 'loop' && session.loop_id ? `${label} · ${session.loop_id}` : label;
 }
 
-/**
- * Summaries stored before the inspect handler wrote plain words hold `availability=<epoch ms>` and `ready=True|False`.
- * Only those two exact patterns are rewritten; every other text, and any value that is not a time, is left as stored.
- */
-export function sessionSummaryText(summary) {
-  if (typeof summary !== 'string') return summary;
-  return summary
-    .replace(/(?<=; )availability=(\d{1,16})(?=;|$)/, (whole, ms) => {
-      const time = utcMin(Number(ms));
-      return time ? `available ${time}` : whole;
-    })
-    .replace(/(?<=; )ready=(True|False)(?=;|$)/, (_whole, value) => (value === 'True' ? 'ready' : 'not ready'));
+/** Reword only complete legacy inspect records. Snapshot IDs can contain semicolons, so match the final field. */
+export function sessionSummaryText(summary, kind) {
+  if (kind !== 'inspect' || typeof summary !== 'string') return summary;
+  const source = /^(Inspected source snapshot [\s\S]+); availability=([1-9]\d*)$/.exec(summary);
+  if (source) {
+    const ms = Number(source[2]);
+    return ms <= MAX_ADVISOR_TIME_MS ? `${source[1]}; available ${utcMin(ms)}` : summary;
+  }
+  return summary.replace(
+    /^(Inspected paper status [\s\S]+); ready=(True|False)(; controllers=(?:0|[1-9]\d*); mode=PAPER \(simulated wallet\))$/,
+    (_whole, prefix, ready, suffix) => `${prefix}; ${ready === 'True' ? 'ready' : 'not ready'}${suffix}`,
+  );
 }

@@ -78,7 +78,7 @@ export function helmCoinsNote(rows) {
   if (!missing) return null;
   return missing === rows.length
     ? 'Helm does not publish its buy rule or signal values; the state and hold reason below are Helm\'s own'
-    : 'A — means Helm has not published that coin\'s buy rule or signal values.';
+    : 'In Buy rule and Where it is now, a — means Helm has not published that coin\'s buy rule or signal values.';
 }
 
 /**

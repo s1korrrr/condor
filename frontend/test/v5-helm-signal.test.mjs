@@ -120,7 +120,7 @@ test('the unpublished-signal note is one table-level sentence, and only for coin
   assert.equal(helm.helmCoinsNote(rows(null, null, null)), NONE);
   assert.equal(helm.helmCoinsNote(rows(signal(), signal())), null);
   assert.equal(helm.helmCoinsNote([]), null);
-  assert.equal(helm.helmCoinsNote(rows(signal(), null)), 'A — means Helm has not published that coin\'s buy rule or signal values.');
+  assert.equal(helm.helmCoinsNote(rows(signal(), null)), 'In Buy rule and Where it is now, a — means Helm has not published that coin\'s buy rule or signal values.');
 });
 
 test('a coin whose signal is published still shows every published value beside an unpublished coin', () => {

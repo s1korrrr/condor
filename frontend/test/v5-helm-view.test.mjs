@@ -96,7 +96,7 @@ test('rounded Helm figures retain exact owner inputs and RSI distance', context 
   assert.match(html, /title="200\.00001"/);
 });
 
-test('one published coin keeps its values; the unpublished one shows plain dashes under a single note', context => {
+test('the single note explains dashes in rule and signal columns only, not Held or Breakeven', context => {
   context.mock.method(Date, 'now', () => 1793929900000);
   const html = render({ extra: { symbols: [
     { pair: 'BNB-USDC', signal: { at: 1793929890, rsi: '40.5', oversold: '31', rsi_length: 21, atr_fraction: null, decision: null }, bag: null },
@@ -105,6 +105,7 @@ test('one published coin keeps its values; the unpublished one shows plain dashe
   ] } });
   assert.match(html, /Buys when RSI\(21\) crosses up through 31/);
   assert.match(html, /RSI 40.5, 9.5 points above the line/);
-  assert.equal(html.match(/A — means Helm has not published that coin&#x27;s buy rule or signal values\./g)?.length, 1);
+  assert.equal(html.match(/In Buy rule and Where it is now, a — means Helm has not published that coin&#x27;s buy rule or signal values\./g)?.length, 1);
+  assert.match(html, /<dt>Held<\/dt><dd>—<\/dd><dt>Breakeven<\/dt><dd>—<\/dd>/);
   assert.equal(html.match(/Rule not published by Helm|Signal not published by Helm/g), null);
 });

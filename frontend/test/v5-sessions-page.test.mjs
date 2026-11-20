@@ -24,7 +24,7 @@ test('the Sessions page says it is this dashboard\'s own action journal and poin
 test('every row is labelled from its kind and old summaries read as plain words', context => {
   const html = render([
     row('a', { kind: 'inspect', summary: 'Inspected source snapshot snap-1; availability=1793467481251' }),
-    row('b', { kind: 'report', summary: 'Report request started' }),
+    row('b', { kind: 'report', summary: 'Review readiness; ready=False; do not send' }),
     row('c', { kind: 'loop', loop_id: 'market_analyst_monitor', summary: 'Loop started' }),
     row('d', { kind: 'inspect', agent_id: 'helm', summary: 'Inspected paper status helm_v5_paper; ready=True; controllers=3; mode=PAPER (simulated wallet)' }),
     row('e', { summary: 'Old row without a kind' }),
@@ -35,6 +35,7 @@ test('every row is labelled from its kind and old summaries read as plain words'
   assert.match(html, /market_analyst · Kind not reported ·/);
   assert.match(html, /Inspected source snapshot snap-1; available 31 Oct 17:24 UTC/);
   assert.match(html, /Inspected paper status helm_v5_paper; ready; controllers=3/);
+  assert.match(html, /Review readiness; ready=False; do not send/);
   assert.doesNotMatch(html, /availability=|ready=True/);
   assert.equal(html.match(/Source inspection</g)?.length ?? 0, 0, 'a non-loop row is no longer blanket-labelled "Source inspection"');
 });

@@ -101,12 +101,11 @@ def _valid_advisor_time(value: Any) -> bool:
 
 
 def _utc_minute(ms: Any) -> str | None:
-    """"14 Nov 11:34 UTC" ("14 Nov 2025 11:34 UTC" outside the current UTC year), or None for a non-time."""
+    """Format a journal timestamp as "20 Nov 2026 06:12 UTC", or None for a non-time."""
     if not _valid_advisor_time(ms):
         return None
-    at, now = datetime.fromtimestamp(ms / 1000, timezone.utc), datetime.now(timezone.utc)
-    year = "" if at.year == now.year else f" {at.year}"
-    return f"{at.day} {at:%b}{year} {at:%H:%M} UTC"
+    at = datetime.fromtimestamp(ms / 1000, timezone.utc)
+    return f"{at.day} {at:%b %Y %H:%M} UTC"
 
 
 def _safe_history_advice(advice: Any) -> dict[str, Any]:

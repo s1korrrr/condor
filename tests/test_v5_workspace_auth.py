@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -705,12 +706,14 @@ def test_wire_body_limit_precedes_json_decode_for_chunked_and_length(tmp_path):
         )
 
 
-def test_source_inspection_uses_real_available_at_ms_field(tmp_path):
+@pytest.mark.parametrize("year", [1970, datetime.now(timezone.utc).year])
+def test_source_inspection_uses_real_available_at_ms_field(tmp_path, year):
+    available_at = datetime(year, 11, 20, 6, 12, tzinfo=timezone.utc)
     api = FakeUpstream()
     api.context = {
         "schema_version": "multi-venue-evidence.v1",
         "snapshot_id": "snapshot-1",
-        "available_at_ms": 123456,
+        "available_at_ms": int(available_at.timestamp() * 1000),
     }
     app = create_app(settings=settings(tmp_path), upstream=api)
     with TestClient(app) as client:
@@ -720,8 +723,7 @@ def test_source_inspection_uses_real_available_at_ms_field(tmp_path):
         )
         assert response.status_code == 200
         summary = response.json()["summary"]
-        # 123456 ms after the epoch, written as a UTC time, never as `availability=<epoch ms>`.
-        assert summary == "Inspected source snapshot snapshot-1; available 1 Jan 1970 00:02 UTC"
+        assert summary == f"Inspected source snapshot snapshot-1; available 20 Nov {year} 06:12 UTC"
         assert response.json()["ticks"][0]["summary"] == summary
 
 

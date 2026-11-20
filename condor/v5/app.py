@@ -345,7 +345,9 @@ def create_app(
             if not (isinstance(result, dict) and "source_route" in result):
                 return result if isinstance(result, dict) else None
             payload = await api.observation(result["source_route"])
-            read = read_compatibility_path(path, paper, paper_read=payload)
+            read = read_compatibility_path(
+                path, paper, paper_read=payload, paper_read_now_ms=clock()
+            )
             return read if isinstance(read, dict) else None
         except (HTTPException, UpstreamError):
             return None
@@ -623,16 +625,19 @@ def create_app(
                     raise HTTPException(
                         503, detail={"code": "HOST_OPERATIONS_INVALID"}
                     ) from None
+                read_at_ms = clock()
                 payload = dict(
                     payload,
                     bot_id=paper.bot_name,
-                    read_at_ms=clock(),
+                    read_at_ms=read_at_ms,
                     observed_at_ms=payload.get("observed_at_ms"),
                     source_at_ms=payload.get("generated_at_ms"),
                     capabilities=[],
                     source={"owner": "host_monitor_export"},
                 )
-                return read_compatibility_path(path, paper, paper_read=payload)
+                return read_compatibility_path(
+                    path, paper, paper_read=payload, paper_read_now_ms=read_at_ms
+                )
             try:
                 payload = await api.observation(result["source_route"])
             except UpstreamError as exc:
@@ -650,7 +655,9 @@ def create_app(
                     exc.http_status,
                     detail={"code": exc.code, **exc.upstream_detail},
                 ) from exc
-            return read_compatibility_path(path, paper, paper_read=payload)
+            return read_compatibility_path(
+                path, paper, paper_read=payload, paper_read_now_ms=clock()
+            )
         return result
 
     @app.post("/api/v5/auth/login")

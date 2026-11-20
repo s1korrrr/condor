@@ -456,7 +456,12 @@ export function SettingsPage({ paused = false }: { paused?: boolean } = {}) {
   const query = useQuery({ queryKey: ["v5-settings"], queryFn: v5Api.settings });
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
   const paper = Boolean(paperWorkspaceLabel(profile.data));
-  const observation = usePaperObservation(paper ? profile.data?.readiness.paper_owner?.bot_name : null, false);
+  const bot = paper ? profile.data?.readiness.paper_owner?.bot_name : null;
+  const observation = usePaperObservation(bot, false);
+  function refreshSettings() {
+    void query.refetch();
+    if (bot) void observation.refetch();
+  }
   if (query.isPending) return <Loading label="Loading workspace settings" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
   const settings = query.data;
@@ -464,7 +469,7 @@ export function SettingsPage({ paused = false }: { paused?: boolean } = {}) {
   const errors = typeof settings.source_error === "string" ? settings.source_error.split(";") : [];
   const advisorMissing = errors.some(error => error.startsWith("advisor:")) ? "advisor source unavailable" : settings.advisor_enabled_error === "not a boolean" ? "v5_advisory /v1/advice/status enabled is invalid: not a boolean" : "advisor enabled not published";
   const tasksMissing = errors.some(error => error.startsWith("task_profiles:")) ? "task profiles source unavailable" : "polling state not published";
-  return <><PageHeading title="Workspace settings" description={paper ? `Read-only configuration · paper owner reads: ${observation.summary.label.toLowerCase()}. ${observation.summary.reason}` : "Read-only configuration. Owner readiness is reported separately."} actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh settings</button>} />
+  return <><PageHeading title="Workspace settings" description={paper ? `Read-only configuration · paper owner reads: ${observation.summary.label.toLowerCase()}. ${observation.summary.reason}` : "Read-only configuration. Owner readiness is reported separately."} actions={<button className="v5-button" onClick={refreshSettings}><RotateCw size={15} />Refresh settings</button>} />
     <PaperIdentity paused={paused} />
     <div className="v5-settings-grid"><section className="v5-panel"><div className="v5-section-heading"><div><h2>{paper ? "Advisor runtime identity" : "Runtime identity"}</h2><p>Server-supplied workspace binding</p></div></div><div className="v5-settings-list"><DataValue label="Workspace" value={settings.identity.name} /><DataValue label="Host" value={settings.identity.host} /><DataValue label="Mode" value={settings.identity.mode} /><DataValue label={paper ? "Advisor execution" : "Execution"} value={settings.identity.execution_enabled ? "Enabled" : "Disabled"} /><DataValue label="Baseline binding" value={settings.identity.baseline_binding} /><DataValue label="Upstream revision" value={settings.identity.upstream_revision} /></div></section>
       <section className="v5-panel">

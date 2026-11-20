@@ -86,14 +86,21 @@ test('page statistics, counts, holdings and UTC times retain shared formatter ou
   assert.doesNotMatch(held, /0\.12345678901234567890|640\.000001/);
 });
 
-test('mandate tile shows the effective end when published, else the mandate end labelled as such', () => {
+test('mandate tile shows a usable effective end instead of the mandate end', context => {
+  context.mock.method(Date, 'now', () => 1793929900000);
   const mandate = { state: 'active', mandate_id: 'helm-test', revision: 1, valid_until_ms: 1796496650500 };
   const effective = render({ extra: { mandate: { ...mandate, effective_until_ms: 1793929900000 } } });
   assert.match(effective, /revision 1 · until 6 Nov 01:51 UTC/);
-  assert.doesNotMatch(effective, /5 Dec|mandate ends|effective end not published/);
-  const fallback = render({ extra: { mandate } });
-  assert.match(fallback, /mandate ends 5 Dec 18:50 UTC \(effective end not published\)/);
+  assert.doesNotMatch(effective, /5 Dec|mandate ends|effective end unavailable/);
 });
+
+for (const [reason, fields] of [['missing', {}], ['malformed', { effective_until_ms: 1e18 }]]) {
+  test(`mandate tile labels the mandate end when the effective end is ${reason}`, context => {
+    context.mock.method(Date, 'now', () => 1793929900000);
+    const html = render({ extra: { mandate: { state: 'active', valid_until_ms: 1796496650500, ...fields } } });
+    assert.match(html, /mandate ends 5 Dec 18:50 UTC \(effective end unavailable\)/);
+  });
+}
 
 test('native owner: detail reasons are listed in the headline', () => {
   const html = render({ extra: { ready: false, reasons: ['modular_spot_helm_v5_paper: native_candles_unavailable'] } });

@@ -39,9 +39,10 @@ export async function readHelm(): Promise<HelmRead> {
 const words = (value: unknown) => typeof value === "string" && value ? value.replaceAll("_", " ") : "—";
 const at = (ms: number | null | undefined) => utcMin(ms) ?? "unknown time";
 /** The runtime's effective end (earliest of mandate, authorization and eligibility) when it publishes one, else the mandate's own end, named as such. */
-const mandateEnd = (mandate: NonNullable<HelmStatus["mandate"]>) => mandate.effective_until_ms != null
-  ? `until ${at(mandate.effective_until_ms)}`
-  : `mandate ends ${at(mandate.valid_until_ms)} (effective end not published)`;
+const mandateEnd = (mandate: NonNullable<HelmStatus["mandate"]>) => {
+  const effectiveEnd = utcMin(mandate.effective_until_ms);
+  return effectiveEnd ? `until ${effectiveEnd}` : `mandate ends ${at(mandate.valid_until_ms)} (effective end unavailable)`;
+};
 
 /** Helm page: the Helm paper bot's own published runtime state, read-only. Nothing here sends a control command. */
 export function V5Helm() {

@@ -510,7 +510,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           assert.match(container.textContent,/shutdown not published/);
           assert.match(container.textContent,/a failure was reported but cannot be shown safely/);
           assert.match(container.textContent,/as last published at/);
-          assert.match(container.textContent,/until unknown time/);
+          assert.match(container.textContent,/mandate ends unknown time \(effective end unavailable\)/);
           assert.match(container.textContent,/2 published value\(s\) did not match/);
           assert.doesNotMatch(container.textContent,/Running/);
           await React.act(async () => {

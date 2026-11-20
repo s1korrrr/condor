@@ -33,7 +33,7 @@ test('every row is labelled from its kind and old summaries read as plain words'
   assert.match(html, /market_analyst · Report ·/);
   assert.match(html, /market_analyst · Report loop · market_analyst_monitor ·/);
   assert.match(html, /market_analyst · Kind not reported ·/);
-  assert.match(html, /Inspected source snapshot snap-1; available 31 Oct 17:24 UTC/);
+  assert.match(html, /Inspected source snapshot snap-1; available 31 Oct 2026 17:24 UTC/);
   assert.match(html, /Inspected paper status helm_v5_paper; ready; controllers=3/);
   assert.match(html, /Review readiness; ready=False; do not send/);
   assert.doesNotMatch(html, /availability=|ready=True/);

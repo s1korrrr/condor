@@ -13,9 +13,18 @@ test('each row is labelled from its kind, and an unknown or missing kind is not 
   for (const row of [{ loop_id: null }, { kind: 'bogus' }, { kind: null }, { kind: 'toString' }, null]) assert.equal(sessionKindLabel(row), 'Kind not reported');
 });
 
+test('legacy availability keeps the year before and after the UTC year changes', context => {
+  const summary = 'Inspected source snapshot snap-1; availability=1793467481251';
+  let now = Date.UTC(2026, 11, 31, 23, 59);
+  context.mock.method(Date, 'now', () => now);
+  const sameYear = inspect(summary);
+  now = Date.UTC(2027, 0, 1);
+  assert.equal(sameYear, inspect(summary));
+  assert.equal(sameYear, 'Inspected source snapshot snap-1; available 31 Oct 2026 17:24 UTC');
+});
+
 test('old summaries: availability epoch ms becomes a UTC time and ready=True/False becomes plain words', context => {
-  context.mock.method(Date, 'now', () => 1793929900000); // 6 Nov 2026: the year is omitted for 2026 times
-  assert.equal(inspect('Inspected source snapshot snap-1; availability=1793467481251'), 'Inspected source snapshot snap-1; available 31 Oct 17:24 UTC');
+  context.mock.method(Date, 'now', () => Date.UTC(2026, 10, 6));
   assert.equal(inspect('Inspected source snapshot snap-1; availability=1'), 'Inspected source snapshot snap-1; available 1 Jan 1970 00:00 UTC');
   assert.equal(inspect('Inspected source snapshot snap-1; availability=4102444800000'), 'Inspected source snapshot snap-1; available 1 Jan 2100 00:00 UTC');
   assert.equal(inspect('Inspected source snapshot snap; availability=1; availability=123456'), 'Inspected source snapshot snap; availability=1; available 1 Jan 1970 00:02 UTC');

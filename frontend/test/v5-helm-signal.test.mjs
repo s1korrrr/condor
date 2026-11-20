@@ -113,14 +113,14 @@ test('missing bags and incomplete breakevens have a reason, zero bags have no in
   assert.equal(row(signal(), {}, { bag: { held_amount: '0.000', breakeven_price: '640' } }).breakeven, '—');
 });
 
-const NONE = 'Helm does not publish its buy rule or signal values; the state and hold reason below are Helm\'s own';
+const NONE = 'Helm does not publish its buy rule or signal values; the state and hold reason below are Helm\'s own.';
 
 test('the unpublished-signal note is one table-level sentence, and only for coins without a signal', () => {
   const rows = (...signals) => signals.map((published, index) => helm.helmCoinRow(coin(published, { pair: `C${index}-USDC` }), { fresh: true, nowS }));
   assert.equal(helm.helmCoinsNote(rows(null, null, null)), NONE);
   assert.equal(helm.helmCoinsNote(rows(signal(), signal())), null);
   assert.equal(helm.helmCoinsNote([]), null);
-  assert.equal(helm.helmCoinsNote(rows(signal(), null)), 'In Buy rule and Where it is now, a — means Helm has not published that coin\'s buy rule or signal values.');
+  assert.equal(helm.helmCoinsNote(rows(signal(), null)), 'A dash in place of a buy rule or signal means Helm has not published it for that coin.');
 });
 
 test('a coin whose signal is published still shows every published value beside an unpublished coin', () => {

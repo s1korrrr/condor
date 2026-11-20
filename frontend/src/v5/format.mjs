@@ -253,11 +253,11 @@ export function count(value) {
 const validMs = ms => typeof ms === 'number' && Number.isFinite(ms) && Math.abs(ms) <= MAX_DATE_MS;
 const two = number => String(number).padStart(2, '0');
 
-function stamp(ms, nowMs, seconds) {
+function stamp(ms, nowMs, seconds, alwaysYear = false) {
   if (!validMs(ms)) return null;
   const at = new Date(ms);
-  const now = validMs(nowMs) ? new Date(nowMs) : new Date();
-  const year = at.getUTCFullYear() === now.getUTCFullYear() ? '' : ` ${at.getUTCFullYear()}`;
+  const now = alwaysYear ? null : validMs(nowMs) ? new Date(nowMs) : new Date();
+  const year = at.getUTCFullYear() === now?.getUTCFullYear() ? '' : ` ${at.getUTCFullYear()}`;
   const clock = `${two(at.getUTCHours())}:${two(at.getUTCMinutes())}${seconds ? `:${two(at.getUTCSeconds())}` : ''}`;
   return `${at.getUTCDate()} ${MONTHS[at.getUTCMonth()]}${year} ${clock} UTC`;
 }
@@ -270,6 +270,11 @@ export function utc(ms, nowMs = Date.now()) {
 /** "14 Nov 11:34 UTC" where seconds mean nothing, or null. */
 export function utcMin(ms, nowMs = Date.now()) {
   return stamp(ms, nowMs, false);
+}
+
+/** "14 Nov 2026 11:34 UTC" for journal times that must display the year. */
+export function utcMinWithYear(ms) {
+  return stamp(ms, undefined, false, true);
 }
 
 /** "24 s" under 2 min, "3 min" under 2 h, "3 h 10 min" under 2 days, then "3 d 19 h"; whole units, rounded down. Unknown is "—". */

@@ -20,6 +20,16 @@ The app requires these process settings:
 | `V5_FRONTEND_DIST` | Separate frontend build root; defaults to `frontend/dist-v5/`. |
 | `V5_COOKIE_SECURE` | Defaults to `true`; use `false` only for an isolated local development browser. |
 | `V5_PAPER_STATUS_FILE` | Optional. Absolute `<bot>.status.json` of the native paper runtime, mounted read-only. Unset keeps every projection unbound and unchanged. |
+| `V5_TRADEPAD_URL` | Optional fixed HTTP(S) base URL for the read-only Tradepad owner. Unset reports not connected. |
+| `V5_TRADEPAD_CAMPAIGN_ID` | Optional exact tested-window campaign ID, for example `w1772323200-1790812800`. Required to open a campaign; other campaign IDs are refused. |
+| `V5_RESEARCH_URL` | Optional fixed HTTP(S) base URL for the Research OS owner. Only its overview and network are read; unset reports not connected. The displayed generation time and age describe the owner projection, not its choice of source tree. |
+| `V5_LEARNING_SOURCE` | Optional. Exactly `research_os_v1` enables the read-only Learning / Factory / Lineage projection source (design `docs/plans/active/2026-11-18-v5-learning-factory-lineage-projection.md` §5 in rsibot, frozen appendix vendored in `condor/v5/schemas/learning_projection/`). Unset disables it: `/api/v5/learning/{manifest,lessons,records,jobs}` answer a typed `503 PUBLICATION_UNAVAILABLE`, never fixture data. Any other value fails startup. When set, all five `V5_LEARNING_*` names are required; a partial or invalid set fails startup. |
+| `V5_LEARNING_OWNER_URL` | Fixed HTTP(S) owner projection-proxy origin. Path must be empty or `/`; no query, fragment or credentials. Read with its own 256,000-byte cap, 4 s deadline, no retries, identity encoding and no credentials. |
+| `V5_LEARNING_SCOPE_ID` | Must match the selected artifact. The authenticated browser reads it from `/api/v5/auth` and supplies `scope_id` on every projection request. Condor never appends or rewrites it: missing or different is `400 INVALID_QUERY`; valid raw query bytes pass through unchanged. |
+| `V5_LEARNING_SCOPE_SHA256` | Canonical SHA-256 (64 lowercase hex characters) of an artifact pinned in `schemas/learning_scopes/PIN.md`. Unknown pins, corrupted canonical preimages and scope ID mismatches fail startup. Both runtimes check the envelope summary and row membership against the selected artifact, not the response's own membership claims. |
+| `V5_LEARNING_PROJECTION_REVISION` | The frozen projection revision hash, lowercase hex, 64 characters. An owner envelope with another revision is rejected. |
+
+Tradepad's owner publishes numeric PnL as a float; numeric values are shown as published, not as exact accounting. Decimal strings, when supplied, retain their text. Browsers without lossless JSON primitive source access fail closed rather than display a rounded number. The campaign owner may publish no generation time or freshness deadline; neither a successful refresh nor the Research tree selection establishes freshness. Bridge limits in `config.py` reject oversized collections without truncating them: 10,000 strategies or sources, 20,000 network nodes, 100,000 network edges, and 10,000 statistics, facet or limitation rows. Per-endpoint byte limits are 4–64 MiB and the deadline is 20 seconds. Collection caps are checked after decode; the byte cap bounds the work. The pages label display subsets.
 
 The stock agent definitions live in the repository-level `agents_v5/`. Runtime notes and optional
 local agent overlays live under `$V5_RUNTIME_ROOT/agents/`; local files override
@@ -97,5 +107,11 @@ WorkspaceState.backup_database(
 ```
 
 The application serves the V5 frontend from `$V5_FRONTEND_DIST/v5.html` and its
-`assets/` directory. The ordinary Condor app, routes, auth, runtime root, and
+`assets/` directory. Put the matching reviewed build manifest at
+`$V5_FRONTEND_DIST/../v5-reviewed-build.json` (for example,
+`frontend/dist-v5/` alongside `frontend/v5-reviewed-build.json`). New root-level
+statics and the favicon alias require manifest membership and a matching SHA256;
+an absent or invalid manifest withholds them with a warning. The legacy
+`/condor_old.jpeg` GET route remains independent of the manifest and serves the
+logo file as before. The ordinary Condor app, routes, auth, runtime root, and
 ports are not changed by this package.

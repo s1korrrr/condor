@@ -1,0 +1,1265 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "candidates",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "PARTIAL",
+  "reason_codes": [
+    "INDEX_INCOMPLETE",
+    "OMITTED_CONTENT"
+  ],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "PARTIAL",
+    "total_items": 52,
+    "returned_items": 25,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": "AQQAAABQrCUfGhy3XriJDBuFmARu9ArHnXd1pihINYUTGLJavWaiTPJLEkyYPYm1d3nVwfnLq30hdsXH3D75GJah1eCGATCBX17sLTnkH4TaHgx5V8jtIO3oeDEY8UUJUYy3iN8MRBNvo1WzZ4oRRq0W9-hknpT7T8If536DEMBg9hyq_4ppZGVhOm9reC1rb3JvdXNoYWstMjA5ODAzNjc1ODA3MjIxNzY1ODpyZXZpc2lvbjozNGNjZTgxMmUxNWVhYTIyOTI5ZjdlOGU3YjBlNjJlZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "has_more": true
+  },
+  "items": [
+    {
+      "record_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903:revision:cd2887da2b4e98e7d786512627bcc975",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-cd2887da2b4e98e7d786512627bcc975d22819f2d2dff730ea1fdf2e11142703.json",
+          "pointer": "/nodes/1",
+          "sha256": "b1fd745a0c6651f4fe96607c2cb342523f9ea27f68c2d3728d01d9dcc76b976e",
+          "bytes": 3326
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903:revision:cd2887da2b4e98e7d786512627bcc975",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903",
+      "idea_revision_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903:revision:cd2887da2b4e98e7d786512627bcc975",
+      "title": "CD-01 accumulate-distribute diagnostic",
+      "hypothesis": "An accumulate-distribute controller with drawdown-scaled cash tickets and all-in trail/accelerator distribution beats B0 versus buy-and-hold after 18 bps on unpooled BTC/ETH/BNB books. This is a new controller shape, not a YAML change.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "c5a8ddffbd610fcd36d933816ea4d13885112c1368b71a461e85c111b6d044ad",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-01-exit-architecture-20260903:revision:5626bb45487765d8ce0b125f6c6f521f",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-5626bb45487765d8ce0b125f6c6f521f82831e02d567f4185c013423204b0027.json",
+          "pointer": "/nodes/1",
+          "sha256": "b87e5ec93344ed879e3c94fb50756fc5155e56688945ddab31cbd3d5592fdeea",
+          "bytes": 2966
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-01-exit-architecture-20260903:revision:5626bb45487765d8ce0b125f6c6f521f",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-01-exit-architecture-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-01-exit-architecture-20260903:revision:5626bb45487765d8ce0b125f6c6f521f",
+      "title": "Exit architecture on active executors",
+      "hypothesis": "Most 1m RSI-dip MFE does not reach the 1.5% YAML trail anchor, so the ordinary winner does not arm the trail. Exiting the active PositionExecutor on bag-path RSI-reversal, or arming near the 40 bps locked floor, raises captured MFE after 18 bps versus B0.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "713b5d53e9070d43b6d484c78ac3c87adc98a4c6ffe309fe6c10b0ccdac1625e",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-02-early-stop-vs-bags-20260903:revision:94f3ca8bde86caa3346c9b91d101b330",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-94f3ca8bde86caa3346c9b91d101b3303290db285051dfca08ec248ebfaef87e.json",
+          "pointer": "/nodes/1",
+          "sha256": "e61b52cde97beadc16a84ac65b20be0c731e4f80fbb99a92bdd26dcd3e04390e",
+          "bytes": 2770
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-02-early-stop-vs-bags-20260903:revision:94f3ca8bde86caa3346c9b91d101b330",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-02-early-stop-vs-bags-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-02-early-stop-vs-bags-20260903:revision:94f3ca8bde86caa3346c9b91d101b330",
+      "title": "Early-stop realise versus bag recovery",
+      "hypothesis": "Converting -3% / -3.5% losers into bags that wait for +5% to +7% net, then 1% pullback, then 20% LIMIT_CHASER slices, is a PnL hole versus realizing the early-stop.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "c4ae2d7e552fbae893eb0e085072c11c358c49ca315e8474ab49134ef2052de8",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-03-stop-ladder-20260903:revision:4584f423b1f566cfae8bcea347d4240f",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-4584f423b1f566cfae8bcea347d4240f336a1a817391f87234e799517f18573d.json",
+          "pointer": "/nodes/1",
+          "sha256": "2cecce0d88d5d05290713d62e389ecee999fa01ba120a96ae7a2eff2dec4909f",
+          "bytes": 2525
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-03-stop-ladder-20260903:revision:4584f423b1f566cfae8bcea347d4240f",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-03-stop-ladder-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-03-stop-ladder-20260903:revision:4584f423b1f566cfae8bcea347d4240f",
+      "title": "Stop laddering into losers",
+      "hypothesis": "The loss engine is DCA into red with dca_score_boost=0 and 6 / 6 / 8 slots, not the RSI gate. Boost 1 or 2 and/or fewer slots raises pair PnL versus B0.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "662abb3461f36ae48ee3073ed54b21a4e94c7bc0a27f219f2f0d49f57e7090f7",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-04-dynamic-cash-reserve-20260903:revision:f60a02bf194f65721f07ece1d9147463",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-f60a02bf194f65721f07ece1d9147463a2ab806f32c701fb058ddd8d17c22257.json",
+          "pointer": "/nodes/1",
+          "sha256": "04fbad1a11ae93f47f6d4b5a7767a87f0106179fd3596fc195e3161204a4289e",
+          "bytes": 3109
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-04-dynamic-cash-reserve-20260903:revision:f60a02bf194f65721f07ece1d9147463",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-04-dynamic-cash-reserve-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-04-dynamic-cash-reserve-20260903:revision:f60a02bf194f65721f07ece1d9147463",
+      "title": "Dynamic cash reserve in strong up-months",
+      "hypothesis": "A long-only no-underwater-sale policy loses to buy-and-hold in melt-up months because harvest plus cash drag cannot beat a full book. A predeclared reserve rule that raises quote reserve when a short confirmed-close trend filter is up will beat B0 versus buy-and-hold on ETH in months like 2026-08 without destroying June.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "75b6b56763a772c65139bcde10337807e0a32746df27b76db554fa63750aa5a3",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-05-capital-honesty-20260903:revision:a78ad339e99179f3665118e930d85d4d",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-a78ad339e99179f3665118e930d85d4d44428b21c4d37d033c0249c9b0e3d350.json",
+          "pointer": "/nodes/1",
+          "sha256": "91529b0cfc26c35836b5e12366d99ee409b9bbda59eaa19ace8ae59903e67cfb",
+          "bytes": 2765
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-05-capital-honesty-20260903:revision:a78ad339e99179f3665118e930d85d4d",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-05-capital-honesty-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-05-capital-honesty-20260903:revision:a78ad339e99179f3665118e930d85d4d",
+      "title": "Capital honesty, cap equal to declared budget",
+      "hypothesis": "Caps 900 / 1500 / 2500 with a leftover 500 field create idle-then-overloaded inventory. Setting max_total_position_usd equal to owner-declared cash changes BTC ticket count and ETH/BNB bag-plus-active inventory, with a sign versus B0.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "e427b38519c25c2ba2a80571d3bbe5184b700ec30a8a53253dcad32b2dcf3aa0",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-06-rebound-scout-20260903:revision:ee02b7f304089f1887842769b771def6",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-ee02b7f304089f1887842769b771def6a85f915138ea52329fb26fa48b319131.json",
+          "pointer": "/nodes/1",
+          "sha256": "ae94f62581c69d54c0718014434053a0426b0b4080c49f49ccec53d905dd1d22",
+          "bytes": 2780
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-06-rebound-scout-20260903:revision:ee02b7f304089f1887842769b771def6",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-06-rebound-scout-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-06-rebound-scout-20260903:revision:ee02b7f304089f1887842769b771def6",
+      "title": "Rebound confirm plus real scout/runner",
+      "hypothesis": "First touch is the bad fill. Arming on RSI-reversal and waiting for buy_confirmation_rsi_delta plus price above trough, with scout fraction 0.4, cuts adverse first fills versus B0's full-size immediate fire.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "8e99e2c7941cfb154e5cbb968e53404f81c98c473627a62b1af2af4b125fa913",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:0f9163d1e23471e72ef9dda8d63a069b",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": "okx_spot_dca",
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-0f9163d1e23471e72ef9dda8d63a069b52298231e0f0f42ad9e0cdecf0bd315c.json",
+          "pointer": "/nodes/1",
+          "sha256": "5aa6e145d037f7640ca24f2f2827db60e2a3e6a589a92bb135d60d4d55f5c941",
+          "bytes": 20171
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:0f9163d1e23471e72ef9dda8d63a069b",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:0f9163d1e23471e72ef9dda8d63a069b",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:0f9163d1e23471e72ef9dda8d63a069b",
+      "title": "Shrink-only vol-sensitive size wrap on okx_spot_dca",
+      "hypothesis": "Reducing the size of new uncommitted spot entry/DCA purchases when 1440-bar 1m close-to-close population variance exceeds the warmup-only median 1.4278464713012902e-07, via a shrink-only clip [0.5, 1.0] after HLRSIController._effective_buy_entry_usd, improves the permitted after-cost equity/downside tradeoff versus unchanged owner and versus a preregistered constant 0.5 control, without unacceptable inactivity or longer inventory lock-up. Never increases owner planned quote. Does not change RSI eligibility,",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "3dcfff3e5dbe1565c7bd5165e99a8a2414bcc16b4d1695660432b8dcc458cc41",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:778ac2c734986ef757b898301a643ac9",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": "okx_spot_dca",
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-778ac2c734986ef757b898301a643ac93051f79079753479aec7f341a08c2e4e.json",
+          "pointer": "/nodes/1",
+          "sha256": "3bc545852c00f8e5cd72d464682ba691069bff3166b4421129c390c8e4e657ac",
+          "bytes": 27537
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:778ac2c734986ef757b898301a643ac9",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:778ac2c734986ef757b898301a643ac9",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:778ac2c734986ef757b898301a643ac9",
+      "title": "Shrink-only vol-sensitive size wrap on okx_spot_dca",
+      "hypothesis": "Reducing the size of new uncommitted spot entry/DCA purchases when 1440-bar 1m close-to-close population variance exceeds the warmup-only median 1.4278464713012902e-07, via a shrink-only clip [0.5, 1.0] after HLRSIController._effective_buy_entry_usd, improves the permitted after-cost equity/downside tradeoff versus unchanged owner and versus a preregistered constant 0.5 control, without unacceptable inactivity or longer inventory lock-up. Never increases owner planned quote. Does not change RSI eligibility,",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "4eafaffe9321cedde3bb47f869d17c40fcef64c34d7a3ebb88caf001400aff1c",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:9447242d3485a973b7f123b29ca95cd1",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": "okx_spot_dca",
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-9447242d3485a973b7f123b29ca95cd10dc1cf9a96d73b61874284f8308539ee.json",
+          "pointer": "/nodes/1",
+          "sha256": "ca6cc006b674fb276dc91a91ba38451f9355b1bbddbac6665f5b000a4fcb2df1",
+          "bytes": 15465
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:9447242d3485a973b7f123b29ca95cd1",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:9447242d3485a973b7f123b29ca95cd1",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:9447242d3485a973b7f123b29ca95cd1",
+      "title": "Volatility-regime gate or vol-targeted sizing",
+      "hypothesis": "Reducing the size of new, uncommitted spot entry/DCA purchases when causally estimated market risk rises improves the permitted net-equity/downside tradeoff versus the unchanged owner baseline, without unacceptable inactivity or longer inventory lock-up, and with incremental value versus a preregistered constant reduced-size control. This revision is shrink-only: it never increases the owner's planned quote after HLRSIController._effective_buy_entry_usd. It does not add a block-as-eligibility gate beyond th",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "d593aacceb5a981dd01924b22876bd4c0168aa20ac918eb5853ee7824c9952be",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:97d1128bf9df3b971eef66710c5fa5df",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": "okx_spot_dca",
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-97d1128bf9df3b971eef66710c5fa5df139f50a018e23c4dc5e6bb9b5ac8745d.json",
+          "pointer": "/nodes/1",
+          "sha256": "3a0570900266a470d827a1008bb1193c0c46f96a0beb0fd56146fe18eb1b105f",
+          "bytes": 11670
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:97d1128bf9df3b971eef66710c5fa5df",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:97d1128bf9df3b971eef66710c5fa5df",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:97d1128bf9df3b971eef66710c5fa5df",
+      "title": "Shrink-only vol-sensitive size wrap on okx_spot_dca",
+      "hypothesis": "Reducing the size of new uncommitted spot entry/DCA purchases when 1440-bar 1m close-to-close population variance exceeds the warmup-only median 1.4278464713012902e-07, via a shrink-only clip [0.5, 1.0] after HLRSIController._effective_buy_entry_usd, improves the permitted after-cost equity/downside tradeoff versus unchanged owner and versus a preregistered constant 0.5 control, without unacceptable inactivity or longer inventory lock-up. Never increases owner planned quote. Does not change RSI eligibility,",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "879d0ffcf676ce27b5be615dbb639fb07ae4fd2d7f5d1f488bb2270c00d155af",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:ac587ad43c94e017ce21166ccc0a02f1",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": "okx_spot_dca",
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-ac587ad43c94e017ce21166ccc0a02f1110f4f5cf5843760afb273d02465ffe8.json",
+          "pointer": "/nodes/1",
+          "sha256": "e37123869a17366f092e68905148bf9ab2587c95775c9fe9cbfad9d7de0e0be3",
+          "bytes": 13753
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:ac587ad43c94e017ce21166ccc0a02f1",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:ac587ad43c94e017ce21166ccc0a02f1",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:ac587ad43c94e017ce21166ccc0a02f1",
+      "title": "Shrink-only vol-sensitive size wrap on okx_spot_dca",
+      "hypothesis": "Reducing the size of new uncommitted spot entry/DCA purchases when 1440-bar 1m close-to-close population variance exceeds the warmup-only median 1.4278464713012902e-07, via a shrink-only clip [0.5, 1.0] after HLRSIController._effective_buy_entry_usd, improves the permitted after-cost equity/downside tradeoff versus unchanged owner and versus a preregistered constant 0.5 control, without unacceptable inactivity or longer inventory lock-up. Never increases owner planned quote. Does not change RSI eligibility,",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "180efe12aa69f5303597ea1cd38160635ba4716496da5f966b58e1c8d2fa373f",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:b666af7cad5b670c63a8dfb305353da2",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": "okx_spot_dca",
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-b666af7cad5b670c63a8dfb305353da27266ec742b315046c363bdfee389a125.json",
+          "pointer": "/nodes/1",
+          "sha256": "385eab923149c7fa666255f8d0e35893a2202c888d32dfc3ad78dc8f0269f951",
+          "bytes": 23854
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:b666af7cad5b670c63a8dfb305353da2",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:b666af7cad5b670c63a8dfb305353da2",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:b666af7cad5b670c63a8dfb305353da2",
+      "title": "Shrink-only vol-sensitive size wrap on okx_spot_dca",
+      "hypothesis": "Reducing the size of new uncommitted spot entry/DCA purchases when 1440-bar 1m close-to-close population variance exceeds the warmup-only median 1.4278464713012902e-07, via a shrink-only clip [0.5, 1.0] after HLRSIController._effective_buy_entry_usd, improves the permitted after-cost equity/downside tradeoff versus unchanged owner and versus a preregistered constant 0.5 control, without unacceptable inactivity or longer inventory lock-up. Never increases owner planned quote. Does not change RSI eligibility,",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "0994d0896989e17e6d1e926d7551368c8f449e10a7bbb69859e9c0e58133e043",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:d3c43baac58d964c9a82e24d49b017c5",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": "okx_spot_dca",
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-d3c43baac58d964c9a82e24d49b017c50758316c9eb3a13a43568932e32c410f.json",
+          "pointer": "/nodes/1",
+          "sha256": "2fe5f77e559ba380e3737a4f5c3b1329c064f095235691c53eaba5df79d847c8",
+          "bytes": 16683
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:d3c43baac58d964c9a82e24d49b017c5",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:d3c43baac58d964c9a82e24d49b017c5",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:d3c43baac58d964c9a82e24d49b017c5",
+      "title": "Shrink-only vol-sensitive size wrap on okx_spot_dca",
+      "hypothesis": "Reducing the size of new uncommitted spot entry/DCA purchases when 1440-bar 1m close-to-close population variance exceeds the warmup-only median 1.4278464713012902e-07, via a shrink-only clip [0.5, 1.0] after HLRSIController._effective_buy_entry_usd, improves the permitted after-cost equity/downside tradeoff versus unchanged owner and versus a preregistered constant 0.5 control, without unacceptable inactivity or longer inventory lock-up. Never increases owner planned quote. Does not change RSI eligibility,",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "103c61d029e6a783807fe03eb89ea015f812b6ff58c7257d3648cad50fb64d70",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:ea1538464936cb56e75cc0c4de0497e6",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-ea1538464936cb56e75cc0c4de0497e63f389ded75ec98b322ebd34e689d465a.json",
+          "pointer": "/nodes/1",
+          "sha256": "3374af268665cfc1113a379e065efe96d501f4fe5f241a4d35f27344325fd7b6",
+          "bytes": 2654
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:ea1538464936cb56e75cc0c4de0497e6",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:ea1538464936cb56e75cc0c4de0497e6",
+      "title": "Volatility-regime gate or vol-targeted sizing",
+      "hypothesis": "Blocking or shrinking RSI-DCA when recent vol is high raises Sharpe versus B0 because short-horizon reversal is small and high-vol bars are where the range proxy eats the fee budget.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "bf2ddb32eb263b08d5d80ec43bdde6457e752a1649c2667d8ec4d734898a4c0e",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-08-bnb-usdc-okx-lane-20260903:revision:c459bc81b14c76d7e9ce0aca3617870b",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-c459bc81b14c76d7e9ce0aca3617870bce9cc172e2e97c05523c9b0502aa12fc.json",
+          "pointer": "/nodes/1",
+          "sha256": "71cdc6b1b5189761d5549355bbf207ee701ba4ce91d3d6838a369f033df655a0",
+          "bytes": 2741
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-08-bnb-usdc-okx-lane-20260903:revision:c459bc81b14c76d7e9ce0aca3617870b",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-08-bnb-usdc-okx-lane-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-08-bnb-usdc-okx-lane-20260903:revision:c459bc81b14c76d7e9ce0aca3617870b",
+      "title": "BNB-USDC lane viability on OKX",
+      "hypothesis": "A 2500 quote cap with 100-quote tickets is not fillable as a Binance-proxy B0 on OKX BNB-USDC. Snapshot 2026-09-03: 24h quote volume 0.144M, spread 7.16 bps, top sizes about 0.78 BNB per side.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "278b1423d0f90ad36c2c86f979868ddba055dcb54edcd10e6aeba57f444e1cec",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-09-hour-of-day-gate-20260903:revision:c55b1b280b4fd36b30fbb323ada8179b",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-c55b1b280b4fd36b30fbb323ada8179b5d2e9aa74a8180aac2c0cae53b8c8a47.json",
+          "pointer": "/nodes/1",
+          "sha256": "e3868ab2db72fbfd65702a4ed048ffd93678470557a578f73577ee4ac4781c19",
+          "bytes": 2556
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-09-hour-of-day-gate-20260903:revision:c55b1b280b4fd36b30fbb323ada8179b",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-09-hour-of-day-gate-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-09-hour-of-day-gate-20260903:revision:c55b1b280b4fd36b30fbb323ada8179b",
+      "title": "Hour-of-day entry gate",
+      "hypothesis": "Skipping 08-15 UTC entries, or only entering 16-23 UTC, beats B0 because t3 4h mean-of-means is -9.18 versus +17.60 bps, 12 cells each, exploratory in-sample.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "441dac3f6030481db25c7f8cb04dc6fa28735b7b8ebe417a8be45f863c8f270c",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-challenger-10-signed-imbalance-20260903:revision:dc2fbf8ed696c1cf8a391a3959295dfe",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-dc2fbf8ed696c1cf8a391a3959295dfe4b9e657e9ba1a77226d5a9af00023f01.json",
+          "pointer": "/nodes/1",
+          "sha256": "fa06ec94f54e27681843ed9f51f69bf562be3a82c629acda2a2cae5a1b6a9671",
+          "bytes": 2704
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-challenger-10-signed-imbalance-20260903:revision:dc2fbf8ed696c1cf8a391a3959295dfe",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-challenger-10-signed-imbalance-20260903",
+      "idea_revision_id": "idea:ok-rsi-challenger-10-signed-imbalance-20260903:revision:dc2fbf8ed696c1cf8a391a3959295dfe",
+      "title": "Signed aggTrade imbalance filter",
+      "hypothesis": "Skipping RSI buys when 1s buy-notional share is elevated, or allowing them only after sell-initiated prints, raises 5m to 1h event means after costs versus B0.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "6acae7465c841297756a28639b40880bc93788eead9f6e00e653675b5e4679ed",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:ok-rsi-r11-later-longer-entry-limit-20260912:revision:b94acd8b39f6c1d3e5adbf009156c1f8",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-b94acd8b39f6c1d3e5adbf009156c1f8302a109c4bfeec96b992473ca9da51ac.json",
+          "pointer": "/nodes/1",
+          "sha256": "1968722eb4e139fffe3995d5b32440a3aa736914207cecc4161a70e85e070998",
+          "bytes": 4436
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-r11-later-longer-entry-limit-20260912:revision:b94acd8b39f6c1d3e5adbf009156c1f8",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-r11-later-longer-entry-limit-20260912:revision:b94acd8b39f6c1d3e5adbf009156c1f8",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-r11-later-longer-entry-limit-20260912",
+      "idea_revision_id": "idea:ok-rsi-r11-later-longer-entry-limit-20260912:revision:b94acd8b39f6c1d3e5adbf009156c1f8",
+      "title": "Longer entry limit versus frozen r11 owner replay",
+      "hypothesis": "Raising written entry_limit_max_age_seconds from 30 to 90 on the frozen non-episode ok_rsi owner replay, with min_executor_price_gap_threshold still 0 and trailing_delta_pct still 0.004, converts some of the 212 r11 ORDER_EXPIRED maker BUYs into fills and improves net_pnl_quote by at least 1 quote versus sealed r11 78b0ae3829c6d1cb86e6e76da7d8aaa647daddb0c4a77266a260bc078775f36c without fewer entry_fills and without worse abs(maximum_drawdown_pct). price_gap_atr_multiplier 3.0 and early_stop_keep_position t",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "5c47c02d53c7a7775737555d35a6ce9714a5185f2eeb6a7cad1960876facf77d",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:ok-rsi-r11-later-mid-entry-limit-20260912:revision:ee2c48576e91fb8d774a2bfae2ac35b5",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-ee2c48576e91fb8d774a2bfae2ac35b566f6178fa64cc72fff2016138d5e57c2.json",
+          "pointer": "/nodes/1",
+          "sha256": "604ea21361fae1709903ee92ec71781cb9ef105a0d92aab2bf234d21d45a017b",
+          "bytes": 4412
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-r11-later-mid-entry-limit-20260912:revision:ee2c48576e91fb8d774a2bfae2ac35b5",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-r11-later-mid-entry-limit-20260912:revision:ee2c48576e91fb8d774a2bfae2ac35b5",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-r11-later-mid-entry-limit-20260912",
+      "idea_revision_id": "idea:ok-rsi-r11-later-mid-entry-limit-20260912:revision:ee2c48576e91fb8d774a2bfae2ac35b5",
+      "title": "Mid 60s entry limit versus frozen r11 owner replay",
+      "hypothesis": "Raising written entry_limit_max_age_seconds from 30 to 60 on the frozen non-episode ok_rsi owner replay, with min_executor_price_gap_threshold still 0 and trailing_delta_pct still 0.004, converts some of the 212 r11 ORDER_EXPIRED maker BUYs into fills and improves net_pnl_quote by at least 1 quote versus sealed r11 78b0ae3829c6d1cb86e6e76da7d8aaa647daddb0c4a77266a260bc078775f36c without fewer entry_fills and without worse abs(maximum_drawdown_pct). price_gap_atr_multiplier 3.0 and early_stop_keep_position t",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "b8cce307627789d9d0ab49bca56b8b95fed0b26113c45393c9212e45f9c5c45b",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:ok-rsi-r11-later-tighter-trailing-delta-20260912:revision:04ba96e493cafbc04a0da889cb859de6",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-04ba96e493cafbc04a0da889cb859de60bd29f6bba24a5a3ea5da0deea6c760d.json",
+          "pointer": "/nodes/1",
+          "sha256": "01edfba6e168db6c57c046575c1b1055f3a09c542a65e7801f0b89031814b283",
+          "bytes": 4300
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:ok-rsi-r11-later-tighter-trailing-delta-20260912:revision:04ba96e493cafbc04a0da889cb859de6",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:ok-rsi-r11-later-tighter-trailing-delta-20260912",
+      "idea_revision_id": "idea:ok-rsi-r11-later-tighter-trailing-delta-20260912:revision:04ba96e493cafbc04a0da889cb859de6",
+      "title": "Tighter trailing delta versus frozen r11 owner replay",
+      "hypothesis": "Cutting written trailing_delta_pct from 0.004 to 0.002 on the frozen non-episode ok_rsi owner replay, with min_executor_price_gap_threshold still 0, improves net_pnl_quote by at least 1 quote versus sealed r11 78b0ae3829c6d1cb86e6e76da7d8aaa647daddb0c4a77266a260bc078775f36c without fewer entry_fills and without worse abs(maximum_drawdown_pct). BUY gates, price_gap_atr_multiplier 3.0, and early_stop_keep_position true stay unchanged. This is not r12 or r13.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "4b3c7ba9f0a0c12224abd187592531b76a174302058ca3b6230ff0b09e8e9d68",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-0xkvro-tweet-20260910:revision:5b2f043573f0c2d3862b9b21646f5368",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-5b2f043573f0c2d3862b9b21646f53686d12c41c2dbf3c7f818fd9b74a73103a.json",
+          "pointer": "/nodes/1",
+          "sha256": "e2d0bf911e2cc20d90e8fd6beaa3ab5f6ed1e429c46d59b44c8aa18549f1bae8",
+          "bytes": 5299
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-0xkvro-tweet-20260910:revision:5b2f043573f0c2d3862b9b21646f5368",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-0xkvro-tweet-20260910",
+      "idea_revision_id": "idea:okx-0xkvro-tweet-20260910:revision:5b2f043573f0c2d3862b9b21646f5368",
+      "title": "0xkvro 2026-09-10 tweet as research-process hold, not a 10,000-strategy backtest",
+      "hypothesis": "The tweet's 10,000-noise / IS Sharpe 1.8-2.1 collapse claim is a research-process constraint (OOS, costs, multiple testing, regime stress, reject-by-default) already present in this workspace; it specifies no venue, controller overlay, or retrievable IQF-2025-07 paper, so it cannot be executed or promoted from this source set.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "8e365203e918ab7e31aced894f47fa0238b52ea64e1b660651145160e458dae5",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-context-dca-admission-20260913:revision:d8a9a00ff6483c733251ce44bbfe618f",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-d8a9a00ff6483c733251ce44bbfe618f0e2b009282cb146dec9e7e646567e33d.json",
+          "pointer": "/nodes/1",
+          "sha256": "dd6293ecb185902e8322a799637c035aee56d8edd4f89dff2be28f481f04756d",
+          "bytes": 12491
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-context-dca-admission-20260913:revision:d8a9a00ff6483c733251ce44bbfe618f",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-context-dca-admission-20260913:revision:d8a9a00ff6483c733251ce44bbfe618f",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-context-dca-admission-20260913",
+      "idea_revision_id": "idea:okx-context-dca-admission-20260913:revision:d8a9a00ff6483c733251ce44bbfe618f",
+      "title": "Existing completed-candle context as restrict-only ok_rsi DCA admission overlay",
+      "hypothesis": "Using already-computed completed-candle context (hostile, cascade, recovery, markup, stale or missing history) to restrict the next incremental DCA commitment can improve inventory efficiency or downside versus frozen executable legacy ok_rsi, a smaller static buy budget, and volatility-only throttle, after costs, on sealed BNB-USDC May-August 2026 cache. Overlay outputs only allow_new_episode, allow_additional_scale_in, buy_budget_multiplier in [0,1], context_id, decision_reason. Untested. Not a new classi",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "ac75de92cab9e233290545ccb2264e3fac332e30afd15cc5616f12bac8d0f911",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-context-dca-admission-20260915:revision:e74a4c2cc4ecdf1541eb7b58db56a149",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-e74a4c2cc4ecdf1541eb7b58db56a149f4481f16dd22872572be1aa82b7cd445.json",
+          "pointer": "/nodes/1",
+          "sha256": "162863e159e822afc03ae9ddd4f64225b857a3c18eb0318f74d88b2ed0a92c4f",
+          "bytes": 9149
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-context-dca-admission-20260915:revision:e74a4c2cc4ecdf1541eb7b58db56a149",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-context-dca-admission-20260915:revision:e74a4c2cc4ecdf1541eb7b58db56a149",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-context-dca-admission-20260915",
+      "idea_revision_id": "idea:okx-context-dca-admission-20260915:revision:e74a4c2cc4ecdf1541eb7b58db56a149",
+      "title": "Four-variant restrict-only existing-context ok_rsi DCA admission on sealed BNB-USDC",
+      "hypothesis": "Using already-computed completed-candle context (hostile, cascade, recovery confirmation, stale or missing history) to restrict the next incremental DCA BUY can improve after-cost marked-to-market equity, drawdown, underwater duration, inventory age, or capital tied up versus frozen executable YAML baseline, a smaller static buy budget, and volatility-only throttle, on sealed BNB-USDC May-August 2026 cache. Overlay outputs only allow_new_episode, allow_additional_scale_in, buy_budget_multiplier in [0,1], co",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "4207aa865505a2cf5ee162d63472fc8da92755b0544753644521957cdcd27d0c",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-koroushak-2098036758072217658:revision:34cce812e15eaa22929f7e8e7b0e62ed",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-34cce812e15eaa22929f7e8e7b0e62edb3d5d136568cb82049d6d201e8854874.json",
+          "pointer": "/nodes/1",
+          "sha256": "650ba98681f58c403d66377de0c17c9f5a608bf5de84e076cc47aca480f7c5f7",
+          "bytes": 4003
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-koroushak-2098036758072217658:revision:34cce812e15eaa22929f7e8e7b0e62ed",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-koroushak-2098036758072217658",
+      "idea_revision_id": "idea:okx-koroushak-2098036758072217658:revision:34cce812e15eaa22929f7e8e7b0e62ed",
+      "title": "KoroushAK 2098036758072217658 acquisition hold, not an overlay",
+      "hypothesis": "https://x.com/KoroushAK/status/2098036758072217658?s=20 cannot be tested or promoted until a verified local source packet or a supported compiler adapter exists; the URL specifies no overlay and no economic claim.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "aeb4aec130de211285131dee8111c3b8be60eb7fd5fa87f56ff857b87e16612d",
+      "truncated_fields": []
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "eb26fbd63ef9e0f06fbd70395912d10c45264aebf160a6f4c9f5d154bae5bd3b"
+}

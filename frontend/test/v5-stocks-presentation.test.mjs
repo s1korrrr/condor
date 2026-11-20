@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { Window } from 'happy-dom';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const now = Math.floor(Date.now() / 1000);
@@ -53,7 +54,7 @@ test('selected detail failure cannot render its earlier success', () => {
   const { html } = render({ failed: ['stock-market'] });
   assert.match(html, /Public observations: owner_unreachable/);
   assert.doesNotMatch(html, /9876\.543210/);
-  assert.match(html, /123\.456789012345678901/);
+  assert.match(html, /title="≈ 123\.456789012346 \(rounded\)">123\.46/);
 });
 
 test('default region is EEA and spot derivative metrics are explicitly not applicable', () => {
@@ -65,16 +66,78 @@ test('default region is EEA and spot derivative metrics are explicitly not appli
   assert.doesNotMatch(html, /Place order|Buy stock|Sell stock/);
 });
 
-test('selected public fields keep exact venue decimals and expose the full recorded record', () => {
+test('selected public fields format venue decimals while titles retain exact records', () => {
   const { html } = render();
-  assert.match(html, /Best bid[\s\S]{0,180}9876\.000000000000001/);
-  assert.match(html, /Best ask[\s\S]{0,180}9877\.000000000000001/);
-  assert.match(html, /24h volume[\s\S]{0,180}456\.000000000000001/);
+  assert.match(html, /title="≈ 9876 \(rounded\)">9,876/);
+  assert.match(html, /title="≈ 9877 \(rounded\)">9,877/);
+  assert.match(html, /title="≈ 456 \(rounded\)">456\.00/);
   assert.match(html, /All recorded market fields/);
   assert.match(html, /1234567\.890123456789/);
+  const window = new Window();
+  window.document.body.innerHTML = html;
+  const record = [...window.document.querySelectorAll('pre')].find(pre => pre.title.includes('1234567.890123456789'));
+  assert.ok(record);
+  assert.doesNotMatch(record.textContent, /\d\.\d{9}/);
+  window.close();
   assert.match(html, /Funding settlement \(UTC\)/);
   const { html: failed } = render({ failed: ['stock-market'] });
   assert.doesNotMatch(failed, /All recorded market fields|9876\.000000000000001|1234567\.890123456789/);
+});
+
+test('configured Stocks formats exponent, signed and integer numeric fields without changing identifiers or times', () => {
+  const ticker = { ...event('1.234567890123e-20'), data: { last: '1.234567890123e-20', bidPx: '+99.78007932', askPx: '198961', vol24h: 12345 } };
+  const instrumentWithValues = { ...instrument, tickSz: '+99.78007932', lotSz: '1.234567890123e-20', minSz: '198961', ctVal: null, maxLmtSz: '198961', maxMktSz: 198961, instIdCode: '123456789', instrumentCode: '001234', version: '001', listTime: '1700000000000' };
+  const book = { ...event('0'), dataset: 'books', data: { bids: [['+99.78007932', '198961', '0', '3']], asks: [] } };
+  const trade = { ...event('0'), dataset: 'trades', data: { tradeId: '1234567890123', count: '3', px: '1.234567890123e-20', sz: '+99.78007932', side: 'buy' } };
+  const marketWithValues = { ...market, latest: { ...market.latest, ticker, books: book }, channels: { ticker: channel, books: channel, trades: channel }, recent_trades: [trade], book_depth: { bids: 1, asks: 0 } };
+  const data = { ...catalog, rows: [{ ...catalog.rows[0], instrument: instrumentWithValues, latest: { ...latest, ticker } }] };
+  const { html } = render({ data, marketData: marketWithValues });
+  const window = new Window();
+  window.document.body.innerHTML = html;
+  const document = window.document;
+  for (const [exact, display] of [['≈ 0 (rounded)', '0.0000'], ['+99.78007932', '99.78'], ['198961', '198,961'], ['12345', '12,345']]) {
+    assert.ok([...document.querySelectorAll('[title]')].some(element => element.title === exact && element.textContent === display), `${exact} is formatted and retains its exact title`);
+  }
+  const records = [...document.querySelectorAll('pre')];
+  const publicRecord = records.find(record => record.title.includes('≈ 0 (rounded)'));
+  const metadataRecord = records.find(record => record.title.includes('1700000000000'));
+  assert.ok(publicRecord && metadataRecord);
+  const exactRecords = [...document.querySelectorAll('details')].filter(details => details.querySelector(':scope > summary')?.textContent === 'Exact record · as sent');
+  assert.equal(exactRecords.length, 2, 'both market and metadata records have a keyboard and touch disclosure');
+  assert.ok(exactRecords.some(details => details.querySelector('pre')?.textContent.includes('1.234567890123e-20')));
+  assert.ok(exactRecords.some(details => details.querySelector('pre')?.textContent.includes('"instrumentCode": "001234"')));
+  assert.match(publicRecord.textContent, /0\.0000/);
+  assert.match(publicRecord.textContent, /99\.78/);
+  assert.match(publicRecord.textContent, /198,961/);
+  assert.match(publicRecord.textContent, /12,345/);
+  assert.match(publicRecord.textContent, /1234567890123/);
+  assert.doesNotMatch(publicRecord.textContent, /"count"/);
+  assert.match(publicRecord.textContent, new RegExp(`"event_time_ms": ${ticker.event_time_ms}`));
+  assert.match(publicRecord.textContent, /"3"/);
+  assert.match(publicRecord.title, /\+99\.78007932/);
+  assert.match(metadataRecord.textContent, /198,961/);
+  assert.match(metadataRecord.textContent, /"maxLmtSz": "198,961"/);
+  assert.match(metadataRecord.textContent, /"maxMktSz": "198,961"/);
+  assert.match(metadataRecord.textContent, /"ctVal": null/);
+  assert.doesNotMatch(metadataRecord.textContent, /"instIdCode"|"instrumentCode"|"version"/);
+  assert.match(metadataRecord.textContent, /1700000000000/);
+  assert.match(metadataRecord.textContent, /EXAMPLE-USDT/);
+  window.close();
+});
+
+test('unknown Stocks fields appear only in the exact as-sent record', () => {
+  const ticker = { ...event('123.45'), data: { last: '123.45', newPrice: '99.7800793' } };
+  const { html } = render({ marketData: { ...market, latest: { ...market.latest, ticker } } });
+  const window = new Window();
+  window.document.body.innerHTML = html;
+  const exact = [...window.document.querySelectorAll('details')].find(details => details.querySelector(':scope > summary')?.textContent === 'Exact record · as sent' && details.textContent.includes('newPrice'));
+  const ordinary = [...window.document.querySelectorAll('pre[title]')].find(pre => pre.title.includes('newPrice'));
+  assert.ok(ordinary);
+  assert.doesNotMatch(ordinary.textContent, /newPrice|99\.7800793/);
+  assert.match(ordinary.textContent, /"last": "123\.45"/);
+  assert.ok(exact, 'unknown field remains available as sent');
+  assert.match(exact.textContent, /99\.7800793/);
+  window.close();
 });
 
 test('captured column labels captured and listed-only rows', () => {

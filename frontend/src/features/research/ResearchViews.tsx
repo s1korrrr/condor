@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { authFetch } from "@/lib/auth-token";
-import { readResearch } from "./read";
+import { readResearch, ResearchHttpError } from "./read";
+import { ReadNotice } from "@/components/ReadNotice";
 import {
   object,
   text,
@@ -146,22 +147,20 @@ export function LabReadNotice({
   error,
   onRetry,
 }: {
-  state: string;
+  state: Exclude<ReturnType<typeof researchReadState>, "available">;
   error: Error | null;
   onRetry(): void;
 }) {
-  return (
-    <div className="quant-notice" role={error ? "alert" : "status"}>
-      {error
-        ? error.message
-        : state === "stale"
-          ? "The source has not refreshed. Previous records are unavailable."
-          : "Loading research records…"}
-      {(error || state === "stale") && (
-        <button onClick={onRetry}>Retry records</button>
-      )}
-    </div>
-  );
+  if (state === "loading") return <ReadNotice kind="loading" title="Loading research records…" />;
+  if (state === "stale") return <ReadNotice kind="unavailable" title="Research records are stale" reason="The source has not refreshed. Previous records are unavailable." onRetry={onRetry} retryLabel="Retry records" />;
+  if (error instanceof ResearchHttpError && error.status === 503) {
+    const unconfigured = error.message === "Not connected: V5_RESEARCH_URL is unset";
+    const reason = unconfigured ? "This dashboard has no Research OS connection configured."
+      : error.message === "Not connected: Research upstream unreachable or timed out" ? "Research OS did not respond in time or could not be reached."
+      : error.message.replace(/^Not connected:\s*/, "");
+    return <ReadNotice kind="unavailable" title="Unavailable" reason={reason} onRetry={onRetry} retryLabel="Retry records" />;
+  }
+  return <ReadNotice kind="error" title={error instanceof ResearchHttpError ? `Research read failed (${error.status})` : "Research read failed"} reason={error?.message ?? "Research records could not be loaded."} onRetry={onRetry} retryLabel="Retry records" />;
 }
 export function LabRecords({
   server,

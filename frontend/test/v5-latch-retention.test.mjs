@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { frontendModules } from './helpers/frontend-module.mjs';
+import { frontendModules, paperVisualStubs } from './helpers/frontend-module.mjs';
 
 // Sol round 2, R97-SOL-2 (oracle: review-97-r2-sol/latch-retention-oracle.mjs). A received native latch is a hold.
 // A newer complete risk read that omits, nulls or malforms `latched` is unknown evidence, not a clear: the retained
@@ -12,7 +12,7 @@ import { frontendModules } from './helpers/frontend-module.mjs';
 const fixture = Object.fromEntries(['status','wallet','positions','executors','fills','risk','decisions','history','operations'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)))]));
 const now = fixture.status.read_at_ms;
 const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
-const {load} = frontendModules(stubs);
+const {load} = frontendModules({...stubs, ...paperVisualStubs});
 const policy = load('v5/policy.ts');
 const {paperSafetyReads, paperSafetyBeyondDisplayed} = load('v5/paper-safety.ts');
 const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');

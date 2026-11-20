@@ -4,7 +4,8 @@ export interface ResearchEnvelope {
   source: {
     owner: "research_os";
     server: string;
-    fetched_at: string;
+    fetched_at?: string;
+    generated_at?: string;
     read_only: true;
   };
 }
@@ -43,6 +44,7 @@ export function researchPath(
 export function parseResearchEnvelope(
   value: unknown,
   server: string,
+  allowTimeless = false,
 ): ResearchEnvelope {
   const v = object(value),
     s = object(v.source);
@@ -53,8 +55,9 @@ export function parseResearchEnvelope(
     s.owner !== "research_os" ||
     s.server !== server ||
     s.read_only !== true ||
-    typeof s.fetched_at !== "string" ||
-    !Number.isFinite(Date.parse(s.fetched_at))
+    (!allowTimeless && s.fetched_at === undefined) ||
+    (s.fetched_at !== undefined && (typeof s.fetched_at !== "string" || !Number.isFinite(Date.parse(s.fetched_at)))) ||
+    (s.generated_at !== undefined && (typeof s.generated_at !== "string" || !Number.isFinite(Date.parse(s.generated_at))))
   )
     throw new Error("Research source identity or response is invalid");
   return v as unknown as ResearchEnvelope;

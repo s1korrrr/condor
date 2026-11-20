@@ -1,0 +1,107 @@
+@media (width < 640px) {
+  .condor-native.condor-shell { min-width: 0; max-width: 100%; }
+  .condor-native.condor-shell .v5-shell-header { position: relative; display: block; min-height: 48px; height: 48px; padding: 0 8px; }
+  .condor-native.condor-shell .v5-shell-primary { height: 48px; gap: 6px; }
+  .condor-native.condor-shell .v5-shell-brand { min-height: 44px; }
+  .condor-native.condor-shell .v5-shell-brand > span { font-size: 12px; }
+  .condor-native.condor-shell .v5-shell-scope { padding: 0 5px; font-size: 12px; }
+  .condor-native.condor-shell .v5-shell-scope-short { display: block; }
+  .condor-native.condor-shell .v5-phone-safety summary { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 44px; line-height: 14px; }
+  .condor-native.condor-shell .v5-phone-safety .v5-shell-mode::after { content: "⌄"; margin-left: 4px; }
+  .condor-native.condor-shell .v5-phone-safety-body { position: absolute; z-index: 60; top: 100%; left: 8px; right: 8px; padding: 12px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+  .condor-native.condor-shell .v5-phone-safety:not([open]) > .v5-phone-safety-body { display: none; }
+  .condor-native.condor-shell :is(.v5-shell-scope-long, .v5-shell-menu, .v5-shell-tools, .v5-shell-safety) { display: none; }
+  .condor-native.condor-shell .v5-shell-clock { display: block; margin-left: auto; white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .condor-native.condor-shell .v5-shell-nav, .condor-native.condor-shell .v5-shell-nav.is-open { position: fixed; z-index: 50; inset: auto 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; padding: 0 4px env(safe-area-inset-bottom, 0px); border: 0; border-top: 1px solid var(--color-border); background: var(--color-surface); }
+  .condor-native.condor-shell .v5-shell-link { flex-direction: column; justify-content: center; gap: 3px; min-width: 44px; min-height: 56px; padding: 5px 0; font-size: 12px; }
+  .condor-native.condor-shell .v5-shell-subnav { flex-shrink: 0; flex-wrap: nowrap; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; padding: 2px 8px; }
+  .condor-native.condor-shell .v5-shell-subnav > a { display: inline-flex; align-items: center; flex-shrink: 0; white-space: nowrap; }
+  .condor-native.condor-shell .v5-shell-main { min-height: 0; min-width: 0; padding: 10px 10px calc(66px + env(safe-area-inset-bottom, 0px)); }
+  .condor-native .v5-phone-unit { display: inline; }
+  .condor-native .v5-desktop-unit { display: none; }
+  .condor-native .v5-overview :is(small, button, input, select, summary, .q-tooltip, .q-tooltip__title, .q-legend, .q-chart-legend, .q-dt__bar, .q-dt, .v5-phone-rows dt, svg text) { font-size: 12px !important; }
+  .condor-native .v5-phone-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .condor-native .v5-phone-tools > * { padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; }
+  .condor-native.condor-shell :is(a, button, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, summary, [role="button"], [role="checkbox"], [role="tab"]) { min-width: 44px; min-height: 44px; max-width: 100%; }
+  .condor-native.condor-shell label:has(> :is(input[type="checkbox"], input[type="radio"])) { display: inline-flex; align-items: center; gap: 8px; min-width: 44px; min-height: 44px; }
+  .condor-native :is(a, button, summary) { overflow-wrap: anywhere; }
+  .condor-native a { display: inline-flex; align-items: center; }
+  .condor-native summary { align-content: center; cursor: pointer; }
+  .condor-native [data-quant-ops] { min-width: 0; padding: 10px; }
+  .condor-native .v5m-icon { width: 44px; height: 44px; }
+  .condor-native :is(.v5m-stats, .v5m-stats--wide, .v5m-feature-grid, .paper-metrics, .v5-paper-bots .paper-metrics, .paper-pairs, .q-tile-grid, .fs-stats, .bot-roster__kpis, .v5-stock-observations, .v5-stock-metadata) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .condor-native :is(.v5m-stat, .paper-metric, .q-tile-cell, .q-kpi, .q-stat) { min-width: 0; }
+  .condor-native .q-tile-cell { grid-column: auto !important; }
+  .condor-native .q-state__text { display: inline; }
+  .condor-native :is(.v5m-stat strong, .v5m-price, .v5m-big strong, .paper-metric dd, .q-tile-cell .q-kpi > strong, .q-kpi strong, .q-stat strong, .fs-stats dd) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .condor-native :is(.q-tile-cell .q-kpi small.q-muted, .q-tile-cell .q-stat > small) { display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: anywhere; }
+  .condor-native :is(.v5m-big, .v5m-coin-top, .v5m-range small, .v5m-lane) { flex-wrap: wrap; gap: 6px; }
+  .condor-native .v5m-kv { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); overflow-wrap: anywhere; }
+  .condor-native .paper-pair { padding: 10px; }
+  .condor-native .paper-pair .paper-detail { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .condor-native :is(.v5m-card, .v5-panel, .paper-section, .q-panel) { padding: 10px; }
+  .condor-native :is(.paper-section-heading, .v5-section-heading, .q-dt__bar, .q-chart-toolbar) { flex-wrap: wrap; }
+  .condor-native :is(.q-dt__search, .q-dt__bar, .q-dt, .v5m-detail-head, .v5m-seg) { min-width: 0; max-width: 100%; }
+  .condor-native .q-dt__search { flex-basis: 100%; }
+  .condor-native :is(.v5m-stat small, .v5m-stat span, .v5m-feature, .paper-copy, .paper-caption, .fs-stats dt) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .condor-native :is(.v5-desktop-table, .q-dt__scroll.v5-desktop-table) { display: none; }
+  .condor-native :is(.v5-phone-rows, .v5-phone-table-tools, .v5-phone-empty, .v5-phone-order) { display: block; }
+  .condor-native .v5-phone-rows > div { border-bottom: 1px solid var(--color-border); padding: 4px 0; }
+  .condor-native .v5-phone-rows summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 8px 20px 8px 0; position: relative; }
+  .condor-native .v5-phone-rows summary::after { content: "+"; position: absolute; right: 0; top: 12px; }
+  .condor-native .v5-phone-rows details[open] > summary::after { content: "−"; }
+  .condor-native .v5-phone-rows :is(summary span, dd, dt) { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+  .condor-native .v5-phone-rows :is(summary small, summary strong) { display: block; }
+  .condor-native .v5-phone-rows :is(summary small, dt) { font-size: 12px; color: var(--color-text-muted); }
+  .condor-native .v5-phone-rows summary strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+  .condor-native .v5-phone-rows dl { display: grid; gap: 8px; margin: 8px 0; }
+  .condor-native .v5-phone-rows dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 8px; }
+  .condor-native .v5-phone-rows dd { margin: 0; font-size: 12px; }
+  .condor-native .v5-phone-row-note { display: block; color: var(--color-text-muted); }
+  .condor-native .v5-phone-table-tools > div { display: flex; flex-wrap: wrap; gap: 6px; }
+  .condor-native .v5-phone-table-tools input { width: 100%; }
+  .condor-native :is(.v5-profile-row, .v5-policy-row) { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow-wrap: anywhere; }
+  .condor-native :is(.q-chart-legend, .q-legend, .v5m-legend, .recharts-default-legend) { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
+  .condor-native :is(.q-chart-legend button, .q-legend button, .v5m-legend button) { white-space: normal; margin: 0; }
+  .condor-native .q-donut-chart__legend :is(span, strong, small) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .condor-native .v5m-heat td.is-clickable { min-width: 44px; height: 44px; padding: 12px 6px; }
+  .condor-native .q-heat { min-height: 44px; }
+  .condor-native .op-hwin { flex-wrap: wrap; max-width: 100%; overflow: visible; }
+  .condor-native .operations-workspace[data-scope="paper"] .op-section { padding: 12px !important; }
+  .condor-native .operations-workspace[data-scope="paper"] .op-section > p:has(> strong) { border-bottom: 1px solid var(--color-border); padding: 8px 0; }
+  .condor-native .operations-workspace[data-scope="paper"] .op-section > p:has(> strong) > small { display: inline !important; margin-left: 6px; }
+  .condor-native .operations-workspace[data-scope="paper"] .op-section > p:has(> strong) > small::after { content: ""; display: block; }
+  .condor-native :is(.op-hrow__id strong, .op-log-list summary p, .fs-pairs em) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .condor-native :is(small, button, input, select, summary, time, pre, .paper-eyebrow, .paper-badge, .fs-id p, .fs-pairs a, .fs-stats dt, .v5m-asof, .v5m-feature-meta, .q-tooltip, .q-tooltip__title, .q-dt__count, .q-chip, .q-pill, .q-dt__more, .q-donut-chart__legend li, .q-legend, .q-chart-legend, .v5-phone-order, svg text) { font-size: 12px !important; }
+  .condor-native :is(.q-kpi span, .q-state, .q-stat > span, .q-state-ribbon span, .q-kicker, .q-empty, .q-footer, .q-tag, .q-context-strip, .q-bar-meta, .q-source-details, .q-diag, .q-coverage, .q-warn-chip, .q-open-risk span, [data-panel-id="S01"]) { font-size: 12px !important; }
+  .condor-native :is(.op-muted, .op-services th, .op-services td, .op-services article strong, .op-bot-checks table, .op-hlegend, .op-hfoot, .op-hcell p, .op-hrow__id em, .op-haxis) { font-size: 12px !important; }
+  .condor-native :is(.v5-status, .v5-text-link, .v5-section-heading p, .v5-readiness-row strong, .v5-readiness-row span, .v5-readiness-row b, .v5-no-secret, .v5-profile-row, .v5-profile-row > span, .v5-policy-row, .v5-policy-row > *, .v5-policy-note, .v5-settings-note strong, .v5-settings-note p, .v5-feature-row > *, .v5-domain-label, .v5-coverage > *, .v5-quality-title > *, .v5-cohort-coverage-row span, .v5-cohort-coverage-row strong, .v5-qualified-note, .v5-market-limits > *, .v5-evidence-raw dt, .v5-evidence-raw dd) { font-size: 12px !important; }
+  .condor-native .v5-phone-order { color: var(--color-text-muted); margin: 4px 0 8px; }
+  .condor-native :is(.v5-data-value > strong, .v5-page-heading p, .v5-empty p, .v5-error-panel span, .v5-source-warning, .v5-blocker-panel strong, .v5-blocker-panel p, .v5-market-unavailable > strong, .v5-market-unavailable > p) { font-size: 12px !important; }
+  .condor-native .v5m-stat[title]::after { content: attr(title); display: block; margin-top: 4px; color: var(--color-text-muted); font-size: 12px; overflow-wrap: anywhere; }
+  .condor-native :is(.v5m-hour-strip th, .v5m-hour) { font-size: 12px !important; }
+  .condor-native :is(.v5-feature-row, .v5-quality-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .condor-native :is(.v5-feature-row > *, .v5-readiness-row b, .paper-copy) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .condor-native .paper-price-chart .paper-chart-coins { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); gap: 4px; }
+  .condor-native .paper-price-chart .v5-button { min-width: 44px; min-height: 44px; padding: 8px; font-size: 12px; }
+  .condor-native .paper-price-chart .paper-chart-ranges { flex-wrap: wrap; margin-top: 8px; }
+  .condor-native .paper-price-chart .paper-chart-legend { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .condor-native .paper-price-chart :is(p, figcaption, .paper-chart-legend > span) { min-width: 0; max-width: 100%; overflow-wrap: anywhere; font-size: 12px; }
+  .condor-native .paper-price-chart .recorded-candle-chart { min-width: 0; max-width: 100%; margin: 12px 0 0; padding: 8px; }
+  .condor-native .paper-price-chart .recorded-candle-canvas { min-width: 0; width: 100%; height: 360px; }
+  .condor-native .paper-positions .paper-pairs { grid-template-columns: minmax(0, 1fr) !important; }
+  .condor-native .paper-positions :is(p, dt, dd, summary) { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+  .condor-native .paper-positions progress { display: block; width: 100%; max-width: 100%; }
+  .condor-native .paper-positions summary { min-height: 44px; padding: 8px 0; }
+  .condor-native .v5-system { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .condor-native .v5-system :is(p, span, small, dt, dd, label, button, a, summary, th, td) { min-width: 0; overflow-wrap: anywhere; font-size: 12px !important; }
+  .condor-native .v5-system .v5m-venues { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .condor-native .v5-system .v5m-venues > :is(:first-child, .v5m-venue) { grid-column: 1 / -1; }
+  .condor-native .v5-system :is(.v5m-lane, .v5m-lane > span, .op-hrow__pct)[title]::after { content: attr(title); display: block; flex-basis: 100%; margin-top: 4px; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+  .condor-native .v5-system .op-hrow__pct { grid-column: 1 / -1; grid-row: 3; text-align: left; }
+  body:has(.condor-native .v5-system) .q-heat-tip :is(p, span, small, dt, dd) { overflow-wrap: anywhere; font-size: 12px !important; }
+}
+
+@media (max-width: 430px) {
+  .condor-native .v5-catalog-meta { font-size: 12px; }
+}

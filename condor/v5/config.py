@@ -4,12 +4,24 @@ from __future__ import annotations
 
 import hmac
 import os
+import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 from .paper import status_file_name_valid
+from .learning_projection import (
+    STAGE_A_REVISION, STAGE_A_SCOPE_SHA256, STAGE_B_REVISION, STAGE_B_SCOPE_SHA256,
+    ContractViolation, LearningProjectionConfig, load_scope_membership,
+)
+
+MAX_STRATEGIES = 10000
+MAX_SOURCES = 10000
+MAX_NODES = 20000
+MAX_EDGES = 100000
+MAX_STATS_ROWS = 10000
+READ_BYTE_LIMITS = {"catalog": 16 * 1024 * 1024, "campaigns": 16 * 1024 * 1024, "snapshot": 32 * 1024 * 1024, "campaign": 32 * 1024 * 1024, "bundle": 64 * 1024 * 1024, "provenance": 4 * 1024 * 1024, "asset": 64 * 1024 * 1024, "overview": 16 * 1024 * 1024, "network": 64 * 1024 * 1024}
 
 
 class ConfigurationError(ValueError):
@@ -32,6 +44,15 @@ class Settings:
     paper_status_file: Path | None = None
     candle_store_socket: Path | None = None
     host_operations_file: Path | None = None
+    # Optional read-only Helm paper runtime status file for the Helm page; None hides the page's data.
+    helm_status_file: Path | None = None
+    # Five-minute money samples into the runtime state; off unless V5_MONEY_SAMPLER=1 (deployments only).
+    money_sampler: bool = False
+    tradepad_url: str | None = None
+    research_url: str | None = None
+    tradepad_campaign_id: str | None = None
+    # Production Research OS learning projection (V5_LEARNING_*); None leaves the routes disabled/UNAVAILABLE.
+    learning_projection: LearningProjectionConfig | None = None
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -170,6 +191,22 @@ class Settings:
                     "V5_HOST_OPERATIONS_FILE must be an absolute normalized path"
                 )
 
+        helm_status_file = None
+        configured_helm = values.get("V5_HELM_STATUS_FILE", "").strip()
+        if configured_helm:
+            helm_status_file = Path(configured_helm)
+            if (
+                not helm_status_file.is_absolute()
+                or os.path.normpath(configured_helm) != configured_helm
+                or not status_file_name_valid(helm_status_file)
+            ):
+                raise ConfigurationError(
+                    "V5_HELM_STATUS_FILE must be an absolute normalized <bot>_paper.status.json path"
+                )
+
+        campaign_id = values.get("V5_TRADEPAD_CAMPAIGN_ID", "").strip()
+        if campaign_id and not re.fullmatch(r"w[0-9]+-[0-9]+", campaign_id):
+            raise ConfigurationError("V5_TRADEPAD_CAMPAIGN_ID must be a tested-window campaign id")
         return cls(
             runtime_root=runtime_root,
             dashboard_token_file=dashboard_token_file,
@@ -185,7 +222,62 @@ class Settings:
             paper_status_file=paper_status_file,
             candle_store_socket=candle_store_socket,
             host_operations_file=host_operations_file,
+            helm_status_file=helm_status_file,
+            money_sampler=values.get("V5_MONEY_SAMPLER", "").strip() == "1",
+            tradepad_url=_validate_base_url(values["V5_TRADEPAD_URL"], "V5_TRADEPAD_URL") if values.get("V5_TRADEPAD_URL", "").strip() else None,
+            research_url=_validate_base_url(values["V5_RESEARCH_URL"], "V5_RESEARCH_URL") if values.get("V5_RESEARCH_URL", "").strip() else None,
+            tradepad_campaign_id=campaign_id or None,
+            learning_projection=_learning_projection_config(values),
         )
+
+
+LEARNING_SOURCE_NAMES = (
+    "V5_LEARNING_SOURCE",
+    "V5_LEARNING_OWNER_URL",
+    "V5_LEARNING_SCOPE_ID",
+    "V5_LEARNING_SCOPE_SHA256",
+    "V5_LEARNING_PROJECTION_REVISION",
+)
+LEARNING_SOURCE_VALUE = "research_os_v1"
+
+
+def _learning_projection_config(values) -> LearningProjectionConfig | None:
+    """All five V5_LEARNING_* names or none. Partial or invalid configuration fails startup."""
+    given = {name: values.get(name, "").strip() for name in LEARNING_SOURCE_NAMES}
+    if not any(given.values()):
+        return None
+    missing = [name for name, value in given.items() if not value]
+    if missing:
+        raise ConfigurationError("partial V5 learning projection configuration; missing " + ", ".join(missing))
+    if given["V5_LEARNING_SOURCE"] != LEARNING_SOURCE_VALUE:
+        raise ConfigurationError(f"V5_LEARNING_SOURCE must be exactly {LEARNING_SOURCE_VALUE}")
+    scope_id = given["V5_LEARNING_SCOPE_ID"]
+    if (
+        len(scope_id.encode("utf-8")) > 160
+        or re.search(r"[\x00-\x1f\x7f]", scope_id)
+    ):
+        raise ConfigurationError("V5_LEARNING_SCOPE_ID must be a nonblank identifier of at most 160 bytes")
+    for name in ("V5_LEARNING_SCOPE_SHA256", "V5_LEARNING_PROJECTION_REVISION"):
+        if not re.fullmatch(r"[0-9a-f]{64}", given[name]):
+            raise ConfigurationError(f"{name} must be 64 lowercase hex characters")
+    owner_url = given["V5_LEARNING_OWNER_URL"]
+    if urlsplit(owner_url).path not in {"", "/"} or "?" in owner_url or "#" in owner_url:
+        raise ConfigurationError("V5_LEARNING_OWNER_URL must not include a path, query or fragment")
+    scope_sha256 = given["V5_LEARNING_SCOPE_SHA256"]
+    revision = given["V5_LEARNING_PROJECTION_REVISION"]
+    if (revision, scope_sha256) not in {(STAGE_A_REVISION, STAGE_A_SCOPE_SHA256), (STAGE_B_REVISION, STAGE_B_SCOPE_SHA256)}:
+        raise ConfigurationError("V5_LEARNING_PROJECTION_REVISION and V5_LEARNING_SCOPE_SHA256 must pin the same supported stage")
+    try:
+        membership = load_scope_membership(scope_id, scope_sha256)
+    except ContractViolation as error:
+        raise ConfigurationError(str(error)) from error
+    return LearningProjectionConfig(
+        owner_url=_validate_base_url(owner_url, "V5_LEARNING_OWNER_URL"),
+        scope_id=scope_id,
+        scope_sha256=scope_sha256,
+        projection_revision=revision,
+        membership=membership,
+    )
 
 
 def _validate_base_url(value: str, name: str) -> str:

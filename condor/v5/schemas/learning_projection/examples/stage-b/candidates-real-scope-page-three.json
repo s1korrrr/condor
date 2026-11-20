@@ -1,0 +1,160 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "candidates",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "PARTIAL",
+  "reason_codes": [
+    "INDEX_INCOMPLETE",
+    "OMITTED_CONTENT"
+  ],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "PARTIAL",
+    "total_items": 52,
+    "returned_items": 2,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "idea:orchestra-20260913T175405Z:revision:3cfd287da61e5dd5db2cc6791c6a56a2",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-3cfd287da61e5dd5db2cc6791c6a56a240aaa66a83edec108dd620a854c70129.json",
+          "pointer": "/nodes/1",
+          "sha256": "b23aed8c6dd022beede476ab3feb0ff6d28b4e402946cc09d359d2f00d39f19d",
+          "bytes": 4466
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:orchestra-20260913T175405Z:revision:3cfd287da61e5dd5db2cc6791c6a56a2",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:orchestra-20260913T175405Z:revision:3cfd287da61e5dd5db2cc6791c6a56a2",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:orchestra-20260913T175405Z",
+      "idea_revision_id": "idea:orchestra-20260913T175405Z:revision:3cfd287da61e5dd5db2cc6791c6a56a2",
+      "title": "Pomorski ensemble classification vs regression for portfolio construction",
+      "hypothesis": "Register and run a source-bound investigation of Piotr Pomorski's 2026-09-13 claim and the linked paper: Ensembles are strong for **classification** (binary/multi), especially event probabilities. Those probabilities can feed portfolio construction. **Regressions do a better job** at the construction/expected-return step. Primary locators: - Tweet `https://x.com/PtrPomorski/status/2099166968435581430` - SSRN `https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4547523` - UCL thesis: *Construction of Effecti",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "a522c742539ae0f41b27d82ec4c255d75f9401306bda4fcb8d7b3fa0e3777ec8",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:paper-quantifiedstrat-2098758528584585590:revision:895f446d01bb20db83e39c6afd3f4e7c",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-895f446d01bb20db83e39c6afd3f4e7ca6c2155f33e5c750f0e5f2b4fc5080cd.json",
+          "pointer": "/nodes/1",
+          "sha256": "203c8cafb3821f1caea1d67777964af0660b8b3ca322eb8e0beba1349c356999",
+          "bytes": 3159
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:paper-quantifiedstrat-2098758528584585590:revision:895f446d01bb20db83e39c6afd3f4e7c",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:paper-quantifiedstrat-2098758528584585590",
+      "idea_revision_id": "idea:paper-quantifiedstrat-2098758528584585590:revision:895f446d01bb20db83e39c6afd3f4e7c",
+      "title": "QuantifiedStrat status 2098758528584585590: hold until verified source packet",
+      "hypothesis": "No verified full_text exists for https://x.com/QuantifiedStrat/status/2098758528584585590. Compiler and exchange have no X/Twitter adapter; PaperSourcePacket is arXiv-only; CLI fetch-arxiv-source failed with 'arXiv identity must be an exact version-pinned ID'. Graph search for QuantifiedStrat and 2098758528584585590 returned 0 matches. Without verified tweet bytes, no falsifiable ok_rsi overlay can be bound.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "7e9c18d3fb881f84f02e8b432bd8fccd4085093696f4041fac54eb95cb47d37c",
+      "truncated_fields": []
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "3102aa1ce776203026642126765216aa81906e379dd8676dfb326ebfe9a7856d"
+}

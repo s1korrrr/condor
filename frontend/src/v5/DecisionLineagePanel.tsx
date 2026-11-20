@@ -1,38 +1,60 @@
-import { useQuery } from '@tanstack/react-query';
-import { DataTable } from '../features/quant-ops/kit/DataTable';
-import { EvidenceList, ProjectionClock, ProjectionNotice, UtcTime } from './LearningPanel';
-import { learningRead } from './api';
-import type { ResearchProjection } from './ResearchFactoryPanel';
+import { isUnavailableStub, useProjectionPages } from './learning-projection';
+import type { JobRow, ProjectionEnvelope, ProjectionPagesView, RecordEdgeRow, RecordNodeRow, UnavailableRowStub } from './learning-projection';
+import { CopyableHash, IssueList, ProjectionStatusBanner, RefList, SourceRefList, UtcTime } from './projection-ui';
+import { ownerTitle } from './format.mjs';
+import { ReferencePreview, ReferencePreviewList } from './LearningPanel';
 
-export function DecisionLineagePanel({ data, error }: { data?: ResearchProjection; error?: string }) {
-  return <ProjectionClock status={data?.status} sourceGeneration={data?.source_generation}><div className="space-y-4">
-    <div className="v5-page-heading"><div><h1>Decision lineage</h1><p>Follow exact owner records, inputs, release bindings and receipts. Missing edges stay unknown.</p></div></div>
-    <ProjectionNotice status={data?.status} reason={data?.reason} generatedAt={data?.generated_at_ms} error={error} />
-    <section className="v5-panel"><h2>Workflow lifecycle and usage</h2><p>NOT_DISPATCHED requires owner proof and explicit zero consumption. DISPATCH_UNKNOWN means dispatch is unresolved. OUTPUT_PENDING means output is not yet final. UNKNOWN usage is not zero. Reservations remain HELD until the owner closes them. No request is replayed.</p><DataTable label="Workflow lifecycle and usage" rows={data?.jobs ?? []} rowId={row => `${row.job_id}:${row.attempt_id}`} emptyText="No job receipts available. Usage unknown." columns={[
-      { id: 'job', header: 'Job / attempt', value: row => `${row.job_id} / ${row.attempt_id}`, rowHeader: true, wrap: true },
-      { id: 'state', header: 'Owner lifecycle', value: row => row.owner_state },
-      { id: 'history', header: 'State history', value: row => row.state_history.join(' → '), wrap: true },
-      { id: 'usage', header: 'Usage state', value: row => row.usage.state },
-      { id: 'calls', header: 'Calls / input / output tokens', value: row => [row.usage.calls, row.usage.input_tokens, row.usage.output_tokens].map(value => value ?? 'Unknown').join(' / ') },
-      { id: 'cost', header: 'Cost / duration', value: row => `${row.usage.money ? `${row.usage.money.value} ${row.usage.money.quote_currency}` : 'Unknown'} / ${row.usage.duration_ms == null ? 'Unknown' : `${row.usage.duration_ms} ms`}` },
-      { id: 'reserved', header: 'Reserved calls / duration', value: row => `${row.reservation.max_calls} / ${row.reservation.duration_ms == null ? 'Unknown' : `${row.reservation.duration_ms} ms`}` },
-      { id: 'reservation-state', header: 'Reservation state', value: row => row.reservation_state ?? 'Unknown' },
-      { id: 'resolution', header: 'No-dispatch owner proof', value: row => row.dispatch_resolution_ref?.record_id ?? 'Not reported', cell: row => <EvidenceList refs={row.dispatch_resolution_ref ? [row.dispatch_resolution_ref] : []} empty="Not reported" />, wrap: true },
-    ]} /></section>
-    <section className="v5-panel"><h2>Owner record chain</h2><p>Transport receipt ≠ native admission ≠ executor binding ≠ fill. An interrupted UI session never replays a request.</p><DataTable label="Full decision lineage" rows={data?.lineage ?? []} rowId={row => row.record_id} pageSize={12} emptyText="No decision lineage bound. Native execution and transport are unknown." columns={[
-      { id: 'record', header: 'Record', value: row => row.title, rowHeader: true, wrap: true, size: 240, cell: row => <div><strong>{row.title}</strong><p>{row.kind.replaceAll('_', ' ')} · {row.record_id}</p></div> },
-      { id: 'state', header: 'Owner state', value: row => row.state },
-      { id: 'time', header: 'Available UTC', value: row => row.available_at_ms, cell: row => <UtcTime value={row.available_at_ms} /> },
-      { id: 'parents', header: 'Parents and evidence', value: row => [...row.parent_refs, ...row.evidence_refs].map(ref => ref.record_id).join(' '), cell: row => <EvidenceList refs={[...row.parent_refs, ...row.evidence_refs]} empty="No parent / evidence refs reported" />, wrap: true, size: 300 },
-      { id: 'inputs', header: 'Consumed inputs', value: row => row.input_refs.map(ref => ref.record_id).join(' '), cell: row => <EvidenceList refs={row.input_refs} empty="Inputs unknown" />, wrap: true, size: 300 },
-      { id: 'identities', header: 'Pinned bindings', value: row => row.identities.map(item => `${item.label}: ${item.value}`).join('; '), cell: row => <details><summary>Inspect {row.identities.length} pinned identities</summary><dl className="break-all">{row.identities.map(item => <div key={item.label}><dt>{item.label.replaceAll('_', ' ')}</dt><dd><code className="font-mono select-text">{item.value}</code></dd></div>)}<div className="mt-2 text-xs">Record SHA256 <code className="font-mono select-text">{row.payload_sha256}</code></div></dl></details>, wrap: true, size: 300 },
-    ]} /></section>
-    <section className="v5-panel"><h2>Permission remains separate</h2><p>Catalog eligibility: owner-only. Research support: owner-only. Paper, canary and live readiness: disabled. Transport: unknown. Native execution: unknown.</p><p>No activation, delegation, replay or model controls exist on this view.</p></section>
-  </div></ProjectionClock>;
+type Records = ProjectionEnvelope<RecordNodeRow | RecordEdgeRow | UnavailableRowStub>;
+type Attempts = ProjectionEnvelope<JobRow | UnavailableRowStub>;
+
+function Pages({ view, label }: { view?: ProjectionPagesView<'records'> | ProjectionPagesView<'jobs'>; label: string }) {
+  if (!view) return null;
+  return <nav aria-label={`${label} pages`} className="flex flex-wrap gap-3"><button type="button" onClick={view.first} disabled={!view.hasPrevious && !view.snapshotChanged}>First</button><button type="button" onClick={view.previous} disabled={!view.hasPrevious}>Previous</button><button type="button" onClick={view.next} disabled={!view.hasNext}>Next</button></nav>;
+}
+
+function Receipts({ row }: { row: RecordNodeRow | RecordEdgeRow | JobRow | UnavailableRowStub }) {
+  return <><p>Recorded: <UtcTime value={row.recorded_at_ms} /> · Available: <UtcTime value={row.available_at_ms} /></p><IssueList issues={row.issues} /><h4>Source receipts</h4><SourceRefList sources={row.sources} /><p>Row hash: <CopyableHash value={row.row_sha256} label="row hash" /></p></>;
+}
+
+export function DecisionLineagePanel({ nodeView, edgeView, attemptView, nodes, edges, attempts }: {
+  nodeView?: ProjectionPagesView<'records'>; edgeView?: ProjectionPagesView<'records'>; attemptView?: ProjectionPagesView<'jobs'>;
+  nodes?: Records; edges?: Records; attempts?: Attempts;
+}) {
+  const nodeEnvelope = nodeView ? nodeView.envelope : nodes ?? null;
+  const edgeEnvelope = edgeView ? edgeView.envelope : edges ?? null;
+  const attemptEnvelope = attemptView ? attemptView.envelope : attempts ?? null;
+  const nodePage = !nodeView || nodeView.state === 'ready' ? nodeEnvelope : null;
+  const edgePage = !edgeView || edgeView.state === 'ready' ? edgeEnvelope : null;
+  const attemptPage = !attemptView || attemptView.state === 'ready' ? attemptEnvelope : null;
+  const bannerState = (view: typeof nodeView | typeof attemptView, envelope: Records | Attempts | null) => view?.state === 'unavailable' && envelope?.status === 'UNAVAILABLE' && !view.error ? 'ready' : view?.state ?? (envelope ? 'ready' : 'unavailable');
+  const excluded = edgePage?.status !== 'UNAVAILABLE' ? edgePage?.coverage.excluded_proposed_edges : null;
+  return <div className="space-y-4 min-w-0">
+    <div className="v5-page-heading"><div><h1>Research lineage</h1><p>Native-action lineage: not published</p><p>Only owner-recorded explicit assertions are shown.</p></div></div>
+    <section className="min-w-0"><h2>Nodes</h2><ProjectionStatusBanner state={bannerState(nodeView, nodeEnvelope)} envelope={nodeEnvelope} error={nodeView?.error} onFirst={nodeView?.first} />
+      {nodePage?.status !== 'UNAVAILABLE' && nodePage?.items.map(row => <article key={row.record_id} className="v5-panel min-w-0 break-words">
+        <p className="break-all"><code className="select-text">{row.record_id}</code></p>
+        {!isUnavailableStub(row) && row.record_type === 'node' ? <><h3>{row.title}</h3><p>{row.kind} · {row.native_state ?? 'Unknown'}</p>{row.native_state === 'PROPOSED' && (row.kind === 'idea' || row.kind === 'idea_revision') && <p>PROPOSED means registration, not readiness.</p>}{row.summary && <p>{row.summary}</p>}{row.identities.map(identity => <p key={`${identity.name}:${identity.value}`} className="break-all">{identity.name}: <code className="select-text">{identity.value}</code></p>)}</> : <p>Record unavailable</p>}
+        <Receipts row={row} />
+      </article>)}<Pages view={nodeView} label="Node" /></section>
+    <section className="min-w-0"><h2>Explicit edges</h2><ProjectionStatusBanner state={bannerState(edgeView, edgeEnvelope)} envelope={edgeEnvelope} error={edgeView?.error} onFirst={edgeView?.first} />
+      <p>{excluded == null ? 'unknown' : <span title={ownerTitle(excluded) ?? undefined}>{excluded}</span>} proposed links not shown: not explicit assertions</p>
+      {edgePage?.status !== 'UNAVAILABLE' && edgePage?.items.map(row => <article key={row.record_id} className="v5-panel min-w-0 break-words">
+        <p className="break-all"><code className="select-text">{row.record_id}</code></p>
+        {!isUnavailableStub(row) && row.record_type === 'edge' ? <><h3>{row.relation} · {row.basis}</h3><h4>From</h4><RefList refs={[row.from_ref]} /><h4>To</h4><RefList refs={[row.to_ref]} /></> : <p>Record unavailable</p>}
+        <Receipts row={row} />
+      </article>)}<Pages view={edgeView} label="Edge" /></section>
+    <section className="min-w-0"><h2>Research attempts</h2><ProjectionStatusBanner state={bannerState(attemptView, attemptEnvelope)} envelope={attemptEnvelope} error={attemptView?.error} onFirst={attemptView?.first} />
+      {attemptPage?.status !== 'UNAVAILABLE' && attemptPage?.items.map(row => <article key={row.record_id} className="v5-panel min-w-0 break-words">
+        <p className="break-all"><code className="select-text">{row.record_id}</code></p>
+        {!isUnavailableStub(row) ? <><h3>Attempt <code className="select-text break-all">{row.attempt_id}</code></h3><p>{row.native_state} · Completion: {row.completion}{row.native_state === 'RUNNING' ? ' (not a process-liveness claim)' : ''}</p><p>Started: <UtcTime value={row.started_at_ms} /> · Finished: <UtcTime value={row.finished_at_ms} /></p><ReferencePreview shown={1 + row.artifact_refs.length} total={row.reference_total} /><h4>Experiment</h4><RefList refs={[row.experiment_ref]} /><h4>Artifacts</h4><ReferencePreviewList refs={row.artifact_refs} complete={1 + row.artifact_refs.length === row.reference_total} /></> : <p>Attempt unavailable</p>}
+        <Receipts row={row} />
+      </article>)}<Pages view={attemptView} label="Attempt" /></section>
+  </div>;
 }
 
 export function DecisionLineagePage() {
-  const query = useQuery({ queryKey: ['v5-learning-lineage'], queryFn: () => learningRead<ResearchProjection>('research?cursor=0&limit=25'), retry: false });
-  if (query.isPending) return <p role="status">Loading decision lineage…</p>;
-  return <DecisionLineagePanel data={query.data} error={query.error?.message} />;
+  const nodeView = useProjectionPages('records', { record_type: 'node', limit: 25 });
+  const edgeView = useProjectionPages('records', { record_type: 'edge', limit: 25 });
+  const attemptView = useProjectionPages('jobs', { limit: 25 });
+  return <DecisionLineagePanel nodeView={nodeView} edgeView={edgeView} attemptView={attemptView} />;
 }

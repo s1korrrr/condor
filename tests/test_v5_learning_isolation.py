@@ -45,7 +45,10 @@ def test_learning_routes_inherit_auth_origin_and_disabled_default(tmp_path):
         response = client.get("/api/v5/learning/roles")
         assert response.status_code == 200
         assert len(response.json()["roles"]) == 12
-        assert client.get("/api/v5/learning/manifest").json()["status"] == "UNAVAILABLE"
+        unconfigured = client.get("/api/v5/learning/manifest")
+        assert unconfigured.status_code == 503
+        assert unconfigured.json()["code"] == "PUBLICATION_UNAVAILABLE"
+        assert unconfigured.headers["retry-after"] == "1"
         assert client.post("/api/v5/learning/workflows", json={}).status_code == 403
         response = client.post(
             "/api/v5/learning/workflows", json={}, headers={"Origin": ORIGIN}

@@ -1,0 +1,136 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "campaigns",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "BOUND",
+  "reason_codes": [],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "COMPLETE",
+    "total_items": 1,
+    "returned_items": 1,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "fixture-seal",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1794916800000,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "fixtures/stage-b/campaigns/fixture-seal/campaign.json",
+          "pointer": "",
+          "sha256": "c4e7194c275f4e197a3a33a629cd0035d1c6723bc41452362f36fe495d1f6301",
+          "bytes": 338
+        },
+        {
+          "root": "STORE",
+          "relative_path": "fixtures/stage-b/campaigns/fixture-seal/preregistered.json",
+          "pointer": "",
+          "sha256": "326865389fb4dbdf6e048fb195a49cb1154965f7724aea0f34902eedf09d5678",
+          "bytes": 569
+        }
+      ],
+      "row_status": "COMPLETE",
+      "issues": [],
+      "campaign_id": "fixture-seal",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:fixture-seal-experiment",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:fixture-seal:revision:00000000000000000000000000000001",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-fixture-seal",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-11-17T12:00:00Z",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Synthetic sealed paper campaign fixture; no execution.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/native-origin/synthetic-workspace",
+      "stage": "ATTEMPT_CLAIMED",
+      "preregistration_seal": "VERIFIED",
+      "row_sha256": "afe9481372a8f4cbca195b9e40e48d0b01eb690936554238031c73b7eca716fd"
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "ce0a456aa9282b73b8cccce2919f54d7b3ef05c321e896df89a101d26c988482"
+}

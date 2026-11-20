@@ -1,0 +1,43 @@
+{
+  "schema": "research_knowledge.v5_projection_scope.v1",
+  "scope_id": "v5-okx-spot-dca",
+  "program_id": "okx_spot_dca",
+  "family_lane_pairs": [
+    {
+      "family_id": "ok_rsi_challenger_20260903",
+      "lane": "SPOT"
+    },
+    {
+      "family_id": "ok_rsi_owner_replay_baseline",
+      "lane": "SPOT"
+    },
+    {
+      "family_id": "ok_rsi_trend_aware_dca",
+      "lane": "SPOT"
+    },
+    {
+      "family_id": "okx_spot_dca",
+      "lane": "SPOT"
+    }
+  ],
+  "membership_policy": "RECORDED_V1",
+  "enabled_datasets": [
+    "assessments",
+    "campaigns",
+    "candidates",
+    "jobs",
+    "lessons",
+    "manifest",
+    "records"
+  ],
+  "source_receipts": [
+    {
+      "root": "SOURCE",
+      "relative_path": "fixtures/stage-b-selection.json",
+      "pointer": "",
+      "sha256": "ed8304f64a8d43f87cd448e931e32e6faf7bb7763ddd6aa75558eacc80edf642",
+      "bytes": 25
+    }
+  ],
+  "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+}

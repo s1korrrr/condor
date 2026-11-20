@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -201,9 +203,12 @@ def test_financial_research_tradepad_and_market_picture_reads_fail_closed(tmp_pa
     with client:
         for path in paths:
             response = client.get("/api/v5/dashboard/read", params={"path": path})
-            assert response.status_code == 503, path
+            assert response.status_code == (404 if path == "/api/v1/tradepad/sessions" else 503), path
             assert isinstance(response.json()["detail"], str), path
-            assert "unbound" in response.json()["detail"].lower(), path
+            if path == "/api/v1/research/overview":
+                assert response.json()["detail"] == "Not connected: V5_RESEARCH_URL is unset"
+            elif path != "/api/v1/tradepad/sessions":
+                assert "unbound" in response.json()["detail"].lower(), path
             assert "0" not in response.json()["detail"], path
     assert upstream.calls == []
 
@@ -251,37 +256,81 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
     dist.mkdir()
     (dist / "v5.html").write_text("<html>full V5 dashboard</html>")
     (dist / "condor_old.jpeg").write_bytes(b"test-logo")
+    files = {
+        name: hashlib.sha256((dist / name).read_bytes()).hexdigest()
+        for name in ("v5.html", "condor_old.jpeg")
+    }
+    (tmp_path / "v5-reviewed-build.json").write_text(
+        json.dumps(
+            {"entry": "v5.html", "entrySha256": files["v5.html"], "files": files}
+        )
+    )
     app = create_app(
         settings=make_settings(tmp_path), upstream=NoNetworkUpstream(), static_dir=dist
     )
     with TestClient(app) as client:
+        html = {"Accept": "text/html,application/xhtml+xml"}
         logo = client.get("/condor_old.jpeg")
         assert logo.status_code == 200 and logo.content == b"test-logo"
         assert logo.headers["content-type"] == "image/jpeg"
         for path in (
+            "/",
+            "/market",
+            "/market/BTC",
             "/capital",
             "/bots",
+            "/helm",
+            "/money",
             "/operations",
+            "/system/checks",
+            "/system",
+            "/system/data-feeds",
+            "/system/engine-inputs",
+            "/system/readiness",
+            "/system/settings",
             "/research",
+            "/learning",
+            "/research-factory",
+            "/decision-lineage",
             "/backtests",
             "/agents",
+            "/agents/decisions",
             "/agents/market_analyst",
             "/sessions",
             "/sessions/" + "a" * 32,
             "/settings",
             "/market/evidence",
+            "/market/candles",
+            "/market/stocks",
             "/v5/readiness",
         ):
-            response = client.get(path)
-            assert response.status_code == 200
-            assert "full V5 dashboard" in response.text
+            for headers in (None, html):
+                response = client.get(path, headers=headers)
+                assert response.status_code == 200, (path, headers)
+                assert "full V5 dashboard" in response.text, (path, headers)
         for path in (
             "/api/v1/servers",
             "/api/unknown",
             "/secrets",
             "/agents/unknown",
             "/sessions/wrong",
+            "/system/operations",
         ):
             response = client.get(path)
             assert response.status_code == 404
             assert "full V5 dashboard" not in response.text
+        # A browser asking for an unknown page gets the app with 404 (it shows "Page not found"), never raw JSON;
+        # API and asset paths, and non-HTML clients, keep the JSON 404.
+        for path in ("/nope", "/system/unknown", "/system/operations", "/market/DOGE", "/agents/unknown", "/sessions/wrong"):
+            response = client.get(path, headers=html)
+            assert response.status_code == 404 and "full V5 dashboard" in response.text, path
+        bare_api = client.get("/api", headers={"Accept": "text/html"})
+        assert bare_api.status_code == 404 and "full V5 dashboard" in bare_api.text
+        assert bare_api.headers["content-type"].startswith("text/html")
+        for path in ("/api/v5/unknown", "/api/unknown", "/api/v1/servers", "/assets/missing.js"):
+            for headers in (None, html):
+                response = client.get(path, headers=headers)
+                assert response.status_code == 404, (path, headers)
+                assert response.headers["content-type"].startswith("application/json"), (path, headers)
+                assert response.json() == {"detail": "Not Found"}, (path, headers)
+        assert client.get("/market/DOGE").json() == {"detail": "Not Found"}

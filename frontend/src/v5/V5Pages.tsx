@@ -1,22 +1,25 @@
+import { ownerTitleText } from './format.mjs';
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Bot, Check, ChevronRight, CircleDot, Database, FileSearch, FileText, GitBranch, LockKeyhole, Play, RotateCw, Save, ShieldAlert, Sparkles, Square, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { isValidElement, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { v5Api } from "./api";
 import { usePaperObservation } from "./usePaperObservation";
 import type { MarketEvidence, V5Agent, V5Session, V5SessionDetail, V5TaskReport, V5Workspace } from "./contracts";
-import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
+import { cohortCoverageDisplay, formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
 import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel, paperWords } from "./policy";
+import { advisorAvailability, advisorTaskProfile, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
+import { usePaperClock } from "./usePaperClock";
 
 function useWorkspace() {
   return useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
 }
 
-export function PaperReadinessPage() {
-  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: 15_000 });
-  const observation = usePaperObservation(profile.data?.readiness.paper_owner?.bot_name);
-  if (!profile.data?.readiness.paper_owner) return <OverviewPage />;
+export function PaperReadinessPage({ paused = false }: { paused?: boolean } = {}) {
+  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: paused ? false : 15_000 });
+  const observation = usePaperObservation(profile.data?.readiness.paper_owner?.bot_name, false);
+  if (!profile.data?.readiness.paper_owner) return <section><h2>Paper readiness</h2><p>Paper readiness is unavailable: the paper owner is not bound.</p></section>;
   const owner = profile.data.readiness.paper_owner;
   const gates = paperReadiness(owner);
   return <><PageHeading title="Paper readiness" description="Paper operation, production qualification, economic support and live authority are separate gates." />
@@ -25,15 +28,15 @@ export function PaperReadinessPage() {
   </>;
 }
 
-function PaperIdentity() {
-  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: 15_000 });
+function PaperIdentity({ paused = false }: { paused?: boolean }) {
+  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: paused ? false : 15_000 });
   const bot = profile.data?.readiness.paper_owner?.bot_name;
-  const identity = usePaperObservation(bot);
+  const identity = usePaperObservation(bot, false);
   if (!profile.data?.readiness.paper_owner) return null;
   const owner = profile.data.readiness.paper_owner;
   const source = identity.status?.source;
   const snapshotLabel = identity.snapshot?.label;
-  return <section className="v5-panel"><h2>Paper owner identity</h2><p>{paperWorkspaceLabel(profile.data)}</p>{snapshotLabel && <p role="status">{snapshotLabel} · As of {formatTime(identity.status?.generated_at_ms ?? null)}</p>}<div className="v5-settings-list"><DataValue label="Bot" value={owner.bot_name} /><DataValue label="Paper owner reads" value={identity.summary.label} /><DataValue label="Read status" value={identity.summary.reason} /><DataValue label="Process heartbeat" value={`${paperWords(owner.state)} · liveness only`} /><DataValue label="Heartbeat as of" value={owner.generated_at === null ? null : formatTime(owner.generated_at * 1000)} /><DataValue label="Heartbeat reason" value={paperWords(owner.reason)} /><DataValue label="Native source SHA256" value={source?.source_sha256} /><DataValue label="Config SHA256" value={source?.config_sha256} /><DataValue label="Recipe SHA256" value={source?.recipe_sha256} /><DataValue label="Observation snapshot" value={identity.status?.snapshot_id} /><DataValue label="Image identity" value="Unavailable · release manifest read export not connected" /><DataValue label="Paper controls" value="Not enabled in this read-only dashboard" /></div>{identity.isError && <p role="alert">{identity.error.message}</p>}<p>Build, config and recipe IDs come only from the owner observation. Missing IDs remain unavailable; no revision is inferred from this page.</p></section>;
+  return <section className="v5-panel"><h2>Paper owner identity</h2><p>{paperWorkspaceLabel(profile.data)}</p>{snapshotLabel && <p role="status">{snapshotLabel} · As of {formatTime(identity.status?.generated_at_ms ?? null)}</p>}<div className="v5-settings-list"><DataValue label="Bot" value={owner.bot_name} /><DataValue label="Paper owner reads" value={identity.summary.label} /><DataValue label="Read status" value={identity.summary.reason} /><DataValue label="Process heartbeat" value={`${paperWords(owner.state)} · liveness only`} /><DataValue label="Heartbeat as of" value={owner.generated_at === null ? null : formatTime(owner.generated_at * 1000)} /><DataValue label="Heartbeat reason" value={paperWords(owner.reason)} /><DataValue label="Native source SHA256" value={source?.source_sha256} /><DataValue label="Config SHA256" value={source?.config_sha256} /><DataValue label="Recipe SHA256" value={source?.recipe_sha256} /><DataValue label="Observation snapshot" value={identity.status?.snapshot_id} /><DataValue label="Image identity" value="Not published · Hummingbot paper owner identity image digest field is not in the observation export" /><DataValue label="Paper controls" value="Not enabled in this read-only dashboard" /></div>{identity.isError && <p role="alert">{identity.error.message}</p>}<p>Build, config and recipe IDs come only from the owner observation. Missing IDs remain unavailable; no revision is inferred from this page.</p></section>;
 }
 
 function Loading({ label = "Loading owner data" }: { label?: string }) {
@@ -56,8 +59,9 @@ function Status({ state, label }: { state: "ready" | "blocked" | "completed" | "
   return <span className={`v5-status is-${state}`}><i />{label ?? state}</span>;
 }
 
-function formatTime(ms: number | null | undefined) {
-  if (ms == null || !Number.isFinite(ms)) return "Unavailable";
+function formatTime(ms: number | null | undefined, invalid = "Unavailable") {
+  if (ms == null) return "Unavailable";
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0 || ms > 8.64e15) return invalid;
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(ms) + " UTC";
 }
 
@@ -68,7 +72,12 @@ function duration(seconds: number) {
 }
 
 function reasonList(agent: V5Agent) {
-  if (agent.blockers.length) return agent.blockers;
+  const labels: Record<string, string> = {
+    task_disabled: "Task disabled by the owner service.",
+    task_enablement_not_published: "Task enablement not published by the owner service.",
+    task_enablement_invalid: "Task enablement invalid in the owner response.",
+  };
+  if (agent.blockers.length) return agent.blockers.map(reason => labels[reason] ?? reason);
   if (agent.status === "blocked") return ["Owner reported this agent is blocked; no blocker details were supplied."];
   return [];
 }
@@ -161,7 +170,8 @@ function TaskLatestReports({ reports, agents, taskId }: { reports?: Record<strin
 }
 
 function money(value: number | string | null | undefined) {
-  return formatUsdAmount(value);
+  const text = formatUsdAmount(value);
+  return <span title={ownerTitleText(text === "Unavailable" ? undefined : String(value))}>{text}</span>;
 }
 
 function EvidenceSummary({ evidence }: { evidence: MarketEvidence | null }) {
@@ -202,7 +212,7 @@ function CohortCoverageNotice({ evidence }: { evidence: MarketEvidence }) {
   const coverage = selectedCohortCoverage(evidence);
   return <section className={`v5-cohort-coverage${coverage.complete ? " is-complete" : " is-partial"}`} aria-label="Selected market cohort coverage">
     <div className="v5-cohort-coverage-heading"><div><strong>{coverage.complete ? "Complete observed cohort" : "PARTIAL SOURCE"}</strong><p>{coverage.complete ? "All selected spot assets and spot/perpetual venue pairs have qualified coverage." : "Selected asset or venue coverage is incomplete or unknown. Qualified feature values may describe only the observed subset."}</p></div><Status state={coverage.complete ? "ready" : "blocked"} label={coverage.complete ? "COMPLETE" : "PARTIAL / UNKNOWN"} /></div>
-    <div className="v5-cohort-coverage-grid">{coverage.dimensions.map((row) => <div className="v5-cohort-coverage-row" key={row.key}><span>{row.label}</span><strong>{row.valid == null || row.expected == null ? "Unavailable" : `${row.valid} / ${row.expected}`}</strong><small>{row.fraction == null ? "Coverage unknown" : `${(row.fraction * 100).toFixed(1)}%`}</small></div>)}</div>
+    <div className="v5-cohort-coverage-grid">{coverage.dimensions.map((row) => { const shown = cohortCoverageDisplay(row, 1); return <div className="v5-cohort-coverage-row" key={row.key}><span>{row.label}</span><strong>{row.valid == null || row.expected == null ? "Unavailable" : `${row.valid} / ${row.expected}`}</strong><small title={shown?.title}>{shown?.text ?? "Coverage unknown"}</small></div>; })}</div>
   </section>;
 }
 
@@ -215,7 +225,7 @@ function formatAge(ms: number) {
 function FeatureGroup({ label, prefix, features, evidence }: { label: string; prefix: "spot." | "derivatives."; features?: ReturnType<typeof marketFeatures>; evidence: MarketEvidence | null }) {
   const rows = features ?? (evidence ? marketFeatures(evidence, prefix) : []);
   return <section className="v5-domain-block"><span className="v5-domain-label">{label}</span>{rows.length ? <div className="v5-feature-list">{rows.map((feature) => <div className="v5-feature-row" key={feature.id}>
-    <span className="v5-feature-name" title={feature.id}>{feature.label}</span><strong className={feature.status === "QUALIFIED" ? "is-qualified" : "is-unavailable"}>{qualifiedFeatureValue(feature)}</strong><span className="v5-feature-unit">{feature.unit}</span><span className={`v5-feature-state${feature.status === "QUALIFIED" ? " is-qualified" : ""}`}>{feature.status}</span>
+    <span className="v5-feature-name" title={feature.id}>{feature.label}</span><strong title={ownerTitleText(feature.status === "QUALIFIED" && feature.value != null ? String(feature.value) : undefined)} className={feature.status === "QUALIFIED" ? "is-qualified" : "is-unavailable"}>{qualifiedFeatureValue(feature)}</strong><span className="v5-feature-unit">{feature.unit}</span><span className={`v5-feature-state${feature.status === "QUALIFIED" ? " is-qualified" : ""}`}>{feature.status}</span>
   </div>)}</div> : <span className="v5-muted">Unavailable · no {label.toLowerCase()} feature rows</span>}</section>;
 }
 
@@ -249,7 +259,7 @@ function displayEvidenceValue(value: unknown): string {
 }
 
 function DataValue({ label, value }: { label: string; value: unknown }) {
-  const display = value == null || value === "" ? "Unavailable" : displayEvidenceValue(value);
+  const display = isValidElement(value) ? value : value == null || value === "" ? "Unavailable" : displayEvidenceValue(value);
   return <div className="v5-data-value"><span>{label}</span><strong>{display}</strong></div>;
 }
 
@@ -258,9 +268,20 @@ export function AgentsPage() {
   if (query.isPending) return <Loading label="Loading agent catalog" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
   return <><PageHeading title="Agent catalog" description="The workspace roles and their owner-reported readiness." />
+    <p><Link className="v5-text-link" to="/agents/decisions">Agent decisions <ChevronRight size={14} /></Link></p>
+    <ScheduledAgents read={query} />
     {query.data.agents.length ? <div className="v5-agent-catalog">{query.data.agents.map((agent) => <AgentCatalogRow agent={agent} key={agent.id} />)}</div> : <EmptyState title="No agents are registered" body="The service returned an empty catalog. No demo or placeholder agents are shown." />}
     {query.data.source_error && <div className="v5-source-warning"><AlertTriangle size={16} />Some catalog sources are unavailable: {query.data.source_error}</div>}
   </>;
+}
+
+function ScheduledAgents({ read, agentId }: { read: WorkspaceRead; agentId?: string }) {
+  const now = usePaperClock();
+  const lines = scheduledAgentLines(read, now).filter(line => !agentId || line.id === agentId);
+  return <section className="v5-panel" aria-label="Scheduled agents"><h2>Scheduled agents</h2>
+    {lines.map(line => <p key={line.id}><Link to={`/agents/${line.id}`}>{line.name}</Link> · <strong>{line.state}</strong> · {line.reason} · Last report: {line.reportTime ? <time dateTime={line.reportTime}>{line.reportTime.replace("T", " ").replace("Z", " UTC")}</time> : "not published"} ({line.reportAge}) · Owner report: {line.reportState} / {line.reportStatus} · {line.expiry}{line.expiryTime && <> · Owner expiry: <time dateTime={line.expiryTime}>{line.expiryTime.replace("T", " ").replace("Z", " UTC")}</time> ({line.expiryRelative})</>} · {line.overdue} · {line.schedule}</p>)}
+    <p className="v5-muted">Report times, task state and shared scheduler state come from owner reads. Cadence, role rotation and overdue rules are not published. A loop recipe alone is not scheduling evidence.</p>
+  </section>;
 }
 
 function AgentCatalogRow({ agent }: { agent: V5Agent }) {
@@ -292,12 +313,13 @@ export function AgentDetailPage() {
   }, onSuccess: (session) => { cacheSession(queryClient, session); navigate(`/sessions/${encodeURIComponent(session.id)}`); } });
   const saveNotes = useMutation({ mutationFn: (text: string) => v5Api.saveNotes(id, text), onSuccess: (result) => { setNotes(result.notes); void queryClient.invalidateQueries({ queryKey: ["v5-agent", id] }); } });
   const actionError = inspect.error ?? report.error ?? startLoop.error ?? saveNotes.error;
-  const profile = detailQuery.data?.task_id == null ? undefined : workspace.data?.advisor.task_profiles.find((row) => row.task_id === detailQuery.data?.task_id);
-  const effectiveModel = profile?.model ?? workspace.data?.advisor.model ?? null;
+  const profile = advisorTaskProfile(workspace, detailQuery.data?.task_id);
+  const configuredModel = profile?.model ?? workspace.data?.advisor?.model;
+  const effectiveModel = typeof configuredModel === "string" ? configuredModel : null;
   const canRequest = !!detailQuery.data && !!workspace.data && canRequestReport({
     agentReady: detailQuery.data.status === "ready",
-    advisorEnabled: workspace.data.advisor.enabled,
-    taskEnabled: !!profile?.enabled,
+    advisorEnabled: advisorAvailability(workspace).state === "enabled",
+    taskEnabled: profile?.enabled === true,
     modelAvailable: !!effectiveModel,
     mode: workspace.data.identity.mode,
     executionEnabled: workspace.data.identity.execution_enabled,
@@ -314,15 +336,16 @@ export function AgentDetailPage() {
   return <>
     <div className="v5-back-row"><Link to="/agents">Agents</Link><ChevronRight size={14} /><span>{agent.name}</span></div>
     <PageHeading title={agent.name} description={agent.description} actions={<Status state={agent.status} label={agent.status === "ready" ? "Ready" : "Blocked"} />} />
+    <ScheduledAgents read={workspace} agentId={agent.id} />
     <div className="v5-agent-meta-line"><span>Task <b>{agent.task_id ?? "Unavailable"}</b></span><span>Model <b>{agent.model || "Unavailable"}</b></span><span>Mode <b>{agent.mode}</b></span><span>Policy <b>{agent.policy.execution_enabled ? "Execution enabled" : "Execution disabled"}</b></span></div>
     {blockers.length > 0 && <section className="v5-blocker-panel"><AlertTriangle size={18} /><div><strong>Agent readiness is blocked</strong><ul>{blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul></div></section>}
     {actionError && <div className="v5-action-error" role="alert"><AlertTriangle size={15} />{actionError.message}</div>}
     <section className="v5-agent-actions" aria-label="Agent actions">
       <div className="v5-safe-action"><button className="v5-button v5-button-primary" onClick={() => inspect.mutate()} disabled={inspect.isPending}><FileSearch size={16} />{inspect.isPending ? "Inspecting sources…" : "Inspect sources"}</button><span>Deterministic owner inspection; no model call.</span></div>
-      <div className="v5-safe-action"><button className="v5-button" onClick={() => report.mutate()} disabled={!canRequest || report.isPending}><FileText size={16} />{report.isPending ? "Requesting report…" : "Request report"}</button><span>{canRequest ? `Bounded to ${effectiveModel} and this agent’s configured task profile.` : unavailableReason(agent, workspace.data?.advisor.enabled, profile?.enabled, !!effectiveModel)}</span></div>
+      <div className="v5-safe-action"><button className="v5-button" onClick={() => report.mutate()} disabled={!canRequest || report.isPending}><FileText size={16} />{report.isPending ? "Requesting report…" : "Request report"}</button><span>{canRequest ? `Bounded to ${effectiveModel} and this agent’s configured task profile.` : unavailableReason(agent, workspace, profile?.enabled, !!effectiveModel)}</span></div>
       <div className="v5-safe-action"><button className="v5-button" onClick={() => startLoop.mutate()} disabled={!canStartLoop || startLoop.isPending}><Play size={16} />{startLoop.isPending ? "Starting report loop…" : "Start report loop"}</button><span>{agent.loops[0] ? `${agent.loops[0].name}: ≥ ${duration(boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.frequency_sec ?? 900)}, ≤ ${boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.max_ticks ?? 1} ticks` : "No report loop is configured."}</span></div>
     </section>
-    {agent.task_id && <TaskLatestReports reports={workspace.data?.advisor.latest_by_task} agents={[agent]} taskId={agent.task_id} />}
+    {agent.task_id && <TaskLatestReports reports={workspace.data?.advisor?.latest_by_task} agents={[agent]} taskId={agent.task_id} />}
     <div className="v5-agent-layout">
       <section className="v5-panel v5-agent-content-panel">
         <div className="v5-tabs" role="tablist" aria-label="Agent details">{tabs.map((key) => <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? "is-selected" : ""} onClick={() => setTab(key)}>{key === "playbook" ? "Playbook" : key === "skills" ? `Skills (${agent.skills.length})` : key === "tools" ? "Tools & policy" : "Notes"}</button>)}</div>
@@ -341,10 +364,12 @@ export function AgentDetailPage() {
   </>;
 }
 
-function unavailableReason(agent: V5Agent, advisorEnabled?: boolean, profileEnabled?: boolean, modelAvailable = false) {
+function unavailableReason(agent: V5Agent, workspace: WorkspaceRead, profileEnabled?: boolean, modelAvailable = false) {
+  const advisor = advisorAvailability(workspace);
+  if (advisor.state !== "enabled") return advisor.message;
   if (agent.status !== "ready") return "Unavailable while this agent is blocked.";
-  if (!advisorEnabled) return "Advisor is disabled by the owner service.";
-  if (!profileEnabled) return "This task profile is unavailable or disabled.";
+  if (profileEnabled === false) return "This task profile is disabled by the owner service.";
+  if (profileEnabled !== true) return "This task profile is unavailable: enabled state not published.";
   if (!modelAvailable) return "No task-specific or configured advisor model is available.";
   return "Report actions require a reports-only workspace.";
 }
@@ -376,23 +401,6 @@ function NotesEditor({ initial, onSave, saving }: { initial: string; onSave: (va
   const [text, setText] = useState(initial);
   const changed = text !== initial;
   return <div className="v5-notes-editor"><label htmlFor="agent-notes">Operator notes</label><p>Notes are stored by the V5 owner and are not sent to a model unless the owner includes them in a report task.</p><textarea id="agent-notes" maxLength={8000} value={text} onChange={(event) => setText(event.target.value)} /><div className="v5-notes-footer"><span>{text.length} / 8,000</span><button className="v5-button v5-button-primary" disabled={!changed || saving} onClick={() => onSave(text)}><Save size={15} />{saving ? "Saving…" : "Save notes"}</button></div></div>;
-}
-
-export function MarketPage() {
-  const query = useWorkspace();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 10_000); return () => window.clearInterval(timer); }, []);
-  if (query.isPending) return <Loading label="Loading market evidence" />;
-  if (query.isError && !query.data) return <QueryError query={query} retry={() => void query.refetch()} />;
-  const evidence = query.data.context;
-  const cohortCoverage = evidence ? selectedCohortCoverage(evidence) : null;
-  const refresh = query.data.source_refresh;
-  const freshness = refresh?.feed_freshness === "FRESH" && refresh.feed_fresh_until_ms != null && now <= refresh.feed_fresh_until_ms ? "CURRENT" : refresh?.feed_freshness === "UNAVAILABLE" || refresh?.feed_freshness === "FRESH" ? "STALE" : "UNKNOWN";
-  return <><PageHeading title="Market evidence" description="Source status, coverage, timestamps, units, and market type stay explicit." actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh evidence</button>} />
-    <section className="v5-market-refresh" aria-label="Feed refresh status"><div><strong>Feed status</strong><Status state={freshness === "CURRENT" ? "ready" : freshness === "STALE" ? "blocked" : "unknown"} label={`Publisher: ${paperWords(refresh?.state ?? "unknown")} · Data: ${paperWords(freshness)}`} /></div><span>Refresh health does not imply complete market coverage.</span><span>Last refresh attempt: {formatTime(refresh?.last_attempt_at_ms)}</span><span>Last successful publication: {formatTime(refresh?.last_success_at_ms)}</span><span>Published cutoff: {formatTime(refresh?.last_success_cutoff_ms)}</span><span>Dashboard last successful read: {query.dataUpdatedAt ? formatTime(query.dataUpdatedAt) : "Unavailable"}</span>{refresh?.error && <span role="alert">Feed refresh issue: {refresh.error}</span>}{query.error && <span role="alert">Dashboard refresh failed: showing last successful response · {query.error.message}</span>}</section>
-    {query.data.source_error && <div className="v5-source-warning"><AlertTriangle size={16} />{query.data.source_error}</div>}
-    {!evidence ? <div className="v5-panel v5-market-page-empty"><EvidenceSummary evidence={null} /><p>{query.data.identity.baseline_binding ? "A baseline is reported as bound, but no market source evidence was returned." : "Baseline and market context are both unavailable. No comparison or market conclusion can be drawn."}</p></div> : <div className="v5-market-page"><section className="v5-panel"><div className="v5-section-heading"><div><h2>Source record</h2><p>Values are displayed from the owner response without conversion.</p></div><Status state={cohortCoverage?.complete ? "ready" : "blocked"} label={cohortCoverage?.complete ? "Complete observed cohort" : "PARTIAL SOURCE"} /></div><EvidenceSummary evidence={evidence} /></section><section className="v5-market-limits"><ShieldAlert size={17} /><div><strong>Interpretation limits</strong><p>Refresh health and feature validity do not certify full cohort coverage. Native position state is unavailable in this reports-only workspace. V5 does not infer composite scores, strategy baselines, or performance from market context. Missing fields remain unavailable.</p></div></section></div>}
-  </>;
 }
 
 export function SessionsPage() {
@@ -444,19 +452,44 @@ export function SessionDetailPage() {
   </>;
 }
 
-export function SettingsPage() {
+export function SettingsPage({ paused = false }: { paused?: boolean } = {}) {
   const query = useQuery({ queryKey: ["v5-settings"], queryFn: v5Api.settings });
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
   const paper = Boolean(paperWorkspaceLabel(profile.data));
-  const observation = usePaperObservation(paper ? profile.data?.readiness.paper_owner?.bot_name : null);
+  const observation = usePaperObservation(paper ? profile.data?.readiness.paper_owner?.bot_name : null, false);
   if (query.isPending) return <Loading label="Loading workspace settings" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
   const settings = query.data;
   const tasks = settings.task_profiles ?? settings.budget.task_profiles ?? [];
+  const errors = typeof settings.source_error === "string" ? settings.source_error.split(";") : [];
+  const advisorMissing = errors.some(error => error.startsWith("advisor:")) ? "advisor source unavailable" : settings.advisor_enabled_error === "not a boolean" ? "v5_advisory /v1/advice/status enabled is invalid: not a boolean" : "advisor enabled not published";
+  const tasksMissing = errors.some(error => error.startsWith("task_profiles:")) ? "task profiles source unavailable" : "polling state not published";
   return <><PageHeading title="Workspace settings" description={paper ? `Read-only configuration · paper owner reads: ${observation.summary.label.toLowerCase()}. ${observation.summary.reason}` : "Read-only configuration. Owner readiness is reported separately."} actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh settings</button>} />
-    <PaperIdentity />
+    <PaperIdentity paused={paused} />
     <div className="v5-settings-grid"><section className="v5-panel"><div className="v5-section-heading"><div><h2>{paper ? "Advisor runtime identity" : "Runtime identity"}</h2><p>Server-supplied workspace binding</p></div></div><div className="v5-settings-list"><DataValue label="Workspace" value={settings.identity.name} /><DataValue label="Host" value={settings.identity.host} /><DataValue label="Mode" value={settings.identity.mode} /><DataValue label={paper ? "Advisor execution" : "Execution"} value={settings.identity.execution_enabled ? "Enabled" : "Disabled"} /><DataValue label="Baseline binding" value={settings.identity.baseline_binding} /><DataValue label="Upstream revision" value={settings.identity.upstream_revision} /></div></section>
-      <section className="v5-panel"><div className="v5-section-heading"><div><h2>Model budget</h2><p>Usage reported by the advisor service</p></div><Sparkles size={16} /></div><div className="v5-budget-grid"><DataValue label="Advisor enabled" value={settings.budget.enabled ? "Yes" : "No"} /><DataValue label="Configured model" value={settings.budget.model} /><DataValue label="Calls today" value={settings.budget.calls_today} /><DataValue label="Spent" value={money(settings.budget.spent_usd)} /><DataValue label="Reserved" value={money(settings.budget.reserved_usd)} /><DataValue label="Pilot cap" value={money(settings.budget_policy?.pilot_usd)} /><DataValue label="Daily cap" value={money(settings.budget_policy?.daily_usd)} /><DataValue label="Remaining pilot cap" value={money(settings.budget_policy?.remaining_pilot_usd)} /><DataValue label="Authorized ceiling" value={money(settings.budget_policy?.authorized_ceiling_usd)} /><DataValue label="Provider billing balance" value="Unavailable" /></div><div className="v5-no-secret"><LockKeyhole size={15} /><span>Provider credentials are not exposed or editable in this dashboard.</span></div><p className="v5-muted">Provider access is managed by the advisor service owner on Razer. Never enter credentials in this browser.</p><p className="v5-muted">Automatic advisor polling: {settings.scheduler?.enabled == null ? "Unavailable" : settings.scheduler.enabled ? "Enabled" : "Disabled"} · Last attempt: {formatTime(settings.scheduler?.last_attempt_ms)} · {settings.scheduler?.last_status ?? "No status"}</p></section>
+      <section className="v5-panel">
+        <div className="v5-section-heading"><div><h2>Model budget</h2><p>Read-only advisor service data</p></div><Sparkles size={16} /></div>
+        <h3>Advisor configuration and usage · v5_advisory /v1/advice/status · time not published</h3>
+        <div className="v5-budget-grid">
+          <DataValue label="Advisor enabled" value={typeof settings.budget.enabled === "boolean" ? `${settings.budget.enabled ? "Yes" : "No"} · source: v5_advisory /v1/advice/status enabled · time not published` : `— · ${advisorMissing}`} />
+          <DataValue label="Configured model (model)" value={settings.budget.model} />
+          <DataValue label="Calls today (calls_today)" value={settings.budget.calls_today} />
+          <DataValue label="Spent (spent_usd)" value={money(settings.budget.spent_usd)} />
+          <DataValue label="Reserved (reserved_usd)" value={money(settings.budget.reserved_usd)} />
+        </div>
+        <h3>Advisor scheduler and policy · v5_advisory /v1/tasks · time not published</h3>
+        <div className="v5-budget-grid">
+          <DataValue label="Automatic advisor polling" value={typeof settings.scheduler?.enabled === "boolean" ? `${settings.scheduler.enabled ? "Enabled" : "Disabled"} · source: v5_advisory /v1/tasks scheduler.enabled · time not published` : `— · ${tasksMissing}`} />
+          <DataValue label="Pilot cap (budget_policy.pilot_usd)" value={money(settings.budget_policy?.pilot_usd)} />
+          <DataValue label="Daily cap (budget_policy.daily_usd)" value={money(settings.budget_policy?.daily_usd)} />
+          <DataValue label="Remaining pilot cap (budget_policy.remaining_pilot_usd)" value={money(settings.budget_policy?.remaining_pilot_usd)} />
+          <DataValue label="Advisor policy ceiling" value={settings.budget_policy?.authorized_ceiling_usd == null ? `— · ${errors.some(error => error.startsWith("task_profiles:")) ? "task profiles source unavailable" : "policy ceiling not published"}` : `${settings.budget_policy.authorized_ceiling_usd} USD · source: v5_advisory service policy budget_policy.authorized_ceiling_usd · time not published`} />
+        </div>
+        <DataValue label="Provider billing balance" value="Unavailable" />
+        <div className="v5-no-secret"><LockKeyhole size={15} /><span>Provider credentials are not exposed or editable in this dashboard.</span></div>
+        <p className="v5-muted">Provider access is managed by the advisor service owner on Razer. Never enter credentials in this browser.</p>
+        <p className="v5-muted">Polling last attempt: {formatTime(settings.scheduler?.last_attempt_ms, "invalid time from v5_advisory /v1/tasks scheduler.last_attempt_ms")} · {settings.scheduler?.last_status ?? "No status"} · source: v5_advisory /v1/tasks scheduler</p>
+      </section>
     </div>
     <section className="v5-panel v5-task-profiles"><div className="v5-section-heading"><div><h2>Task profiles</h2><p>Model selection follows the configured task profile.</p></div></div>
       {tasks.length ? <div className="v5-profile-table"><div className="v5-profile-row v5-profile-head"><span>Task</span><span>Model</span><span>Enabled</span><span>Credential</span><span>Owner reason</span></div>{tasks.map((task, index) => <div className="v5-profile-row" key={task.task_id ?? `task-${index}`}><strong>{task.task_id ?? "Unavailable"}</strong><span>{task.model || "Unavailable"}</span><Status state={task.enabled ? "ready" : "blocked"} label={task.enabled ? "Enabled" : "Disabled"} /><span>{task.credential_status ?? "Unavailable"}</span><span>{task.reason || "No reason supplied"}</span></div>)}</div> : <EmptyState title="No task profiles returned" body="The advisor service did not provide task-specific models. No model or usage values are inferred." />}

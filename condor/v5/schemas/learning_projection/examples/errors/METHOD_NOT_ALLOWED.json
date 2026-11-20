@@ -1,0 +1,7 @@
+{
+  "schema": "research_knowledge.v5_projection_error.v1",
+  "owner": "research_os",
+  "code": "METHOD_NOT_ALLOWED",
+  "retryable": false,
+  "snapshot_id": null
+}

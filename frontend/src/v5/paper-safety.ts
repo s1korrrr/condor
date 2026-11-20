@@ -1,5 +1,5 @@
 import type { PaperRead, PaperRiskData } from './contracts';
-import { paperNativeLatch, paperRiskControllers, paperRiskHolds, paperSectionError, paperSnapshotsAgree } from './policy.ts';
+import { paperNativeHolds, paperNativeLatch, paperRiskControllers, paperRiskHolds, paperSectionError, paperSnapshotsAgree } from './policy.ts';
 
 export const PAPER_OWNER_HOLD_REASONS = [
   'stop_intent_log_damaged', 'stop_persistence_failed', 'ingress_unreadable',
@@ -14,11 +14,11 @@ export const PAPER_NATIVE_ENTRY_HOLD_REASONS = [
 function signalKeys(read: PaperRead): string[] {
   return [
     ...paperRiskHolds(read).map(hold => `owner:${hold.reason}`),
+    ...paperNativeHolds(read).map(hold => `${hold.controller_id}:${hold.reason}`),
     ...(paperRiskControllers(read, 0) ?? []).flatMap(controller => [
       ...(controller.operator.emergency === true ? [`${controller.id}:emergency`] : []),
       ...(controller.operator.paused === true ? [`${controller.id}:paused`] : []),
       ...(controller.latch === true ? [`${controller.id}:latch`] : []),
-      ...controller.holds.map(hold => `${controller.id}:${hold.reason}`),
     ]),
   ];
 }

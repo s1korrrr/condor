@@ -1,5 +1,7 @@
 import { PAPER_SNAPSHOT_FRESH_MS, paperAge, paperTimestampIssue } from './snapshot-presentation.ts';
 import { paperOpaqueClockNumber } from './paper-json.ts';
+import { decimalPercentRatio, fixed, usdc } from './format.mjs';
+import { receiptAmountFields, receiptDecimalParts } from './trades-model.mjs';
 
 export interface ReportPermissionInput {
   agentReady: boolean;
@@ -22,13 +24,13 @@ export async function paperBoundedRead<Result>(attempt: () => Promise<Result>, w
   }
 }
 
-export async function paperCoherentRead(statusPath: string, sections: { section: string; path: string; paginate?: boolean }[], read: (path: string, section: string, status?: import("./contracts").PaperRead) => Promise<import("./contracts").PaperRead>, wait?: (milliseconds: number) => Promise<void>, progress: (reads: import("./contracts").PaperRead[]) => void = () => {}) {
+export async function paperCoherentRead(statusPath: string, sections: { section: string; path: string; paginate?: boolean; maxPages?: number }[], read: (path: string, section: string, status?: import("./contracts").PaperRead) => Promise<import("./contracts").PaperRead>, wait?: (milliseconds: number) => Promise<void>, progress: (reads: import("./contracts").PaperRead[]) => void = () => {}) {
   return paperBoundedRead(async () => {
     progress([]);
     try {
       const status = await read(statusPath, "status");
       if (!status.snapshot_id) throw new Error("Owner snapshot is unavailable. No sections or totals are inferred.");
-      const reads: import("./contracts").PaperRead[] = [status];
+      const reads: import("./contracts").PaperRead[] = [retainValidatedSection(status)];
       progress([...reads]);
       let nextIndex = 0;
       let failure: { error: unknown } | undefined;
@@ -38,9 +40,9 @@ export async function paperCoherentRead(statusPath: string, sections: { section:
           const section = sections[index];
           const path = section.path + `${section.path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id!)}`;
           try {
-            const value = section.paginate ? await paperObservationPages(path, page => read(page, section.section, status)) : await read(path, section.section, status);
-            if (!paperSnapshotsAgree([status, value])) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
-            reads[index + 1] = value;
+            const value = section.paginate ? await paperObservationPages(path, page => read(page, section.section, status), section.maxPages) : await read(path, section.section, status);
+            if (!paperSnapshotsAgree([status, value]) || value.bot_id !== status.bot_id) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
+            reads[index + 1] = retainValidatedSection(value);
             progress(reads.filter(Boolean));
           } catch (error) {
             if (!failure) failure = { error };
@@ -56,10 +58,10 @@ export async function paperCoherentRead(statusPath: string, sections: { section:
   }, wait);
 }
 
-export function paperWorkspaceReads(page: "capital" | "operations" | "tradepad") {
+export function paperWorkspaceReads(page: "capital" | "operations" | "tradepad", campaignId?: string) {
   if (page === "capital") return { presentation: "paper" as const, paperReadUrl: "/api/v1/servers/rsibot-v5/account-balances", paperHistoryReadUrl: "/api/v1/servers/rsibot-v5/controller-performance/history", paperAccountingReadUrl: "/api/v1/servers/rsibot-v5/fleet/accounting" };
   if (page === "operations") return { presentation: "paper" as const, paperReadUrl: "/api/v1/operations/workspace" };
-  return { presentation: "paper" as const };
+  return campaignId ? { presentation: "paper" as const, paperReadUrl: `/api/v1/tradepad/campaigns/${encodeURIComponent(campaignId)}?delivery=deferred-assets-v1`, paperPublicationId: campaignId } : { presentation: "paper" as const };
 }
 
 export function paperObservationSummary(reads: import("./contracts").PaperRead[], bot: string, now: number) {
@@ -67,7 +69,12 @@ export function paperObservationSummary(reads: import("./contracts").PaperRead[]
   if (reads.length !== required.length || required.some(section => reads.filter(read => read.section === section && read.bot_id === bot).length !== 1) || reads.some(read => paperSectionError(read)) || !paperSnapshotsAgree(reads)) return { label: "Unavailable", reason: "A complete, validated set of paper reads from one owner snapshot is not available." };
   const states = reads.map(read => paperReadState(read, now));
   if (states.includes("stale")) return { label: "Stale", reason: "The retained paper report has expired. Process heartbeat does not refresh its data." };
-  if (!reads.every(read => paperCompleteRead(read, now))) return { label: "Incomplete", reason: "One or more owner sections are incomplete or unavailable. No qualification pass is inferred." };
+  const partial = reads.filter(read => !paperCompleteRead(read, now));
+  if (partial.length) {
+    // Name each section and the owner's own reason, so a by-design recent window reads differently from a real gap.
+    const named = partial.map(read => `${read.section} (${String(read.reason ?? read.completeness ?? read.state).replaceAll("_", " ")})`).join(", ");
+    return { label: "Incomplete", reason: `Owner sections not complete: ${named}. No qualification pass is inferred.` };
+  }
   return { label: "Available", reason: "Required paper sections passed their read contracts at one snapshot. This is not production qualification." };
 }
 
@@ -111,6 +118,7 @@ function paperNativeRecordValid(value: unknown, key = "", depth = 0, nativeFee =
   const currency = (part: unknown) => typeof part === "string" && /^[A-Za-z0-9_.-]{1,32}$/.test(part);
   const fields = (part: unknown, required: string[], allowed = required): part is Record<string, unknown> => object(part) && required.every(name => name in part) && Object.keys(part).every(name => allowed.includes(name));
   if (typeof value === "string" && (value.length > 4096 || /^(?:nan|-?inf|-?infinity)$/i.test(value))) return false;
+  if (key === "execution_receipt" && object(value)) return Object.entries(value).every(([name, part]) => depth < 16 && receiptAmountFields.includes(name) && receiptDecimalParts(part) !== null || paperNativeRecordValid(part, name, depth + 1, nativeFee, [...path, name]));
   if (key.endsWith("_ms") || key.endsWith("_count")) return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
   if (["count_basis", "fee_quote_valuation_basis", "target_basis", "pnl_scope"].includes(key) || nativeFee && key === "fee_type") return typeof value === "string" && !!value && (!["target_basis", "pnl_scope"].includes(key) || /^[A-Za-z0-9_.-]{1,128}$/.test(value));
   if (key === "fee") {
@@ -127,19 +135,22 @@ function paperNativeRecordValid(value: unknown, key = "", depth = 0, nativeFee =
   return typeof value !== "number" || Number.isSafeInteger(value);
 }
 
-export async function paperObservationPages(path: string, fetchPage: (path: string) => Promise<import("./contracts").PaperRead>): Promise<import("./contracts").PaperRead> {
+export async function paperObservationPages(path: string, fetchPage: (path: string) => Promise<import("./contracts").PaperRead>, maxPages?: number): Promise<import("./contracts").PaperRead> {
   const url = new URL(path, "https://paper.invalid");
   url.searchParams.set("limit", "200");
   let result = await fetchPage(url.pathname + url.search);
+  // A caller that shows only the newest records asks for fewer pages; the read keeps its owner next_cursor, so it is
+  // never presented as complete.
+  const pageLimit = Math.min(result.section === "history" ? 16 : 5, maxPages ?? Infinity);
   const seen = new Set<string>();
-  for (let page = 1; result.next_cursor && page < 5; page++) {
+  for (let page = 1; result.next_cursor && page < pageLimit; page++) {
     if (seen.has(result.next_cursor)) throw new Error("Repeated owner history cursor was refused.");
     seen.add(result.next_cursor);
     url.searchParams.set("cursor", result.next_cursor);
     if (!result.snapshot_id) throw new Error("Owner history snapshot is unavailable.");
     url.searchParams.set("snapshot_id", result.snapshot_id);
     const next = await fetchPage(url.pathname + url.search);
-    if (!paperSnapshotsAgree([result, next]) || result.section !== next.section || result.state !== next.state || result.completeness !== next.completeness) throw new Error("Mixed owner page snapshots or states were refused.");
+    if (!paperSnapshotsAgree([result, next]) || result.bot_id !== next.bot_id || result.source?.sha256 !== next.source?.sha256 || result.section !== next.section || result.state !== next.state || result.completeness !== next.completeness) throw new Error("Mixed owner page snapshots or states were refused.");
     if (Array.isArray(result.data) && Array.isArray(next.data)) {
       result = { ...next, data: [...result.data, ...next.data] };
       continue;
@@ -147,13 +158,47 @@ export async function paperObservationPages(path: string, fetchPage: (path: stri
     const previousData = result.data as Record<string, unknown> | null;
     const nextData = next.data as Record<string, unknown> | null;
     if (!Array.isArray(previousData?.segments) || !Array.isArray(nextData?.segments)) throw new Error("Owner history page is invalid.");
+    const terminal = (data: Record<string, unknown>) => (data.terminal_executors as { data?: Record<string, unknown> } | undefined)?.data;
+    const previousTerminal = terminal(previousData!), nextTerminal = terminal(nextData!);
+    if (previousTerminal?.delivery === "publication_pages" || nextTerminal?.delivery === "publication_pages") {
+      const metadata = (data: Record<string, unknown> | undefined) => JSON.stringify(Object.fromEntries(Object.entries(data ?? {}).filter(([key]) => key !== "records")));
+      if (!Array.isArray(previousTerminal?.records) || !Array.isArray(nextTerminal?.records) || metadata(previousTerminal) !== metadata(nextTerminal) || JSON.stringify(previousData!.segments) !== JSON.stringify(nextData!.segments)) throw new Error("Owner history page metadata changed.");
+      result = { ...next, data: { ...nextData, terminal_executors: { ...(nextData!.terminal_executors as Record<string, unknown>), data: { ...nextTerminal, records: [...previousTerminal.records, ...nextTerminal.records] } } } };
+      continue;
+    }
     result = { ...next, data: { ...nextData, segments: [...previousData.segments, ...nextData.segments] } };
   }
   return result;
 }
 
+const validatedSections = new WeakSet<object>();
+
+function retainValidatedSection(read: import("./contracts").PaperRead) {
+  paperSectionAdmissionError(read);
+  return read;
+}
+
+export function paperSectionAdmissionError(read: import("./contracts").PaperRead): string | null {
+  if (validatedSections.has(read)) return null;
+  const error = paperSectionError(read);
+  if (error) return error;
+  // These are decoded JSON sections. Freeze the admitted payload so its validation
+  // can be reused across clock ticks, tables and projections without hiding edits.
+  const pending: unknown[] = [read];
+  const seen = new WeakSet<object>();
+  while (pending.length) {
+    const value = pending.pop();
+    if (!value || typeof value !== "object" || seen.has(value)) continue;
+    seen.add(value);
+    for (const child of Object.values(value)) pending.push(child);
+    Object.freeze(value);
+  }
+  validatedSections.add(read);
+  return null;
+}
+
 export function paperSectionError(read: Partial<import("./contracts").PaperRead> | undefined): string | null {
-  if (!read) return null;
+  if (!read || validatedSections.has(read)) return null;
   const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
   const records = (value: unknown): value is Record<string, unknown>[] => Array.isArray(value) && value.every(object);
   const invalid = () => `${typeof read.section === "string" ? paperWords(read.section) : "Paper section"} owner schema invalid; this section is unavailable.`;
@@ -196,6 +241,7 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
     }
     if (read.section === "risk" && "native_entry_holds" in read.data && (!records(read.data.native_entry_holds) || read.data.native_entry_holds.length > 20 || read.data.native_entry_holds.some(hold => typeof hold.controller_id !== "string" || !hold.controller_id || typeof hold.explanation !== "string" || !hold.explanation.trim() || !["native_refusal_receipt_pending", "native_refusal_owner_ambiguous", "native_refusal_recovery_unavailable", "v5_risk_incomplete"].includes(String(hold.reason)) || hold.protected_exits !== "preserved"))) return invalid();
     for (const key of ["assets", "conditions", "rails", "segments", "gaps", ...(read.section === "decisions" ? ["controllers"] : [])]) {
+      if (read.section === "history" && key === "gaps" && Array.isArray(read.data[key]) && read.data[key].every(value => object(value) || value === "bounded_recent_fill_window")) continue;
       if (key in read.data && !records(read.data[key])) return invalid();
     }
   }
@@ -256,13 +302,8 @@ export function paperWords(value: unknown): string {
 
 export function paperAmount(value: unknown, unit: string, places = 4): string {
   if (typeof value !== "string" || !/^-?\d+(\.\d+)?$/.test(value) || value.length > 128) return "Not published";
-  const negative = value.startsWith("-");
-  const [whole, fraction = ""] = value.replace(/^-/, "").split(".");
-  const digits = fraction.padEnd(places + 1, "0");
-  const scaled = BigInt(whole + digits.slice(0, places)) + (digits[places] >= "5" ? 1n : 0n);
-  const rounded = scaled.toString().padStart(places + 1, "0");
-  const integer = places ? rounded.slice(0, -places) : rounded;
-  return `${negative && scaled !== 0n ? "−" : ""}${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${places ? "." + rounded.slice(-places) : ""} ${unit}`;
+  const shown = fixed(value, places);
+  return `${/^0(?:\.0+)?$/.test(shown) ? "0" : shown} ${unit}`;
 }
 
 export function paperExactAmount(value: unknown, unit: string): string {
@@ -286,6 +327,41 @@ export function paperCompleteRecords(read: import("./contracts").PaperRead | und
   return paperCompleteRead(read, now) && Array.isArray(read?.data) ? read.data : null;
 }
 
+export function paperRetainedRecords(read: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown>[] | null {
+  if (paperCompleteRead(read, now) && Array.isArray(read?.data)) return read.data;
+  if (!read || !["fills", "executors"].includes(read.section) || read.completeness !== "partial" || paperSectionError(read) || !read.capabilities?.includes("read") || !["available", "degraded"].includes(read.state) || read.generated_at_ms == null || paperTimestampIssue(read.generated_at_ms, now) || now - read.generated_at_ms > PAPER_SNAPSHOT_FRESH_MS) return null;
+  return Array.isArray(read.data) ? read.data : null;
+}
+
+/**
+ * True only for a validated, current wallet read that the OWNER marked degraded (e.g. a missing mark withholds equity):
+ * not a synthetic section that replaced a client validation failure, not a future timestamp, not a stale read.
+ */
+export function paperWalletOwnerDegraded(read: import("./contracts").PaperRead | undefined, now: number): boolean {
+  if (!read || read.section !== "wallet" || paperSectionError(read) || read.state !== "degraded") return false;
+  if (read.completeness === "unavailable" || !read.data || typeof read.data !== "object" || Array.isArray(read.data)) return false;
+  const at = read.generated_at_ms;
+  // Not in the future at all (paperTimestampIssue alone tolerates 5 s of skew), and within the 30 s line.
+  return typeof at === "number" && paperTimestampIssue(at, now) === null && now >= at && now - at <= PAPER_SNAPSHOT_FRESH_MS;
+}
+
+export type PaperLastWallet = { bot: string; equity: unknown; cash: unknown; asOf: number };
+
+/** The complete wallet to remember as "last complete": only one that is not in the future at all. */
+export function paperLastWalletToKeep(bot: string, totals: { equity: unknown; cash: unknown } | null, read: import("./contracts").PaperRead | undefined, now: number): PaperLastWallet | null {
+  const at = read?.generated_at_ms;
+  return totals && typeof at === "number" && at <= now ? { bot, ...totals, asOf: at } : null;
+}
+
+/**
+ * The remembered wallet to show while the owner withholds the current one: same bot, current owner-degraded read
+ * (paperWalletOwnerDegraded), and strictly older than that read, so a newer value is never shown as "last".
+ */
+export function paperLastWalletToShow(kept: PaperLastWallet | null, bot: string, read: import("./contracts").PaperRead | undefined, now: number): PaperLastWallet | null {
+  if (!kept || kept.bot !== bot || !paperWalletOwnerDegraded(read, now)) return null;
+  return kept.asOf < (read!.generated_at_ms as number) ? kept : null;
+}
+
 export function paperWalletTotals(read: import("./contracts").PaperRead | undefined, now: number): { equity: unknown; cash: unknown } | null {
   if (!read || read.section !== "wallet" || !paperCompleteRead(read, now) || !read.data || typeof read.data !== "object" || Array.isArray(read.data)) return null;
   const wallet = read.data as Record<string, unknown>;
@@ -294,7 +370,7 @@ export function paperWalletTotals(read: import("./contracts").PaperRead | undefi
 }
 
 const PAPER_DECIMAL = /^\d+(\.\d+)?$/;
-const paperDecimal = (value: unknown): value is string => typeof value === "string" && value.length <= 128 && PAPER_DECIMAL.test(value);
+export const paperDecimal = (value: unknown): value is string => typeof value === "string" && value.length <= 128 && PAPER_DECIMAL.test(value);
 
 /** Exact sum of non-negative decimal strings; the result keeps the longest fraction. */
 export function paperDecimalSum(values: readonly string[]): string {
@@ -317,16 +393,19 @@ function paperNativeRails(risk: import("./contracts").PaperRiskData | null): Rec
     const limits = native.configured_limits && typeof native.configured_limits === "object" ? native.configured_limits as Record<string, unknown> : {};
     const complete = native.complete === true;
     const used = complete && paperDecimal(native.marked_exposure) ? native.marked_exposure : null;
-    const limit = complete && paperDecimal(limits.pair_quote) && Number(limits.pair_quote) > 0 ? limits.pair_quote : null;
+    const limit = complete && paperDecimal(limits.pair_quote) && decimalPercentRatio(limits.pair_quote, limits.pair_quote) ? limits.pair_quote : null;
+    const ratio = used !== null && limit !== null ? decimalPercentRatio(used, limit) : null;
+    const usedPercent = ratio && ratio.numerator >= -100n * ratio.denominator && ratio.numerator <= 0n ? 100 + Number(ratio.numerator) / Number(ratio.denominator) : null;
     const latch = native.latched === true ? "Yes" : native.latched === false ? "No" : "Not published";
     return {
       label: `${id} marked exposure`,
       used_quote: used,
       limit_quote: limit,
-      used_percent: used !== null && limit !== null ? Number(used) / Number(limit) * 100 : null,
+      used_percent: usedPercent,
       note: complete
-        ? `Pair cap ${paperExactAmount(limits.pair_quote, "USDC")} · program cap ${paperExactAmount(limits.program_quote, "USDC")} · reserved admission ${paperAmount(native.reserved_admission, "USDC")} · daily loss use ${paperAmount(native.daily_loss_use, "USDC")} · drawdown use ${paperAmount(native.drawdown_use, "USDC")} · native entry latch: ${latch} (${paperWords(native.reason)})`
+        ? `Pair cap ${paperDecimal(limits.pair_quote) ? usdc(limits.pair_quote) : "Not published"} · program cap ${paperDecimal(limits.program_quote) ? usdc(limits.program_quote) : "Not published"} · reserved admission ${paperAmount(native.reserved_admission, "USDC")} · daily loss use ${paperAmount(native.daily_loss_use, "USDC")} · drawdown use ${paperAmount(native.drawdown_use, "USDC")} · native entry latch: ${latch} (${paperWords(native.reason)})`
         : `Native risk evidence incomplete: ${paperWords(native.stale_reason ?? native.reason ?? "not published")}. No use is inferred.`,
+      note_exact: complete ? `Pair cap ${paperExactAmount(limits.pair_quote, "USDC")} · program cap ${paperExactAmount(limits.program_quote, "USDC")} · reserved admission ${paperExactAmount(native.reserved_admission, "USDC")} · daily loss use ${paperExactAmount(native.daily_loss_use, "USDC")} · drawdown use ${paperExactAmount(native.drawdown_use, "USDC")}` : undefined,
     };
   });
 }
@@ -353,11 +432,18 @@ function paperNativeEntryHold(native: Record<string, unknown>, holds: readonly u
   return latch === false ? false : null;
 }
 
+export function paperNativeHolds(read: import("./contracts").PaperRead | undefined) {
+  if (!read || read.section !== "risk" || paperSectionError(read)) return [];
+  const risk = read.data as import("./contracts").PaperRiskData | null;
+  return (risk?.native_entry_holds ?? []).map(hold => ({ ...hold, controllerPublished: Object.hasOwn(risk?.controllers ?? {}, hold.controller_id) }));
+}
+
 export function paperRiskControllers(read: import("./contracts").PaperRead | undefined, now: number) {
   if (!read || read.section !== "risk" || paperSectionError(read)) return null;
   const risk = read.data as import("./contracts").PaperRiskData;
+  const nativeHolds = paperNativeHolds(read);
   return risk?.controllers ? Object.entries(risk.controllers).map(([id, controller]) => {
-    const holds = risk.native_entry_holds?.filter(hold => hold.controller_id === id) ?? [];
+    const holds = nativeHolds.filter(hold => hold.controller_id === id);
     // latch: native latch evidence (true / explicit false / unknown); entryHold adds the owner's native hold list.
     const latch = paperNativeLatch(controller.native ?? {});
     return { id, ...controller, current: paperCompleteRead(read, now), holds, latch, entryHold: paperNativeEntryHold(controller.native ?? {}, holds) };
@@ -376,12 +462,17 @@ export function paperPairHoldings(pair: string, positions: import("./contracts")
   const byState = new Map<string, string[]>();
   for (const row of mine) byState.set(row.state as string, [...(byState.get(row.state as string) ?? []), row.quantity as string]);
   // Only an explicit owner flag counts either way; an omitted or malformed flag stays unknown (never "unprotected").
-  const unprotected = mine.filter(row => row.protected_exit === false);
+  // The engine's own words only: protected_exit false with reason no_active_fixed_target_executor means "no fixed-target
+  // exit order", true by definition for any row. Whether the bag policy will sell it is NOT inferred here (it needed four
+  // corrections: dust, foreign rows, unproven basis, live recovery sells); the bag's own published state is shown beside it.
+  const noFixedTarget = mine.filter(row => row.protected_exit === false && row.protection_reason === "no_active_fixed_target_executor");
+  const unprotected = mine.filter(row => row.protected_exit === false && !noFixedTarget.includes(row));
   return {
     count: mine.length,
     total: paperDecimalSum(mine.map(row => row.quantity as string)),
     states: [...byState].map(([state, quantities]) => ({ state, count: quantities.length, quantity: paperDecimalSum(quantities) })),
     protectedCount: mine.filter(row => row.protected_exit === true).length,
+    noFixedTargetCount: noFixedTarget.length,
     unprotectedCount: unprotected.length,
     unknownCount: mine.filter(row => typeof row.protected_exit !== "boolean").length,
     unprotectedReasons: [...new Set(unprotected.map(row => typeof row.protection_reason === "string" && row.protection_reason ? row.protection_reason : "protection_reason_not_published"))],
@@ -517,13 +608,14 @@ export function paperExitProjection(position: Record<string, unknown> | undefine
     // never as an executor-verified exit. A complete executor read that contradicts the position stays unknown.
     const owned = !paperCompleteRead(executors, now) && !!position && typeof position.protected_exit === "boolean" && !!paperCompleteRecords(positions, now)?.includes(position);
     const statement = owned ? `Owner-reported: ${position!.protected_exit ? "protected exit present" : "no protected exit"}${typeof position!.protection_reason === "string" && position!.protection_reason ? ` · ${paperWords(position!.protection_reason)}` : ""} · executor cross-check unavailable (${missing})` : `Protection status unknown · ${missing}`;
-    return { verified: false, targetPrice: null, basis: null, reason: statement, remainingAmount: null, order: null, protectedExit: null };
+    return { verified: false, ownerProtectedExit: owned ? position!.protected_exit as boolean : null, targetPrice: null, basis: null, reason: statement, remainingAmount: null, order: null, protectedExit: null };
   }
   const executor = matches[0];
   const record = position && "target_price" in position ? position : executor;
   const order = record?.protected_exit_order;
   return {
     verified: true,
+    ownerProtectedExit: null,
     targetPrice: record?.target_price ?? null,
     basis: record?.target_basis ? paperWords(record.target_basis) : null,
     reason: record?.target_reason ? paperWords(record.target_reason) : "Owner exit target not published",
@@ -533,8 +625,8 @@ export function paperExitProjection(position: Record<string, unknown> | undefine
   };
 }
 
-export function paperWalletInventory(read: import("./contracts").PaperRead | undefined, now: number): { value: string; unit: string; basis: string; asOf: number } | null {
-  if (!read || read.section !== "wallet" || !paperCompleteRead(read, now)) return null;
+export function paperWalletInventory(read: import("./contracts").PaperRead | undefined, now: number, valuesAt = now): { value: string; unit: string; basis: string; asOf: number } | null {
+  if (!read || read.section !== "wallet" || !paperCompleteRead(read, valuesAt)) return null;
   const wallet = read.data as Record<string, unknown> | null;
   if (!wallet || typeof wallet.quote_asset !== "string" || !Array.isArray(wallet.assets)) return null;
   const inventory = (wallet.assets as Record<string, unknown>[]).filter(asset => asset.asset !== wallet.quote_asset);

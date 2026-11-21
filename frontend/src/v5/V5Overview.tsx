@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
 import { helmHeadline } from "./helm-model.mjs";
-import { latest, moneySampleTimeState, moneySinceStart, type MoneyRow } from "./money-model.mjs";
+import { latest, moneySinceStart, type MoneyRow } from "./money-model.mjs";
 import { ownerTitleText, ownerDisplay, usdc } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
-import { usePaperClock } from "./usePaperClock";
+import { useHeldCoinsMark } from "./useHeldCoinsMark";
 import { readHelm } from "./V5Helm";
 import { readMoney, V5Money } from "./V5Money";
 import "./market.css";
@@ -16,14 +16,10 @@ const tone = (value: unknown) => {
 };
 
 function HeldCoinsStat({ row }: { row: MoneyRow }) {
-  const state = moneySampleTimeState(row.at_ms, usePaperClock());
-  const value = state === "current" ? row.unrealized : null;
-  const time = utcExact(row.at_ms);
+  const { value, note } = useHeldCoinsMark(row);
   return <div className={`v5m-stat${tone(value)}`}>
     <span>Coins still held</span><strong><OwnerValue value={value} kind="signed" /></strong>
-    <small>{state === "unknown" ? "Sample time unknown"
-      : state === "future" ? `Sample time ${time} is ahead of the page clock`
-      : `gain or loss at the last recorded sample (as of ${time})${state === "stale" ? " · stale sample" : ""}`}</small>
+    <small>{note}</small>
   </div>;
 }
 

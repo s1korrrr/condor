@@ -43,6 +43,7 @@ test('wallet equity note keeps one inline text flow at desktop and phone widths'
 test('live-shaped Money comparison renders both values and styled owner tiles', () => {
   const closes = Object.fromEntries(['BTC','ETH','BNB','SOL','XRP'].map(coin => [coin, [[1794219300,100.123456789],[1794824100,86.144123456]]]));
   const {load} = frontendModules({
+    './usePaperClock': {usePaperClock: () => liveMoneyRows.at(-1).at_ms},
     '@tanstack/react-query': {useQuery: ({queryKey}) => ({data:queryKey[0] === 'v5-money' ? {rows:liveMoneyRows, daily:[], range:'7d', sampler:true} : queryKey[0] === 'v5-profile' ? {candle_store:{configured:true}} : {closes}, refetch() {}})},
     '@/features/quant-ops/kit/charts': {BarsChart:() => null, TimeSeriesChart:() => null},
     '@/features/quant-ops/kit/DataTable': {DataTable:() => null},
@@ -124,7 +125,7 @@ test('Overview dates the held-coin mark to its actual sample and labels it stale
   try {
     const note = now => renderMoneyFixture(window, row, now, 'V5Overview', gap)('Coins still held').querySelector('small').textContent;
     assert.equal(note(sampleAt + 360_000), 'gain or loss at the last recorded sample (as of 2026-11-15 12:00:00.000Z)');
-    assert.match(note(sampleAt + 360_001), /last recorded sample \(as of 2026-11-15 12:00:00\.000Z\).*stale/i);
+    assert.match(note(sampleAt + 360_001), /withheld.*stale.*2026-11-15 12:00:00\.000Z/i);
   } finally { window.close(); }
 });
 
@@ -138,7 +139,23 @@ test('Overview withholds the noon held-coin mark when both clocks read 11:59 UTC
   } finally { window.close(); }
 });
 
-test('Overview and Bots publish the same held-coin mark at the sample time boundaries', () => {
+test('Money tile explains the held-coin mark at the page clock boundaries', () => {
+  const row = { bot: 'v5', unit: 'USDC', unrealized: '12', at_ms: sampleAt };
+  const window = new Window();
+  try {
+    for (const [age, value, reason] of [
+      [-60_000, '—', /ahead|future/i],
+      [360_000, '▲ +12.00', /2026-11-15 12:00:00\.000Z/],
+      [360_001, '—', /withheld.*stale/i],
+    ]) {
+      const tile = renderMoneyFixture(window, row, sampleAt + age, 'V5Money')('Gain or loss on coins still held');
+      assert.equal(tile.querySelector('strong').textContent, value, String(age));
+      assert.match(tile.querySelector('small').textContent, reason);
+    }
+  } finally { window.close(); }
+});
+
+test('Money, Overview and Bots publish the same held-coin mark at the sample time boundaries', () => {
   const { paperMoneyTiles } = paperWorkspaceModules().load('pages/tabs/ActiveBotsTab.tsx');
   const window = new Window();
   try {
@@ -150,8 +167,10 @@ test('Overview and Bots publish the same held-coin mark at the sample time bound
       const bots = paperMoneyTiles({ complete: false, now: sampleAt, money: moneyRead([row], sampleAt) })
         .find(tile => tile.label === 'Coins still held');
       const overview = renderMoneyFixture(window, row, sampleAt, 'V5Overview')('Coins still held');
+      const money = renderMoneyFixture(window, row, sampleAt, 'V5Money')('Gain or loss on coins still held');
       assert.equal(bots.exact ?? null, expected, String(atMs));
       assert.equal(overview?.querySelector('strong [title]')?.title ?? null, bots.exact ?? null, String(atMs));
+      assert.equal(money.querySelector('strong [title]')?.title ?? null, bots.exact ?? null, String(atMs));
     }
   } finally { window.close(); }
 });

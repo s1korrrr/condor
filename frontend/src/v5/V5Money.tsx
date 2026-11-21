@@ -6,12 +6,13 @@ import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable"
 import { CHART, type ChartSeries } from "@/features/quant-ops/kit/series";
 import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
-import { dayCoverage, equityChange, holdReturn, latest, moneySinceStart, series, type DailyRow } from "./money-model.mjs";
+import { dayCoverage, equityChange, holdReturn, latest, moneySinceStart, series, type DailyRow, type MoneyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { ownerTitleText, axis, count, decimalPercentChange, fixed, ownerDisplay, pct, pnl, rationalPercent, signed, usdc, utcMin, type OwnerValueKind } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
 import { readMoney } from "./money-api";
+import { useHeldCoinsMark } from "./useHeldCoinsMark";
 export { readMoney } from "./money-api";
 import "./market.css";
 
@@ -96,7 +97,7 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
         <div className="v5m-stats v5m-stats--wide">
           <Stat label="Wallet equity" value={fixed(now?.equity)} owner={{value:now?.equity, kind:"usdc", unit:""}} unit={unit} note={sinceStart.value == null ? `Since start unavailable: ${sinceStart.reason}` : <><OwnerValue value={sinceStart.value} kind="pnl" exact={sinceStart.title} /> vs the <span title={ownerTitleText(funding ?? undefined)}>{usdc(funding, unit)}</span> start {sincePercent && <span title={`(${ownerTitleText(equity)} − ${ownerTitleText(funding)}) × 100 / ${ownerTitleText(funding)} = ${ownerTitleText(sincePercent.exact)}`}>({pct(sincePercent.value)})</span>}</>} warn={ownerDisplay(sinceStart.value, "pnl").tone === "down"} />
           <Stat label="Profit from closed trades" value={pnl(now?.realized).text} owner={{value:now?.realized, kind:"pnl"}} note="lifetime, owner accounting" />
-          <Stat label="Gain or loss on coins still held" value={pnl(now?.unrealized).text} owner={{value:now?.unrealized, kind:"pnl"}} note="marked at the owner's fresh book midpoint" warn={ownerDisplay(now?.unrealized, "pnl").tone === "down"} />
+          <HeldCoinsStat row={now} />
           <Stat label="Fees paid" value={fixed(now?.fees)} owner={{value:now?.fees, kind:"usdc", unit:""}} unit={unit} note="lifetime" />
         </div>
       </section>
@@ -132,6 +133,12 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
       <p className="v5m-hint">Limits: values come from the owners' own reads; the record starts when this dashboard's recorder started (no backfill); a missing sample stays a gap; nothing here is a trading signal.</p>
     </>}
   </div>;
+}
+
+function HeldCoinsStat({ row }: { row: MoneyRow | null }) {
+  const { value, note } = useHeldCoinsMark(row);
+  const shown = pnl(value);
+  return <Stat label="Gain or loss on coins still held" value={shown.text} owner={{ value, kind: "pnl" }} note={note} warn={shown.tone === "down"} />;
 }
 
 function Stat({ label, value, unit, note, warn, owner, title }: { label: string; value: string; unit?: string; note?: ReactNode; warn?: boolean; owner?: { value: unknown; kind: OwnerValueKind; unit?: string }; title?: string }) {

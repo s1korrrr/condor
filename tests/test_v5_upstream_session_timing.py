@@ -1,4 +1,4 @@
-"""One shared owner session per client, and Server-Timing on the V5 API routes."""
+"""Per-owner HTTP pools and Server-Timing on the V5 API routes."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import time
 from concurrent.futures import Future
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from threading import Event
 
 import aiohttp
 import httpx
@@ -24,6 +25,7 @@ from condor.v5.http_pool import SharedSession
 from condor.v5.upstream import UpstreamError, V5Upstream
 from test_v5_dashboard_bridge import ORIGIN, TOKEN, NoNetworkUpstream, make_settings
 from test_v5_paper_binding import NOW, status, write_status
+from test_v5_research_bridge import OVERVIEW
 from test_v5_tradepad_bridge import CATALOG
 
 CATALOG_PATH = "/api/v1/tradepad/catalog"
@@ -62,11 +64,11 @@ def owner_settings(tmp_path, base):
     return replace(make_settings(tmp_path), observation_base_url=base, advisor_control_base_url=base)
 
 
-# ---- V5Upstream: one shared session -------------------------------------------------------------------------------
+# ---- V5Upstream: per-owner shared sessions -------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_sequential_owner_reads_share_one_connector(tmp_path, monkeypatch):
+async def test_same_origin_owner_reads_each_reuse_their_own_connector(tmp_path, monkeypatch):
     built = []
 
     class Counting(aiohttp.TCPConnector):
@@ -81,11 +83,12 @@ async def test_sequential_owner_reads_share_one_connector(tmp_path, monkeypatch)
         try:
             for _ in range(5):
                 assert await upstream.observation("/v1/context") == {"ok": True}
+            for _ in range(2):
+                assert await upstream.task_profiles() == {"ok": True}
         finally:
             await upstream.close()
-    assert len(owner.transports) == 5
-    assert len(built) == 1 and upstream._shared.created == 1
-    assert owner.connections == 1
+    assert len(built) == owner.connections == 2
+    assert owner.transports == [owner.transports[0]] * 5 + [owner.transports[-1]] * 2
 
 
 @pytest.mark.asyncio
@@ -105,7 +108,8 @@ async def test_close_is_terminal_for_shared_reads(tmp_path, monkeypatch):
     owner = Owner()
     async with serve(owner) as base:
         upstream = V5Upstream(owner_settings(tmp_path, base))
-        async with http_pool.lease(upstream._shared, None, aiohttp.ClientTimeout()) as (session, _):
+        pool = upstream._sessions["observation"]
+        async with http_pool.lease(pool, None, aiohttp.ClientTimeout()) as (session, _):
             connector = session.connector
         await upstream.observation("/v1/context")
         started, release = asyncio.Event(), asyncio.Event()
@@ -118,17 +122,25 @@ async def test_close_is_terminal_for_shared_reads(tmp_path, monkeypatch):
 
         monkeypatch.setattr(session, "close", pause_close)
         closing = asyncio.create_task(upstream.close())
+        second_close = None
         try:
             await asyncio.wait_for(started.wait(), timeout=2)
+            second_close = asyncio.create_task(pool.close())
+            await asyncio.sleep(0)
+            assert not second_close.done()
+            assert asyncio.get_running_loop() in pool._sessions
             with pytest.raises(RuntimeError, match="closed"):
                 await upstream.observation("/v1/context")
         finally:
             release.set()
             await closing
+            if second_close is not None:
+                await second_close
         assert session.closed and connector.closed
+        assert not pool._sessions
         with pytest.raises(RuntimeError, match="closed"):
             await upstream.observation("/v1/context")
-        assert upstream._shared.created == 1
+        assert pool.created == 1
         await upstream.close()
 
 
@@ -184,6 +196,50 @@ async def test_shutdown_closes_a_session_on_another_running_loop():
     finally:
         loop.call_soon_threadsafe(release.set)
         await worker
+
+
+@pytest.mark.asyncio
+async def test_shutdown_reports_a_session_when_its_owner_stops_after_enqueue(monkeypatch, caplog):
+    shared = SharedSession()
+    ready, stopped = Future(), Future()
+    queued, resume = Event(), Event()
+
+    def exercise():
+        with asyncio.Runner() as runner:
+            loop = runner.get_loop()
+            session = runner.run(shared.get())
+            enqueue = loop.call_soon_threadsafe
+
+            def watch_enqueue(callback, *args, **kwargs):
+                handle = enqueue(callback, *args, **kwargs)
+                queued.set()
+                return handle
+
+            def stop_after_enqueue():
+                loop.stop()
+                ready.set_result(session)
+                assert queued.wait(timeout=2)
+
+            monkeypatch.setattr(loop, "call_soon_threadsafe", watch_enqueue)
+            loop.call_soon(stop_after_enqueue)
+            loop.run_forever()
+            stopped.set_result(None)
+            assert resume.wait(timeout=3)
+        assert session.closed  # Runner shutdown can still finalize this generator.
+
+    worker = asyncio.create_task(asyncio.to_thread(exercise))
+    try:
+        session = await asyncio.wait_for(asyncio.wrap_future(ready), timeout=2)
+        first_close = asyncio.create_task(shared.close())
+        await asyncio.wait_for(asyncio.wrap_future(stopped), timeout=2)
+        second_close = asyncio.create_task(shared.close())
+        await asyncio.wait_for(asyncio.gather(first_close, second_close), timeout=1)
+        assert not session.closed and not shared._sessions
+        assert caplog.text.count("Could not close shared owner session") == 1
+    finally:
+        resume.set()
+        await worker
+    assert "asynchronous generator is already running" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -296,7 +352,7 @@ async def test_each_read_keeps_its_own_deadline(tmp_path, monkeypatch):
         return pooled
 
     monkeypatch.setattr(aiohttp, "ClientSession", one_off)
-    monkeypatch.setattr(upstream._shared, "get", get)
+    monkeypatch.setattr(upstream._sessions["observation"], "get", get)
     await upstream.observation("/v1/context")
     await upstream.observation("/v1/paper/status")
     await upstream.request_report("market_context", "snapshot-1")
@@ -360,39 +416,52 @@ async def test_bridge_timeout_still_fires_on_a_shared_session(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_a_hung_bridge_owner_does_not_starve_the_other_owner(monkeypatch):
+async def test_stalled_tradepad_reads_do_not_starve_research_on_the_same_origin(tmp_path, monkeypatch):
     arrived = asyncio.Queue()
     release = asyncio.Event()
 
-    class HungOwner:
+    class BridgeOwners:
         async def handler(self, request):
-            arrived.put_nowait(None)
-            await release.wait()
-            return web.json_response(CATALOG)
+            if request.path.startswith("/tradepad/"):
+                arrived.put_nowait(None)
+                await release.wait()
+                return web.json_response(CATALOG)
+            assert request.path == "/research/api/knowledge/overview"
+            await asyncio.sleep(0.25)
+            return web.json_response(OVERVIEW)
 
-    monkeypatch.setattr(read_bridge, "TIMEOUT_SECONDS", 5.0)
-    shared = SharedSession()
-    async with serve(HungOwner()) as hung, serve(Owner(payload=CATALOG)) as healthy:
-        reads = [asyncio.create_task(read_bridge.read_tradepad(hung, CATALOG_PATH, "catalog", shared)) for _ in range(36)]
-        try:
-            for _ in range(16):
-                await asyncio.wait_for(arrived.get(), timeout=2.0)
-            result = await asyncio.wait_for(read_bridge.read_tradepad(healthy, CATALOG_PATH, "catalog", shared), timeout=1.0)
-            assert result
-            assert arrived.empty()
-        finally:
-            release.set()
-            await asyncio.gather(*reads, return_exceptions=True)
-            await shared.close()
+    monkeypatch.setattr(read_bridge, "TIMEOUT_SECONDS", 1.5)
+    async with serve(BridgeOwners()) as base:
+        settings = replace(
+            make_settings(tmp_path), tradepad_url=f"{base}/tradepad", research_url=f"{base}/research",
+            tradepad_campaign_id=CAMPAIGN,
+        )
+        app = create_app(settings=settings, upstream=NoNetworkUpstream(), static_dir=tmp_path / "dist")
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                login = await client.post("/api/v5/auth/login", json={"token": TOKEN}, headers={"Origin": ORIGIN})
+                assert login.status_code == 200
+                route = "/api/v5/dashboard/read"
+                reads = [asyncio.create_task(client.get(route, params={"path": CATALOG_PATH})) for _ in range(17)]
+                try:
+                    for _ in range(16):
+                        await asyncio.wait_for(arrived.get(), timeout=2)
+                    result = await client.get(route, params={"path": "/api/v1/research/overview"})
+                    assert result.status_code == 200 and result.json() == OVERVIEW
+                    assert arrived.empty() and all(not read.done() for read in reads)
+                finally:
+                    release.set()
+                    await asyncio.gather(*reads)
 
 
 @pytest.mark.parametrize("store_raises", [False, True])
-def test_app_shutdown_closes_the_upstream_and_the_bridge_session(tmp_path, monkeypatch, store_raises):
+def test_app_shutdown_closes_the_upstream_and_both_bridge_sessions(tmp_path, monkeypatch, store_raises):
     closed = []
 
     class Spy(SharedSession):
         async def close(self):
-            closed.append("bridge")
+            closed.append(self._owner)
             await super().close()
 
     class Upstream(NoNetworkUpstream):
@@ -411,7 +480,7 @@ def test_app_shutdown_closes_the_upstream_and_the_bridge_session(tmp_path, monke
     else:
         with TestClient(app):
             assert closed == []
-    assert sorted(closed) == ["bridge", "upstream"]
+    assert sorted(closed) == ["Research", "Tradepad", "upstream"]
 
 
 # ---- Server-Timing -------------------------------------------------------------------------------------------------

@@ -325,8 +325,10 @@ def create_app(
         KNOWN_TASK_IDS if config.paper_status_file is not None else ADVISOR_TASK_IDS
     )
     api = upstream or V5Upstream(config)
-    # One session for the Tradepad/Research bridge reads, closed on shutdown. False keeps a session per read.
-    bridge_session = SharedSession() if reuse_bridge_connections else None
+    # The upstreams can share an origin. Give each its own connection limit.
+    bridge_sessions = {
+        owner: SharedSession(owner=owner) for owner in ("Tradepad", "Research")
+    } if reuse_bridge_connections else {}
     candle_owner = (
         CandleOwner(str(config.candle_store_socket))
         if config.candle_store_socket
@@ -409,8 +411,7 @@ def create_app(
                     close()
             finally:
                 try:
-                    if bridge_session is not None:
-                        await bridge_session.close()
+                    await asyncio.gather(*(session.close() for session in bridge_sessions.values()))
                 finally:
                     api_close = getattr(api, "close", None)  # V5Upstream owns a shared session; test doubles have none
                     if api_close is not None:
@@ -631,11 +632,11 @@ def create_app(
     ):
         tradepad = tradepad_route(path, config.tradepad_campaign_id)
         if tradepad is not None:
-            raw = await read_tradepad(config.tradepad_url, *tradepad, bridge_session)
+            raw = await read_tradepad(config.tradepad_url, *tradepad, bridge_sessions.get("Tradepad"))
             return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
         research = research_route(path)
         if research is not None:
-            raw = await read_research(config.research_url, *research, bridge_session)
+            raw = await read_research(config.research_url, *research, bridge_sessions.get("Research"))
             return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
         paper = await current_paper()
         result = (

@@ -49,14 +49,14 @@ class UpstreamError(RuntimeError):
 class V5Upstream:
     def __init__(self, settings: Settings, *, session_factory=None):
         self.settings = settings
-        # An injected factory (tests) is called once per request, as before. By default every owner read reuses
-        # one session, created on first use and closed by ``close`` when the app shuts down.
+        # An injected factory is called once per request. Otherwise each owner gets a lazily opened pool.
         self.session_factory = session_factory
-        self._shared = SharedSession() if session_factory is None else None
+        self._sessions = {
+            owner: SharedSession(owner=owner) for owner in ("observation", "advisor")
+        } if session_factory is None else {}
 
     async def close(self) -> None:
-        if self._shared is not None:
-            await self._shared.close()
+        await asyncio.gather(*(session.close() for session in self._sessions.values()))
 
     async def _request(
         self,
@@ -64,6 +64,7 @@ class V5Upstream:
         path: str,
         token_file,
         *,
+        owner: str = "observation",
         method: str = "GET",
         payload=None,
         timeout_sec: float = 5.0,
@@ -82,7 +83,7 @@ class V5Upstream:
         try:
             async with asyncio.timeout(timeout_sec):
                 timeout = aiohttp.ClientTimeout(total=timeout_sec)
-                shared = self._shared if method == "GET" else None
+                shared = self._sessions[owner] if method == "GET" and self._sessions else None
                 factory = self.session_factory if self.session_factory is not None else aiohttp.ClientSession
                 async with lease(shared, factory, timeout) as (session, extra):
                     async with session.request(
@@ -212,9 +213,10 @@ class V5Upstream:
             )
         if path not in allowed and not paper_route and not history_route:
             raise UpstreamError("operation_not_allowed", http_status=403)
+        advisor = path == "/v1/tasks"
         base_url = (
             self.settings.advisor_control_base_url
-            if path == "/v1/tasks"
+            if advisor
             else self.settings.observation_base_url
         )
         token_file = self.settings.observation_read_token_file
@@ -222,6 +224,7 @@ class V5Upstream:
             base_url,
             path,
             token_file,
+            owner="advisor" if advisor else "observation",
             **({"timeout_sec": PAPER_READ_TIMEOUT_SECONDS} if paper_route else {}),
         )
 

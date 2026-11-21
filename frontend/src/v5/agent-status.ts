@@ -1,14 +1,10 @@
 import type { V5TaskReport, V5Workspace } from "./contracts";
-import { onSessionEnd } from "./session-policy.mjs";
 
 export interface WorkspaceRead {
   data?: V5Workspace;
   isPending?: boolean;
   isError?: boolean;
   error?: Error | null;
-  /** react-query's own stamps for the last good and the last failed read; they only date "refresh failed at". */
-  dataUpdatedAt?: number;
-  errorUpdatedAt?: number;
 }
 
 export function sourceFailure(read: WorkspaceRead, source: string): string | undefined {
@@ -49,8 +45,6 @@ export function advisorAvailability(read: WorkspaceRead) {
   return advisorUnread("advisor.enabled is not published · Source: /v1/advice/status");
 }
 
-export const scheduledTaskIds = ["market_context", "source_quality", "decision_review"] as const;
-
 const scheduledRoles = [
   { id: "market_analyst", taskId: "market_context", name: "Market analyst" },
   { id: "source_auditor", taskId: "source_quality", name: "Source auditor" },
@@ -63,75 +57,21 @@ function publishedTimestamp(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 8_640_000_000_000_000;
 }
 
-/** A report the dashboard can show and date: an object result for this task with a published receive time. */
-export function usableReport(report: unknown, taskId: string): report is V5TaskReport {
-  if (!isRecord(report) || !isRecord(report.record)) return false;
-  const result = report.record.result;
-  return isRecord(result) && result.task_id === taskId && publishedTimestamp(result.received_at_ms);
-}
-
 /**
- * The last good report per role, held in this browser tab for the authenticated session, and when each role's read last failed.
- * It only bridges a failed read: an owner-published "no report" clears it, so an old report is never resurrected.
- * `clearReportStore` empties it when the session ends.
+ * Why this role's report was not read, or undefined when it was. A failed read shows nothing from an earlier one:
+ * the page says it did not read, never that the owner published no report.
  */
-export interface ReportStore { good: Map<string, V5TaskReport>; failedAt: Map<string, number> }
-export const createReportStore = (): ReportStore => ({ good: new Map(), failedAt: new Map() });
-export const agentReportStore = createReportStore();
-
-/** Retention belongs to one authenticated session: sign-out and auth loss end it (session-policy calls this), a transient reconnect does not. */
-export function clearReportStore(store: ReportStore = agentReportStore) {
-  store.good.clear();
-  store.failedAt.clear();
-}
-onSessionEnd(() => clearReportStore());
-
-export interface RetainedReports {
-  /** What to show per role: the owner's current report, or the last good one while a read is failing. */
-  reports: Record<string, V5TaskReport | undefined>;
-  /** Roles whose advisor read failed, with the dashboard's time of that failed read. */
-  failedAt: Record<string, number>;
-  /** Roles the dashboard never asked the owner for, with why. */
-  notRequested: Record<string, string>;
+export function reportNotRead(read: WorkspaceRead, taskId: string): string | undefined {
+  if (read.isError) return `${read.error?.message || "the workspace read failed"} · Source: /api/v5/workspace`;
+  if (!read.data) return "the workspace read has not finished";
+  const failure = sourceFailure(read, `latest_${taskId}`);
+  return failure ? `${failure} · Source: /v1/advice/status` : undefined;
 }
 
-/** The role's report read failed; a failing advisor status read only counts when there is no current report to show. */
-function roleReadFailed(read: WorkspaceRead, taskId: string, usable: boolean) {
-  if (read.isError) return true;
-  const errors = typeof read.data?.source_error === "string" ? read.data.source_error.split(";") : [];
-  return errors.some(value => value.startsWith(`latest_${taskId}:`) || (!usable && value.startsWith("advisor:")));
-}
-
-/** Called while rendering; it only records facts about reads already made and is safe to repeat. */
-export function retainReports(store: ReportStore, read: WorkspaceRead, nowMs: number): RetainedReports {
-  const advisor = read.data?.advisor;
-  const latest: Record<string, unknown> = isRecord(advisor) && isRecord(advisor.latest_by_task) ? advisor.latest_by_task : {};
-  const reports: RetainedReports["reports"] = {};
-  const failedAt: Record<string, number> = {};
-  const notRequested: Record<string, string> = {};
-  // Still loading the first read: nothing is known yet, and what is held must survive until it answers.
-  if (!read.data && !read.isError) return { reports, failedAt, notRequested };
-  for (const taskId of scheduledTaskIds) {
-    const current = latest[taskId];
-    const usable = usableReport(current, taskId);
-    const failed = roleReadFailed(read, taskId, usable);
-    const held = store.good.get(taskId);
-    if (usable && (!held || (held.record?.result?.received_at_ms ?? 0) <= (current.record?.result?.received_at_ms ?? 0))) store.good.set(taskId, current);
-    if (!failed) {
-      if (!usable && read.data) store.good.delete(taskId);
-      store.failedAt.delete(taskId);
-      reports[taskId] = current as V5TaskReport | undefined;
-      // The owner's list leaves the decision review out when the dashboard has no paper status file to ask about.
-      if (taskId === "decision_review" && current === undefined && isRecord(advisor) && isRecord(advisor.latest_by_task)) notRequested[taskId] = "not requested: no paper status file";
-      continue;
-    }
-    const stamp = read.isError ? read.errorUpdatedAt : read.dataUpdatedAt;
-    const at = publishedTimestamp(stamp) ? stamp : store.failedAt.get(taskId) ?? nowMs;
-    store.failedAt.set(taskId, at);
-    failedAt[taskId] = at;
-    reports[taskId] = usable ? current : store.good.get(taskId) ?? (current as V5TaskReport | undefined);
-  }
-  return { reports, failedAt, notRequested };
+/** The owner's list leaves the decision review out when the dashboard has no paper status file to ask about. */
+export function reportNotRequested(read: WorkspaceRead, taskId: string): string | undefined {
+  const latest = read.data?.advisor?.latest_by_task;
+  return taskId === "decision_review" && isRecord(latest) && latest[taskId] === undefined ? "not requested: no paper status file" : undefined;
 }
 
 function elapsedTime(durationMs: number) {
@@ -147,10 +87,6 @@ function reportAge(timestamp: number | null, nowMs: number) {
   if (timestamp === null) return "age not published";
   if (!Number.isFinite(nowMs) || nowMs < timestamp) return "age unavailable (clock mismatch)";
   return `${elapsedTime(nowMs - timestamp)} ago`;
-}
-
-function utcTime(timestamp: number) {
-  return new Date(timestamp).toISOString().replace("T", " ").replace("Z", " UTC");
 }
 
 /** "12:20:01 UTC", with the date only when it is not today (UTC). */
@@ -189,14 +125,15 @@ export function watermarkNote(report: V5TaskReport | undefined, nowMs: number) {
   };
 }
 
-export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now(), retained?: RetainedReports) {
+export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now()) {
   const availability = advisorAvailability(read);
-  const advisor = read.data?.advisor;
+  // A failed read shows nothing from an earlier one: the line says the advisor was not read.
+  const advisor = read.isError ? undefined : read.data?.advisor;
   const scheduler = advisor?.scheduler;
   return scheduledRoles.map(role => {
     const agent = Array.isArray(read.data?.agents) ? read.data.agents.find(value => isRecord(value) && value.id === role.id) : undefined;
     const profile = advisorTaskProfile(read, role.taskId);
-    const latest = retained?.reports[role.taskId] ?? advisor?.latest_by_task?.[role.taskId];
+    const latest = advisor?.latest_by_task?.[role.taskId];
     const result = latest?.record?.result;
     const malformedReport = latest != null && (!isRecord(latest) || (latest.record != null && !isRecord(result)) || (latest.status === "CURRENT_REPORT" && !isRecord(result)));
     const report = isRecord(result) && latest?.task_id === role.taskId && result.task_id === role.taskId ? result : undefined;
@@ -204,18 +141,14 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now(), ret
     const expiry = publishedTimestamp(report?.expires_at_ms) ? report.expires_at_ms : null;
     const expired = expiry !== null && Number.isFinite(nowMs) && nowMs >= expiry;
     const failure = sourceFailure(read, `latest_${role.taskId}`) || sourceFailure(read, "task_profiles");
-    // A failing read keeps the last good report: the validity below is that report's own, marked with the failure.
-    const refreshFailed = retained?.failedAt[role.taskId];
-    const held = refreshFailed !== undefined && received !== null;
-    const roleFailure = sourceFailure(read, `latest_${role.taskId}`);
     const nextRun = scheduler?.next_run_by_task?.[role.taskId];
     const schedule = publishedTimestamp(nextRun) ? (nextRun > nowMs ? `next run ~${clock(nextRun, nowMs)}` : `next run was due ${clock(nextRun, nowMs)}`) : "schedule not published";
     let state = "State not published";
     let reason = "Owner scheduling state is not published.";
-    if (availability.state !== "enabled" && !(held && availability.state === "upstream_error")) {
+    if (availability.state !== "enabled") {
       state = availability.state === "disabled" ? "Disabled" : availability.state === "loading" ? "Loading" : availability.state === "upstream_error" ? "Upstream error" : "Unavailable";
       reason = availability.message;
-    } else if (failure && !(held && !sourceFailure(read, "task_profiles"))) {
+    } else if (failure) {
       state = "Upstream error";
       reason = `${failure} · Source: /api/v5/workspace`;
     } else if (malformedReport) {
@@ -230,10 +163,6 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now(), ret
     } else if (report?.status && failedReports.has(report.status)) {
       state = "Last run failed";
       reason = [report.status, report.reason, report.rejection].filter(Boolean).join(" · ");
-    } else if (held && report?.status === "ACCEPTED") {
-      // The failed read cannot confirm validity, and the owner can end it before the published expiry.
-      state = `Last known report · current validity unavailable (refresh failed at ${clock(refreshFailed, nowMs)})`;
-      reason = "The owner's current validity for this report was not read; it can change before the published expiry.";
     } else if (latest?.status === "HISTORICAL_REPORT") {
       state = "Historical · not current";
       reason = "The owner published this report as HISTORICAL_REPORT: it is not the current report. Its published expiry is shown separately.";
@@ -247,23 +176,17 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now(), ret
       }
       if (scheduler.task_id === role.taskId && scheduler.last_status) reason += ` Last scheduler status: ${scheduler.last_status}.`;
     }
-    if (refreshFailed !== undefined) {
-      const why = roleFailure ? `${roleFailure} · Source: /v1/advice/status` : availability.state === "upstream_error" ? availability.message.replace(/^Advisor state not read: /, "") : "advisor read failed";
-      reason = held ? `Refresh failed at ${utcTime(refreshFailed)} (${why}); showing the last good report. ${reason}` : `Refresh failed at ${utcTime(refreshFailed)} (${why}); no earlier report is held in this tab. ${reason}`;
-    }
     return {
       ...role, name: agent?.name || role.name, state, reason,
       reportTime: received === null ? null : new Date(received).toISOString(),
       reportAge: reportAge(received, nowMs),
       reportStatus: typeof report?.status === "string" ? report.status : "not published",
-      reportState: held && typeof latest?.status === "string" ? `last read as ${latest.status}` : expired && latest?.status === "CURRENT_REPORT" ? "was CURRENT_REPORT" : typeof latest?.status === "string" ? latest.status : "not published",
-      expiry: expiry === null ? "expiry not published" : held ? `published expiry ${clock(expiry, nowMs)}` : !Number.isFinite(nowMs) ? "expiry unavailable (clock mismatch)" : nowMs >= expiry ? "expired" : "not expired",
+      reportState: expired && latest?.status === "CURRENT_REPORT" ? "was CURRENT_REPORT" : typeof latest?.status === "string" ? latest.status : "not published",
+      expiry: expiry === null ? "expiry not published" : !Number.isFinite(nowMs) ? "expiry unavailable (clock mismatch)" : nowMs >= expiry ? "expired" : "not expired",
       expiryTime: expiry === null ? null : new Date(expiry).toISOString(),
-      expiryRelative: expiry === null ? "expiry not published" : held ? "current validity unavailable" : !Number.isFinite(nowMs) ? "relative time unavailable (clock mismatch)" : expired ? reportAge(expiry, nowMs) : `in ${elapsedTime(expiry - nowMs)}`,
+      expiryRelative: expiry === null ? "expiry not published" : !Number.isFinite(nowMs) ? "relative time unavailable (clock mismatch)" : expired ? reportAge(expiry, nowMs) : `in ${elapsedTime(expiry - nowMs)}`,
       overdue: "overdue rule not published",
       schedule,
-      refreshFailedAt: refreshFailed === undefined ? null : new Date(refreshFailed).toISOString(),
-      lastKnown: held,
       conclusion: reportConclusion(latest),
     };
   });

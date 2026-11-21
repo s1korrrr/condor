@@ -11,7 +11,7 @@ import { AgentDecisionsPage } from "./AgentDecisionsPage";
 import { SystemPauseProvider, V5System } from "./V5System";
 import { V5MarketHome } from "./V5MarketHome";
 import { V5AppShell } from "./V5AppShell";
-import { clearSessionCache, confirmLogout, dropSessionReads, sessionEnded } from "./session-policy.mjs";
+import { clearSessionCache, confirmLogout } from "./session-policy.mjs";
 import { V5PaperBots } from "@/pages/tabs/ActiveBotsTab";
 import { LearningPage } from './LearningPanel';
 import { ResearchFactoryPage } from './ResearchFactoryPanel';
@@ -62,7 +62,7 @@ function LoginPage() {
 
 function AuthGate() {
   const auth = useQuery({ queryKey: ["v5-auth"], queryFn: v5Api.auth, retry: false, refetchInterval: 15_000, refetchOnWindowFocus: true });
-  useEffect(() => { if (sessionEnded({ data: auth.data, isError: auth.isError, error: auth.error }, error => error instanceof V5ApiError && error.status === 401)) dropSessionReads(client); }, [auth.isError, auth.error, auth.data]);
+  useEffect(() => { if (auth.data?.authenticated === false || (auth.isError && auth.error instanceof V5ApiError && auth.error.status === 401)) client.removeQueries({ predicate: query => query.queryKey[0] !== "v5-auth" }); }, [auth.isError, auth.error, auth.data?.authenticated]);
   if (auth.isPending) return <main className="v5-loading-screen"><div className="v5-spinner" /><span>Connecting to the V5 workspace…</span></main>;
   if (auth.isError && auth.error instanceof V5ApiError && auth.error.status === 401) return <LoginPage />;
   if (auth.isError) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>Workspace connection failed</strong><span>{auth.error.message}</span><button className="v5-button" onClick={() => void auth.refetch()}>Retry connection</button></div></main>;

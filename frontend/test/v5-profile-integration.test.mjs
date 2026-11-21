@@ -28,9 +28,7 @@ test("V5 entry reuses the actual dashboard pages under an isolated cookie profil
   // The feed refresh time moved with the market evidence onto the one Market page.
   assert.match(await readFile(new URL("../src/v5/V5Market.tsx", import.meta.url), "utf8"), /last_success_at_ms/);
   const pages = await readFile(new URL("../src/v5/V5Pages.tsx", import.meta.url), "utf8");
-  // The pages show the advisor's latest_by_task reports through the retention that bridges a failed read.
-  assert.match(pages, /retainReports\(agentReportStore/);
-  assert.match(await readFile(new URL("../src/v5/agent-status.ts", import.meta.url), "utf8"), /latest_by_task/);
+  assert.match(pages, /latest_by_task/);
   assert.match(pages, /result\.actual_usd/);
   assert.match(pages, /result\.expires_at_ms/);
   assert.match(pages, /remaining_pilot_usd/);

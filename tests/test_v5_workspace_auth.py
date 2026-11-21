@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
@@ -604,6 +605,62 @@ def test_loop_caps_origin_and_stop_are_enforced(tmp_path):
         assert stopped.status_code == 200
         assert stopped.json()["status"] == "STOPPED"
         assert api.report_calls == []
+
+
+def test_loop_stop_returns_terminal_receipt_when_admission_prunes_it(
+    tmp_path, monkeypatch
+):
+    from condor.v5 import state as state_module
+
+    monkeypatch.setattr(state_module, "MAX_ROWS", 2)
+    config = settings(tmp_path)
+    state = WorkspaceState(config.runtime_root)
+    app = create_app(settings=config, upstream=FakeUpstream(), state=state)
+    headers = {"Origin": ORIGIN}
+    admitted = []
+    finish_session = state.finish_session
+
+    def finish_and_schedule_admission(session_id, status, summary):
+        receipt = finish_session(session_id, status, summary)
+        if status == "STOPPED":
+            # This runs after the loop finishes and before its stop waiter resumes.
+            asyncio.get_running_loop().call_soon(
+                lambda: admitted.append(
+                    state.create_session("market_analyst", kind="inspect")
+                )
+            )
+        return receipt
+
+    monkeypatch.setattr(state, "finish_session", finish_and_schedule_admission)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        login(client)
+        running = client.post(
+            "/api/v5/agents/market_analyst/loops/start",
+            json={
+                "loop_id": "market_analyst_monitor",
+                "frequency_sec": 900,
+                "max_ticks": 1,
+            },
+            headers=headers,
+        )
+        assert running.status_code == 200
+        session_id = running.json()["id"]
+        tick = state.add_tick(session_id, status="COMPLETED", summary="previous loop tick")
+        newer = client.post("/api/v5/agents/market_analyst/inspect", headers=headers)
+        assert newer.status_code == 200
+        assert state.storage_status()["sessions_used"] == 2
+
+        stopped = client.post(f"/api/v5/sessions/{session_id}/stop", headers=headers)
+
+        assert len(admitted) == 1
+        assert state.session(session_id) is None
+        assert state.session(newer.json()["id"])["status"] == "COMPLETED"
+        assert stopped.status_code == 200
+        receipt = stopped.json()
+        assert receipt["id"] == session_id
+        assert receipt["status"] == "STOPPED"
+        assert receipt["finished_at_ms"] is not None
+        assert receipt["ticks"] == [tick]
 
 
 def test_restart_marks_pending_sessions_interrupted(tmp_path):

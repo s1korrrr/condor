@@ -235,7 +235,7 @@ class WorkspaceState:
                 (status, self.clock(), summary[:500], session_id),
             )
             db.execute("DELETE FROM reservations WHERE session_id=?", (session_id,))
-        return self.session(session_id)
+            return self._session_detail(db, session_id)
 
     def add_tick(
         self,
@@ -325,16 +325,18 @@ class WorkspaceState:
 
     def session(self, session_id: str) -> dict[str, Any] | None:
         with self._connection() as db:
-            row = db.execute(
-                "SELECT * FROM sessions WHERE id=?", (session_id,)
-            ).fetchone()
-            if row is None:
-                return None
-            value = self._session(row)
-            ticks = db.execute(
-                "SELECT * FROM ticks WHERE session_id=? ORDER BY at_ms,id",
-                (session_id,),
-            ).fetchall()
+            return self._session_detail(db, session_id)
+
+    def _session_detail(
+        self, db: sqlite3.Connection, session_id: str
+    ) -> dict[str, Any] | None:
+        row = db.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+        if row is None:
+            return None
+        value = self._session(row)
+        ticks = db.execute(
+            "SELECT * FROM ticks WHERE session_id=? ORDER BY at_ms,id", (session_id,)
+        ).fetchall()
         value["ticks"] = [self._tick(tick) for tick in ticks]
         value["journal"] = "\n".join(
             f"{tick['at_ms']}: {tick['summary']}" for tick in value["ticks"]

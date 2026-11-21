@@ -13,61 +13,97 @@ for (const name of ['window', 'document', 'navigator', 'HTMLElement', 'Element',
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const { createRoot } = await import('react-dom/client');
 
-test('a failed second auth poll retains the routed draft until auth is revoked', async (context) => {
+test('auth and profile 503s retain the routed draft until auth is revoked', async (context) => {
+  const AuthContext = React.createContext(null);
   const unrelatedViews = Object.fromEntries([
-    '@/hooks/useServer', '@/lib/auth', './V5Pages', './AgentDecisionsPage', './V5System',
-    './V5MarketHome', './V5AppShell', '@/pages/tabs/ActiveBotsTab', './LearningPanel',
+    './V5Pages', './AgentDecisionsPage',
+    './V5MarketHome', '@/pages/tabs/ActiveBotsTab', './LearningPanel',
     './ResearchFactoryPanel', './DecisionLineagePanel', './V5Helm', './V5Overview',
-    './V5NotFound', './usePaperObservation', './OwnerJournalCondition',
+    './V5NotFound', './usePaperObservation',
   ].map(name => [name, {}]));
   const { load } = frontendModules({
     ...unrelatedViews, '@tanstack/react-query': ReactQuery, 'react-router-dom': Router,
-  }, { 'v5/V5App.tsx': ['AuthGate', 'client'] });
-  const { AuthGate, client } = load('v5/V5App.tsx');
-  const queryKey = ['v5-auth'];
+    '@/lib/auth': { AuthContext, useAuth: () => React.useContext(AuthContext) },
+    '@/hooks/useTheme': { useTheme: () => ({ theme: 'dark', toggleTheme() {} }) },
+    './usePaperClock': { usePaperClock: () => 0 },
+    './V5System': { SystemPauseProvider: ({ children }) => children },
+    './OwnerJournalCondition': { PaperJournalNotice: () => null },
+  }, { 'v5/V5App.tsx': ['AuthGate', 'ProfileGate', 'client'] });
+  const { AuthGate, ProfileGate, client } = load('v5/V5App.tsx');
   let resolveFirst;
   const firstResponse = new Promise(resolve => { resolveFirst = resolve; });
-  let polls = 0;
+  const profile = {
+    schema_version: 'v5-dashboard-profile.v1',
+    server: { server_id: 'rsibot-v5', host: 'razer', mode: 'reports-only', execution_enabled: false },
+    condor: { base_revision: 'ff8858df765cffe4d325fde384f7a2eecdf51641' },
+    readiness: { paper_owner: { bot_name: 'fixture' } },
+  };
+  const unavailable = () => Response.json({ detail: { code: 'server_token_unavailable' } }, { status: 503 });
+  let authPolls = 0;
+  let profileUnavailable = false;
   context.mock.method(globalThis, 'fetch', async (url) => {
+    if (url === '/api/v5/dashboard/profile') return profileUnavailable ? unavailable() : Response.json(profile);
     assert.equal(url, '/api/v5/auth');
-    polls += 1;
-    if (polls === 1) return firstResponse;
-    if (polls === 2) throw new Error('fixture network failure');
-    return Response.json({ authenticated: polls === 3 });
+    authPolls += 1;
+    if (authPolls === 1) return firstResponse;
+    if (authPolls === 2) return unavailable();
+    return Response.json({ authenticated: authPolls === 3 });
   });
   const container = document.body.appendChild(document.createElement('div'));
   const root = createRoot(container);
   const element = React.createElement;
-  const poll = () => React.act(async () => {
-    await client.refetchQueries({ queryKey }, { cancelRefetch: false });
+  function DraftRoute() {
+    const { isAuthenticated } = React.useContext(AuthContext);
+    return element('textarea', { 'aria-label': 'Draft', 'data-authenticated': isAuthenticated });
+  }
+  const poll = key => React.act(async () => {
+    await client.refetchQueries({ queryKey: [key] }, { cancelRefetch: false });
     await new Promise(resolve => setTimeout(resolve, 0));
   });
+  const scope = () => container.querySelector('.v5-shell-mode')?.textContent;
+  const status = () => container.querySelector('#v5-shell-status-slot[role="status"]')?.textContent ?? '';
   try {
     await React.act(async () => {
       root.render(element(ReactQuery.QueryClientProvider, { client }, element(Router.MemoryRouter, null,
         element(Router.Routes, null, element(Router.Route, { element: element(AuthGate) },
-          element(Router.Route, { path: '/', element: element('input', { 'aria-label': 'Draft' }) }),
+          element(Router.Route, { element: element(ProfileGate) },
+            element(Router.Route, { path: '/', element: element(DraftRoute) })),
         )),
       )));
     });
     resolveFirst(Response.json({ authenticated: true }));
-    await poll();
-    assert.equal(polls, 1);
+    await poll('v5-auth');
+    await poll('v5-profile');
+    assert.equal(authPolls, 1);
     const draft = container.querySelector('[aria-label="Draft"]');
     assert.ok(draft);
     draft.value = 'unsaved notes';
+    assert.equal(draft.dataset.authenticated, 'true');
+    assert.equal(scope(), 'PAPER');
 
-    await poll();
-    assert.equal(polls, 2);
-    assert.ok(container.querySelector('[aria-label="Draft"]') === draft, 'draft must remain mounted');
+    await poll('v5-auth');
+    const authDuring503 = draft.dataset.authenticated;
+    const statusDuringAuth503 = status();
+    profileUnavailable = true;
+    await poll('v5-profile');
+    assert.equal(container.querySelector('[aria-label="Draft"]'), draft, 'profile 503 must keep the editor mounted');
+    assert.equal(authDuring503, 'false');
+    assert.match(statusDuringAuth503, /session reconnecting/i);
+    assert.equal(draft.dataset.authenticated, 'false');
+    assert.match(status(), /session reconnecting/i);
+    assert.equal(scope(), undefined);
+
+    await poll('v5-auth');
+    assert.equal(draft.dataset.authenticated, 'false', 'profile must also recover before confirming authority');
+    assert.match(status(), /session reconnecting/i);
+    profileUnavailable = false;
+    await poll('v5-profile');
+    assert.equal(container.querySelector('[aria-label="Draft"]'), draft, 'recovery must keep the editor mounted');
     assert.equal(draft.value, 'unsaved notes');
-    assert.match(container.querySelector('[role="status"]').textContent, /reconnecting/i);
-    assert.doesNotMatch(container.textContent, /Workspace connection failed/);
-
-    await poll();
-    assert.ok(container.querySelector('[aria-label="Draft"]') === draft, 'recovery must not remount the draft');
-    assert.equal(container.querySelector('[role="status"]'), null);
-    await poll();
+    assert.equal(draft.dataset.authenticated, 'true');
+    assert.equal(scope(), 'PAPER');
+    assert.equal(status(), '');
+    await poll('v5-auth');
     assert.equal(container.querySelector('[aria-label="Draft"]'), null);
     assert.ok(container.querySelector('#v5-session-token'));
   } finally {

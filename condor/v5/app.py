@@ -334,7 +334,7 @@ def create_app(
     money_task: asyncio.Task | None = None
     # The recorder's own last failure, shown by the money route; a failure never stops the loop.
     money_errors: dict[str, Any] = {"count": 0, "last": None, "at_ms": None}
-    active_loop_task: asyncio.Task | None = None
+    active_loop_task: asyncio.Task[dict[str, Any] | None] | None = None
     active_loop_stop: asyncio.Event | None = None
     login_failures: dict[str, list[float]] = {}
     dashboard_token_error_logged = False
@@ -1236,9 +1236,9 @@ def create_app(
         frequency_sec: int,
         max_ticks: int,
         stop: asyncio.Event,
-    ):
+    ) -> dict[str, Any] | None:
         try:
-            for index in range(max_ticks):
+            for _ in range(max_ticks):
                 try:
                     await asyncio.wait_for(stop.wait(), timeout=frequency_sec)
                     break
@@ -1266,24 +1266,15 @@ def create_app(
                     error=latest.get("error"),
                 )
                 current = store.session(session_id)
-                if current and current.get("status") != "RUNNING":
-                    break
-                if index + 1 >= max_ticks:
-                    store.finish_session(
-                        session_id,
-                        "COMPLETED",
-                        f"Bounded loop completed {max_ticks} report ticks",
-                    )
-                    break
+                if current is None or current["status"] != "RUNNING":
+                    return current
             else:
-                store.finish_session(
+                return store.finish_session(
                     session_id,
                     "COMPLETED",
                     f"Bounded loop completed {max_ticks} report ticks",
                 )
-            current = store.session(session_id)
-            if current and current.get("status") == "RUNNING":
-                store.finish_session(session_id, "STOPPED", "Report loop stopped")
+            return store.finish_session(session_id, "STOPPED", "Report loop stopped")
         except asyncio.CancelledError:
             store.finish_session(
                 session_id,
@@ -1298,7 +1289,7 @@ def create_app(
                 if isinstance(exc, StateCapacityError)
                 else "Report loop stopped after an internal error"
             )
-            store.finish_session(session_id, "FAILED", summary)
+            return store.finish_session(session_id, "FAILED", summary)
 
     @app.post("/api/v5/agents/{agent_id}/loops/start")
     async def start_loop(agent_id: str, payload: ReportLoopBody, request: Request):
@@ -1371,17 +1362,21 @@ def create_app(
             return session
         if active_loop_stop:
             active_loop_stop.set()
-        if active_loop_task is not None:
+        task = active_loop_task
+        if task is not None:
             # Let an in-flight upstream call reach its bounded timeout and be
-            # journaled before the loop exits; do not cancel a possible charge.
-            await active_loop_task
-            active_loop_task = None
-            active_loop_stop = None
-        if store.session(session_id).get("status") == "RUNNING":
-            store.finish_session(
+            # journaled. The task carries the terminal receipt through pruning.
+            terminal = await task
+            if active_loop_task is task:
+                active_loop_task = None
+                active_loop_stop = None
+        else:
+            terminal = store.finish_session(
                 session_id, "STOPPED", "Report loop stopped by operator"
             )
-        return session_response(session_id)
+        if terminal is None:
+            raise HTTPException(404, detail={"code": "session_not_found"})
+        return terminal
 
     @app.get("/api/v5/sessions", dependencies=[Depends(require_auth)])
     async def list_sessions():

@@ -121,7 +121,7 @@ test('holds never equates quote currencies, infers missing breakeven, or hides s
   const disagreement = marketHolding('BTC', same, same[0].bot_id, 90, 'USDT', now);
   assert.match(disagreement.text, /V5 holds 0\.0162 · — to breakeven/);
   assert.equal(disagreement.warning, 'bag-mismatch');
-  assert.equal(disagreement.reason, null);
+  assert.match(disagreement.reason, /^No breakeven shown: the strategy's bag is 1 BTC; the position rows total 0\.0162\. /);
 });
 
 test('hourly strip uses UTC hour boundaries with the preceding close, not a neighbouring minute', () => {

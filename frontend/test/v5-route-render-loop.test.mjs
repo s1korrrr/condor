@@ -333,7 +333,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       try {
         await React.act(async () => {mount.render(React.createElement(Boundary,null,React.createElement(V5App)));});
         assertChartMarkers('mount');
-        assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, pathname === '/bots' ? 1 : 0, 'only Bots reads symbols once on initial mount with a complete snapshot');
+        { const reads = requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length; if (pathname === '/bots') assert.equal(reads, 1, 'Bots reads symbols once on initial mount with a complete snapshot'); else assert.ok(reads <= (pathname.startsWith('/market') && pathname !== '/market/stocks' ? 1 : 0), 'only Bots reads symbols on initial mount; Market at most once, after its Binance view settles (the Bot market lane checks each pair)'); }
         await React.act(async () => {await client.refetchQueries({type:'active'});});
         assertChartMarkers('explicit refresh');
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
@@ -398,7 +398,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           assert.equal(symbols.options.refetchInterval, undefined, 'symbols must not schedule an interval');
           now -= 60_001;
         }
-        if (pathname !== '/bots') assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 0, 'other routes never read Bots symbols');
+        if (pathname !== '/bots') assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, pathname.startsWith('/market') && pathname !== '/market/stocks' ? 1 : 0, 'other routes never read the symbol list, except Market once, after its Binance view settles (the Bot market lane checks each pair)');
         assert.deepEqual(failures,[],'real route must not enter a render loop');
         assert.deepEqual(warnings,[],'React must not warn about unstable snapshots or cross-component updates');
         assert.ok(container.querySelector('main'),`${pathname} must keep the app mounted`);
@@ -439,6 +439,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           await React.act(async () => {chart.move({time:fixtureMinute});});
           assert.match(container.textContent,/C 101\.12/, 'the crosshair must show the formatted close');
           assert.match(container.textContent,/101\.12/,'configured Market must show a fixture candle close');
+          assert.match(container.textContent,/OKX spot · BTC-USDC/,'the Bot market lane must label the bots venue and pair');
           assert.match(container.textContent,/Instrument coverage/,'open candle-store details must render the fixture view');
           scan(container, `${pathname} / Instrument coverage`);
           for (const [tab, heading] of [['Cross-venue','Cross-venue price deviation'],['Coverage heatmap','Hourly coverage'],['Store facts','Store facts']]) {

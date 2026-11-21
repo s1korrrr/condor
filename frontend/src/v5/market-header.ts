@@ -82,6 +82,9 @@ export function hourlyReturns(read: CandleRead | null | undefined): { from: numb
   return result;
 }
 
+/** The owner's retained-bag rows: the bag's `held_amount` is the sum of these rows, not of the pair's whole position. */
+const BAG_ROWS = 'held_reconciliation';
+
 export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot: string | null | undefined, last: number | null, quote: string, now: number, pending?: boolean): { text: string; exact?: string; title?: string; reason: string | null; state?: 'loading'; warning?: 'bag-mismatch'; asOf: number | null } {
   if (bot && pending) return { text: 'V5 holds —', reason: 'Loading holdings…', state: 'loading', asOf: null };
   const unavailable = (reason: string) => ({ text: 'V5 holds —', reason, asOf: null });
@@ -95,15 +98,21 @@ export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot:
   if (!holdings || (positions.data as Record<string, unknown>[]).filter(row => row.trading_pair === pair).some(row => decimal(row.quantity) == null)) return unavailable('V5 has not reported exact amounts for all positions.');
   let reason: string | null = null, gap: string | null = null;
   let warning: 'bag-mismatch' | undefined;
-  if (!bag?.heldAmount || decimal(bag.heldAmount) == null) reason = 'Breakeven comparison needs an exact amount from the strategy.';
-  else if (decimal(bag.heldAmount) !== decimal(holdings.total)) warning = 'bag-mismatch';
-  else if (pair.split('-')[1] !== quote) reason = `The market price is in ${quote}. Breakeven is in ${pair.split('-')[1]}.`;
+  // The bag's amount equals the whole pair (nothing else held) or exactly its retained-bag rows. Anything else is a real disagreement.
+  const bagRows = holdings.states.find(row => row.state === BAG_ROWS)?.quantity ?? null;
+  const covers = !bag?.heldAmount || decimal(bag.heldAmount) == null ? null : decimal(bag.heldAmount) === decimal(holdings.total) ? 'all' : bagRows != null && decimal(bag.heldAmount) === decimal(bagRows) ? 'bag' : 'none';
+  const base = pair.split('-')[1];
+  if (!covers) reason = 'Breakeven comparison needs an exact amount from the strategy.';
+  else if (covers === 'none') { warning = 'bag-mismatch'; reason = `No breakeven shown: the strategy's bag is ${formatCoin(bag!.heldAmount)} ${coin}; the position rows total ${formatCoin(holdings.total)}${bagRows != null ? ` (${formatCoin(bagRows)} in ${BAG_ROWS.replace('_', ' ')} rows)` : ''}. The breakeven belongs to the bag, and no group of rows matches it.`; }
+  else if (base !== quote) reason = `The market price on this card is in ${quote}. Breakeven is in ${base}. The Bot market card compares in ${base}.`;
   else if (last == null) reason = 'Breakeven comparison needs a recent price.';
-  else if (decimal(bag.breakevenPrice) == null || decimal(bag.breakevenPrice)! <= 0n) reason = 'V5 has not reported a usable breakeven price.';
-  else gap = change(last, bag.breakevenPrice!, 1);
-  if (!gap && !reason && !warning) reason = 'A complete price comparison is unavailable.';
+  else if (decimal(bag!.breakevenPrice) == null || decimal(bag!.breakevenPrice)! <= 0n) reason = 'V5 has not reported a usable breakeven price.';
+  else gap = change(last, bag!.breakevenPrice!, 1);
+  if (!gap && !reason) reason = 'A complete price comparison is unavailable.';
   const comparison = gap && last != null ? decimalPercentChange(last, bag?.breakevenPrice, 1) : null;
-  const exact = comparison ? `holding ${holdings.total} · (${last} − ${bag!.breakevenPrice}) × 100 / ${bag!.breakevenPrice} = ${comparison.exact}` : holdings.total;
-  const title = comparison ? `holding ${ownerTitleText(holdings.total)} · (${ownerTitleText(last)} − ${ownerTitleText(bag!.breakevenPrice)}) × 100 / ${ownerTitleText(bag!.breakevenPrice)} = ${ownerTitleText(comparison.exact)}` : ownerTitleText(holdings.total);
-  return { text: `V5 holds ${formatCoin(holdings.total)} · ${gap ? pct(gap, 1) : '—'} to breakeven`, exact, title, reason, warning, asOf: positions.generated_at_ms };
+  // When the bag is only part of the holding, the breakeven is the bag's: say so, with the bag's own amount.
+  const part = covers === 'bag' ? ` · bag ${formatCoin(bag!.heldAmount)}` : '';
+  const exact = comparison ? `holding ${holdings.total}${covers === 'bag' ? ` · bag ${bag!.heldAmount}` : ''} · (${last} − ${bag!.breakevenPrice}) × 100 / ${bag!.breakevenPrice} = ${comparison.exact}` : holdings.total;
+  const title = comparison ? `holding ${ownerTitleText(holdings.total)}${covers === 'bag' ? ` · bag ${ownerTitleText(bag!.heldAmount)}` : ''} · (${ownerTitleText(last)} − ${ownerTitleText(bag!.breakevenPrice)}) × 100 / ${ownerTitleText(bag!.breakevenPrice)} = ${ownerTitleText(comparison.exact)}` : ownerTitleText(holdings.total);
+  return { text: `V5 holds ${formatCoin(holdings.total)}${part} · ${gap ? pct(gap, 1) : '—'} to ${covers === 'bag' ? 'bag ' : ''}breakeven`, exact, title, reason, warning, asOf: positions.generated_at_ms };
 }

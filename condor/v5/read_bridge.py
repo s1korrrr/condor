@@ -9,12 +9,15 @@ import json
 import math
 import re
 import struct
+import time
 import zlib
 from urllib.parse import parse_qsl, urlencode, urlsplit
 from datetime import datetime
 
 import aiohttp
 from fastapi import HTTPException
+from .http_pool import SharedSession, lease
+from .timing import record_owner
 from .config import MAX_STRATEGIES, MAX_SOURCES, MAX_NODES, MAX_EDGES, MAX_STATS_ROWS, READ_BYTE_LIMITS
 
 MAX_BYTES = 64 * 1024 * 1024
@@ -288,13 +291,14 @@ def valid_tradepad(kind: str, value: object) -> bool:
     return bool(value)
 
 
-async def _bounded_read(base_url: str | None, path: str, owner: str, setting: str, kind: str) -> bytes:
+async def _bounded_read(base_url: str | None, path: str, owner: str, setting: str, kind: str, shared: SharedSession | None = None) -> bytes:
     if not base_url:
         raise HTTPException(503, detail=f"Not connected: {setting} is unset")
+    started = time.perf_counter()
     try:
         async with asyncio.timeout(TIMEOUT_SECONDS):
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=TIMEOUT_SECONDS)) as session:
-                async with session.get(base_url + path, allow_redirects=False, headers={"Accept": "application/json"}) as response:
+            async with lease(shared, aiohttp.ClientSession, aiohttp.ClientTimeout(total=TIMEOUT_SECONDS)) as (session, extra):
+                async with session.get(base_url + path, allow_redirects=False, headers={"Accept": "application/json"}, **extra) as response:
                     if response.status != 200:
                         raise HTTPException(503, detail=f"Not connected: {owner} upstream returned HTTP {response.status}")
                     content = bytearray()
@@ -305,10 +309,12 @@ async def _bounded_read(base_url: str | None, path: str, owner: str, setting: st
         return bytes(content)
     except (aiohttp.ClientError, asyncio.TimeoutError, OSError):
         raise HTTPException(503, detail=f"Not connected: {owner} upstream unreachable or timed out") from None
+    finally:
+        record_owner(time.perf_counter() - started)
 
 
-async def read_tradepad(base_url: str | None, path: str, kind: str) -> bytes:
-    raw = await _bounded_read(base_url, path, "Tradepad", "V5_TRADEPAD_URL", kind)
+async def read_tradepad(base_url: str | None, path: str, kind: str, shared: SharedSession | None = None) -> bytes:
+    raw = await _bounded_read(base_url, path, "Tradepad", "V5_TRADEPAD_URL", kind, shared)
     try:
         value = json.loads(raw, parse_constant=_reject_constant)
         _check_caps(kind, value)
@@ -393,8 +399,8 @@ def valid_research(kind: str, value: object) -> bool:
     return True
 
 
-async def read_research(base_url: str | None, path: str, kind: str) -> bytes:
-    raw = await _bounded_read(base_url, path, "Research", "V5_RESEARCH_URL", kind)
+async def read_research(base_url: str | None, path: str, kind: str, shared: SharedSession | None = None) -> bytes:
+    raw = await _bounded_read(base_url, path, "Research", "V5_RESEARCH_URL", kind, shared)
     try:
         value = json.loads(raw, parse_constant=_reject_constant)
         _check_caps(kind, value)

@@ -1,6 +1,6 @@
 // Every Helm age is judged at the server's read time plus the time since that read arrived, on Helm and on Overview:
-// a count observed after the read is "ahead of this read" and never the headline, and a count that ages out while the
-// page stays mounted drops out of the headline. Each coin row keeps its own last decision.
+// a decision keeps ageing while the page stays mounted, and a read with no server time claims no age. Each coin row
+// keeps its own last decision.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import React from 'react';
@@ -48,32 +48,28 @@ async function mount(page, extra, { observedAt = READ_S } = {}) {
 }
 
 for (const page of ['helm', 'overview']) {
-  test(`${page}: a count observed after the read says ahead of this read and is not the headline, not 0 s ago`, async () => {
-    // The file is dated 4 s after the server's read: within the 5 s clock-skew allowance, so the server projects it.
-    const view = await mount(page, { generated_at: READ_S + 4, active_executors: { count: 3, observed_at: READ_S + 4 } });
+  test(`${page}: a decision keeps ageing while the page stays mounted`, async () => {
+    const view = await mount(page, { symbols: [coin('BNB-USDC', { at: READ_S - 20, reason: 'sell_placed' })] });
     try {
-      assert.match(view.text(), /ahead of this read/);
-      assert.doesNotMatch(view.text(), /UTC · 0 s ago|\(0 s ago\)/);
-      assert.doesNotMatch(view.text(), /Running, no entry signal · 3 active executors/);
-      assert.match(view.text(), /Running, waiting for a signal/);
+      assert.match(view.text(), /20 s ago · sell placed/);
+      await view.tick(10_000);
+      assert.match(view.text(), /30 s ago · sell placed/);
     } finally { await view.done(); }
   });
 
-  test(`${page}: a count that ages out while the page stays mounted leaves the headline and carries its age`, async () => {
-    const view = await mount(page, { active_executors: { count: 3, observed_at: READ_S - 29 } });
+  test(`${page}: a decision stamped after the read says ahead of this read, not 0 s ago`, async () => {
+    const view = await mount(page, { generated_at: READ_S + 4, symbols: [coin('BNB-USDC', { at: READ_S + 4, reason: 'sell_placed' })] });
     try {
-      assert.match(view.text(), /Running, no entry signal · 3 active executors/);
-      await view.tick(2_000);
-      assert.doesNotMatch(view.text(), /Running, no entry signal · 3 active executors/);
-      assert.match(view.text(), /Running, waiting for a signal/);
-      assert.match(view.text(), /31 s ago/);
+      assert.match(view.text(), /ahead of this read · sell placed/);
+      assert.doesNotMatch(view.text(), /UTC · 0 s ago/);
     } finally { await view.done(); }
   });
 
-  test(`${page}: a read with no server time never calls a count current`, async () => {
-    const view = await mount(page, { active_executors: { count: 3, observed_at: READ_S } }, { observedAt: null });
+  test(`${page}: a read with no server time shows the decision without an age`, async () => {
+    const view = await mount(page, { symbols: [coin('BNB-USDC', { at: READ_S - 20, reason: 'sell_placed' })] }, { observedAt: null });
     try {
-      assert.doesNotMatch(view.text(), /Running, no entry signal · 3 active executors/);
+      assert.match(view.text(), /11:59 UTC · sell placed/);
+      assert.doesNotMatch(view.text(), /\d+ s ago · sell placed/);
       assert.doesNotMatch(view.text(), /NaN/);
     } finally { await view.done(); }
   });

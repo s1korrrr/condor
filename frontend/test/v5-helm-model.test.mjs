@@ -15,7 +15,7 @@ test('only the runtime says stopped; an old status is unknown; running needs fre
   context.mock.method(Date, 'now', () => 1793929900000);
   assert.equal(helmHeadline({ state: 'STALE', status: status({ reasons: ['runtime_stopped'] }) }).text, 'Stopped (last status 6 Nov 01:51 UTC)');
   assert.match(helmHeadline({ state: 'STALE', status: status() }).text, /current state unknown/);
-  assert.deepEqual(helmHeadline({ state: 'FRESH', status: status({ gates: READY }) }), { text: 'Running, entry gate ready', good: null, detail: 'Activity: active executors not published · no decision time published.' });
+  assert.deepEqual(helmHeadline({ state: 'FRESH', status: status({ gates: READY }) }), { text: 'Running, entry gate ready', good: null, detail: 'No decision time published.' });
   assert.equal(helmHeadline({ state: 'FRESH', status: status({ ready: null }) }).text, 'Publishing status, ready: not published');
   assert.equal(helmHeadline(null).text, '');
 });
@@ -25,13 +25,13 @@ test('only the runtime says stopped; an old status is unknown; running needs fre
 const coin = (pair, hold) => ({ pair, status: 'portfolio_grant_required', candidate_hold: hold });
 const rows = [
   ['ready gate, every coin no_rebound', { gates: READY, symbols: [coin('BNB-USDC', 'no_rebound'), coin('ETH-USDC', 'no_rebound')] },
-    { text: 'Running, waiting for a signal', good: true, detail: 'No coin has an entry signal: no rebound. Activity: active executors not published · no decision time published.' }],
+    { text: 'Running, waiting for a signal', good: true, detail: 'No coin has an entry signal: no rebound. No decision time published.' }],
   ['ready gate, mixed signal waits', { gates: READY, symbols: [coin('BNB-USDC', 'low_volatility'), coin('ETH-USDC', 'no_rebound')] },
-    { text: 'Running, waiting for a signal', good: true, detail: 'No coin has an entry signal: low volatility, no rebound. Activity: active executors not published · no decision time published.' }],
+    { text: 'Running, waiting for a signal', good: true, detail: 'No coin has an entry signal: low volatility, no rebound. No decision time published.' }],
   ['ready gate, a planner code on one coin (normal operation)', { gates: READY, symbols: [coin('BNB-USDC', 'no_rebound'), coin('ETH-USDC', 'bag_gap_not_met')] },
-    { text: 'Running, entry gate ready', good: null, detail: 'ETH-USDC: bag gap not met. Activity: active executors not published · no decision time published.' }],
+    { text: 'Running, entry gate ready', good: null, detail: 'ETH-USDC: bag gap not met. No decision time published.' }],
   ['ready gate, one coin without an entry check this tick', { gates: READY, symbols: [coin('BNB-USDC', 'no_rebound'), coin('ETH-USDC', null)] },
-    { text: 'Running, entry gate ready', good: null, detail: 'ETH-USDC: no entry check published this tick. Activity: active executors not published · no decision time published.' }],
+    { text: 'Running, entry gate ready', good: null, detail: 'ETH-USDC: no entry check published this tick. No decision time published.' }],
   ['symbol_fault gate while every coin reads no_rebound', { gates: [{ gate: 'symbol_fault', note: 'BNB-USDC' }], symbols: [coin('BNB-USDC', 'no_rebound'), coin('ETH-USDC', 'no_rebound')] },
     { text: 'Running, not buying: symbol fault (BNB-USDC)', good: false }],
   ['ENTRY_HOLD gate', { gates: [{ gate: 'ENTRY_HOLD', note: 'operator_entry_pause' }], symbols: [coin('BNB-USDC', 'operator_entry_pause')] },

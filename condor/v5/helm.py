@@ -30,7 +30,6 @@ PLAIN = re.compile(r"[A-Za-z0-9 _.,:;()'%+=-]{1,256}")  # sentences: no / \ @ ~ 
 DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,30})?")
 PAIR = re.compile(r"[A-Z0-9]{1,16}-[A-Z0-9]{1,16}")
 MAX_SAFE = 2**53 - 1
-MAX_EXECUTOR_ROWS = 512  # per native report; more is treated as an unreadable report, not truncated
 
 
 def _code(value: Any) -> str | None:
@@ -105,45 +104,6 @@ def _money(payload: dict) -> dict[str, str | None] | None:
                 break
         totals[key] = None if total is None else format(total.quantize(Decimal("0.00000001")), "f")
     return totals
-
-
-def _active_executors(shown: Any, payload: dict) -> dict[str, Any] | None:
-    """Executors the runtime reports active, with the time of that report; unknown without positive proof of coverage.
-
-    A count needs the runtime's coverage marker (``unavailable_controller_ids`` written as a list, empty) and, when the
-    controller roster is published, a report for exactly those controllers. Silence about a controller is not zero:
-    a roster with a controller that has no report publishes ``count: None`` and how many controllers it did cover. An
-    unreadable executor row also withholds the count. Only counts leave this module (no executor ids or configs).
-    (``_money`` still uses the older rule: no reports or a listed unavailable controller; that gap is not changed here.)
-    """
-    reports = payload.get("native_reports")
-    unavailable = payload.get("unavailable_controller_ids")
-    if not isinstance(reports, dict) or not reports or len(reports) > 16 or not isinstance(unavailable, list):
-        return None
-    controllers = payload.get("controllers")
-    if controllers is not None and controllers != []:
-        if not isinstance(controllers, list):
-            return None  # A roster is published but unreadable; an empty unavailable list says nothing about it.
-        roster = [controller.get("id") if isinstance(controller, dict) else None for controller in controllers]
-        if not all(isinstance(ident, str) for ident in roster):
-            return None
-        covered = len((set(roster) & reports.keys()) - {ident for ident in unavailable if isinstance(ident, str)})
-        if covered < len(set(roster)):
-            return {"count": None, "covered": covered, "of": len(set(roster))}
-        if set(roster) != reports.keys():
-            return None
-    if unavailable:
-        return None
-    active = 0
-    for report in reports.values():
-        executors = report.get("executors") if isinstance(report, dict) else None
-        if not isinstance(executors, list):
-            return None
-        if len(executors) > MAX_EXECUTOR_ROWS or any(not isinstance(row, dict) or not isinstance(row.get("is_active"), bool) for row in executors):
-            shown.withheld += 1
-            return None
-        active += sum(row["is_active"] for row in executors)
-    return {"count": active, "observed_at": shown.one(payload.get("report_observed_at"), _epoch_s)}
 
 
 class _Projection:
@@ -268,7 +228,6 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         # One recipe across controllers, or None when none or several are published (never a guess).
         "recipe_version": recipes[0] if len(recipes) == 1 else None,
         "money": _money(payload),
-        "active_executors": _active_executors(shown, payload),
     }
     status["withheld"] = shown.withheld
     stale = now - generated > STALE_AFTER_SECONDS

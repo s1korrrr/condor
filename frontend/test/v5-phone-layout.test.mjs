@@ -245,7 +245,6 @@ test('a long owner reason in the Helm and Overview summaries wraps instead of wi
   context.mock.method(Date, 'now', () => now);
   const reason = 'w'.repeat(96);
   const status = { generated_at: now / 1000, age_s: 0, ready: true, reasons: [], actions: 1, steps: 1, withheld: 0, gates: [{ gate: 'ready', note: '' }], control_rejections: { count: 0, recent: [] },
-    active_executors: { count: 3, observed_at: now / 1000 - 5 },
     symbols: [{ pair: 'BNB-USDC', status: 'held', candidate_hold: 'no_rebound', bag: null, signal: null, last_decision: { at: now / 1000 - 20, reason } }] };
   const helm = { state: 'FRESH', reason: 'HELM_STATUS_FRESH', bot: 'helm_v5_paper', observed_at: now / 1000, status };
   const { load } = frontendModules({

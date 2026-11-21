@@ -4,7 +4,7 @@ import { RotateCw } from "lucide-react";
 import { ownerTitleText, age, count, usdc, utcMin } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { tri } from "./shown.mjs";
-import { helmCoinRow, helmExecutors, helmHeadline, helmLastDecision } from "./helm-model.mjs";
+import { helmCoinRow, helmHeadline, helmLastDecision } from "./helm-model.mjs";
 import { useHelmClock } from "./useHelmClock";
 import "./market.css";
 
@@ -27,8 +27,6 @@ export type HelmStatus = {
   gates: ({ gate: string | null; note: string | null } | null)[];
   symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: { held_amount: Amount; breakeven_price: Amount } | null; last_decision: { at: number | null; reason: string | null } | null; signal: HelmSignal | null }[];
   withheld: number;
-  /** Executors the runtime reports active and when it reported them; null when no complete report is published, and `count: null` with `covered` of `of` controllers when the roster is only partly covered. */
-  active_executors?: { count: number; observed_at: number | null } | { count: null; covered: number; of: number } | null;
 };
 export type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; observed_at?: number; status: HelmStatus | null };
 
@@ -56,7 +54,6 @@ export function V5Helm() {
   const noRejections = rejectionCount === 0 || typeof rejectionCount === "string" && /^-?0+(?:\.0+)?$/.test(rejectionCount);
   const lastAt = at(status ? status.generated_at * 1000 : null);
   const { text: headline, good, detail } = helmHeadline(read, { nowS });
-  const executors = helmExecutors(status, { nowS });
   return <div className="v5m">
     <header className="v5m-head">
       <div><h1>Helm</h1><p>Helm paper bot ({read?.bot ?? "helm_v5_paper"}) · its own published runtime state · read-only, no controls on this page.</p></div>
@@ -83,7 +80,6 @@ export function V5Helm() {
           <Stat label="Kill switch" value={tri(status.kill_switch, "On", "Off")} warn={status.kill_switch !== false} />
           <Stat label="Phase · profile" value={status.phase ?? "—"} note={status.profile_id ?? undefined} />
           <Stat label="Runtime actions" value={count(status.actions)} note={`${count(status.steps)} engine steps`} />
-          <Stat label="Active executors" value={executors.value} note={executors.note} warn={executors.count == null} />
           <Stat label="Funding" value={words(status.funding)} note={`adaptive actions ${words(status.adaptive_actions)}`} />
         </div>
         <section className="v5m-section"><header><h2>Coins</h2><span>Why each coin is or is not buying, and its bag</span></header>

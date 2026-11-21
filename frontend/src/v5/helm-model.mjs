@@ -18,7 +18,7 @@ function points(value) {
 
 /**
  * The server's own time at the read, moved on by the seconds since the response arrived: the one clock every age on
- * the Helm surfaces is judged against. Undated reads give undefined, and nothing is then called current.
+ * the Helm surfaces is judged against. Undated reads give undefined, and no age is then claimed.
  */
 export function helmReadTimeS(read, elapsedS) {
   const readAt = read?.observed_at, now = typeof readAt === 'number' ? readAt + elapsedS : NaN;
@@ -91,42 +91,11 @@ export function helmLastDecision(row, { nowS } = {}) {
   return whenAndWhy(row?.last_decision?.at, row?.last_decision?.reason, nowS);
 }
 
-/** A count is current only when its own observation is this young: the same bound as the status (30 s) and the signals. */
-const COUNT_FRESH_S = 30;
-
-/**
- * Helm's active-executor count with the time of the report it came from. The status file's own time does not date the
- * count, so `current` is true only when the count's observation is dated and within COUNT_FRESH_S of this read.
- * `when` is its time and age (null when undated); an incomplete roster says how many controllers it covered.
- */
-export function helmExecutors(status, { nowS } = {}) {
-  const read = status?.active_executors;
-  if (!read || typeof read.count !== 'number') {
-    const incomplete = Number.isSafeInteger(read?.covered) && Number.isSafeInteger(read?.of) ? `incomplete: ${count(read.covered)} of ${count(read.of)} controllers` : null;
-    return { value: 'Not published', note: incomplete ?? 'the Helm runtime status has no complete executor report', count: null, current: false, incomplete };
-  }
-  const known = typeof nowS === 'number';
-  const time = utcMin(typeof read.observed_at === 'number' ? read.observed_at * 1000 : null, known ? nowS * 1000 : undefined);
-  const ageS = time && known ? nowS - read.observed_at : null;
-  const ago = ageS == null ? null : ageS < 0 ? 'ahead of this read' : `${age(ageS)} ago`;
-  return { value: count(read.count), note: time ? `reported ${time}${ago ? ` · ${ago}` : ''}` : 'count time not published', count: read.count,
-    current: ageS != null && ageS >= 0 && ageS <= COUNT_FRESH_S, when: time ? `${time}${ago ? ` (${ago})` : ''}` : null };
-}
-
-/** The count as a phrase; unless it is current it carries its own time, or says the time is not published. */
-function executorPhrase(executors) {
-  if (executors.count == null) return `active executors not published${executors.incomplete ? ` (${executors.incomplete})` : ''}`;
-  const what = executors.count === 0 ? 'no active executors' : `${count(executors.count)} active executor${executors.count === 1 ? '' : 's'}`;
-  return executors.current ? what : executors.when ? `${what} as of ${executors.when}` : `${what}, count time not published`;
-}
-
-/** What Helm itself says it has been doing: active executors and the newest published decision, each "not published" when it is. */
+/** What Helm itself says it has been doing: the newest published decision, or that no decision time is published. */
 function helmActivity(status, nowS) {
-  const parts = [executorPhrase(helmExecutors(status, { nowS }))];
   const decided = (Array.isArray(status.symbols) ? status.symbols : []).filter(row => typeof row?.last_decision?.at === 'number');
   const newest = decided.reduce((best, row) => (best && best.last_decision.at >= row.last_decision.at ? best : row), null);
-  parts.push(newest ? `latest decision ${newest.pair ?? 'a coin'} ${helmLastDecision(newest, { nowS })}` : 'no decision time published');
-  return `Activity: ${parts.join(' · ')}.`;
+  return newest ? `Latest decision: ${newest.pair ?? 'a coin'} ${helmLastDecision(newest, { nowS })}.` : 'No decision time published.';
 }
 
 /**
@@ -164,11 +133,8 @@ export function helmHeadline(read, { nowS } = {}) {
     const symbols = Array.isArray(status.symbols) ? status.symbols : [];
     const other = symbols.filter(row => !SIGNAL_WAIT.has(row?.candidate_hold));
     if (symbols.length && !other.length) {
-      // "No entry signal" is all the holds say. Idle would also claim no executor and no decision, which they do not show.
-      // Only a count observed within the freshness bound is present tense; an old or undated one stays in the detail.
-      const executors = helmExecutors(status, { nowS });
-      const active = executors.current ? executors.count : 0;
-      return { text: active ? `Running, no entry signal · ${count(active)} active executor${active === 1 ? '' : 's'}` : 'Running, waiting for a signal', good: true,
+      // "No entry signal" is all the holds say. The latest published decision is added so the page never reads as idle.
+      return { text: 'Running, waiting for a signal', good: true,
         detail: `No coin has an entry signal: ${[...new Set(symbols.map(row => row.candidate_hold))].map(words).join(', ')}. ${helmActivity(status, nowS)}` };
     }
     const holds = other.map(row => `${row?.pair ?? 'a coin'}: ${row?.candidate_hold ? words(row.candidate_hold) : 'no entry check published this tick'}`).join(' · ');

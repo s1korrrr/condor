@@ -32,7 +32,7 @@ export function V5Overview() {
   const sinceStart = exactSignedSum(equity, oppositeFunding);
   const sinceExact = sinceStart == null ? undefined : `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(sinceStart.replace(/^-/, "−"))}`;
   const realized = v5Values?.realized, unrealized = v5Values?.unrealized;
-  // The same live read clock as the Helm page, so a count ages here exactly as it does there.
+  // The same live read clock as the Helm page, so a decision ages here exactly as it does there.
   const { nowS } = useHelmClock(helm.data, helm.dataUpdatedAt);
   const headline = helmHeadline(helm.data, { nowS });
   const helmMoney = helmRow.withValues;

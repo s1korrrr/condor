@@ -111,7 +111,7 @@ test('phone frame and Overview have legible type and units in labels without alt
 });
 
 test('Overview rounds tiny realized loss to zero and keeps exact since-start arithmetic', () => {
-  const row = {bot:'v5', at_ms:now, equity:'199980.07714623162240', initial_funding:'200000', realized:'-0.004', unrealized:'0'};
+  const row = {bot:'v5', at_ms:now, equity:'199980.07714623162240', initial_funding:'200000', external_flows:'0', realized:'-0.004', unrealized:'0'};
   const { load } = frontendModules({
     '@tanstack/react-query': {useQuery: ({queryKey}) => ({data:queryKey[0] === 'v5-money' ? {rows:[row]} : undefined})},
     './V5Money': {V5Money:() => null, readMoney() {}},
@@ -136,6 +136,7 @@ test('Overview values use the tile value element and inherit their rounded tone'
   assert.match(marketCss, /\.v5m-stat strong \.v5-desktop-unit\s*\{[^}]*font-size:\s*\.7em/);
   const {load} = frontendModules({
     '@tanstack/react-query': {useQuery: ({queryKey}) => ({data:queryKey[0] === 'v5-money' ? {rows:liveMoneyRows} : undefined})},
+    './usePaperClock': {usePaperClock:() => liveMoneyRows.at(-1).at_ms},
     './V5Money': {V5Money:() => null, readMoney() {}}, './V5Helm': {readHelm() {}},
   });
   const window = new Window();

@@ -29,7 +29,7 @@ import { paperReadFailureMessage } from "@/v5/policy";
 import { paperCompleteRead, paperNativeHolds, paperSnapshotsAgree } from "@/v5/policy";
 import { utcExact } from "@/v5/shown.mjs";
 import { ownerTitleText, coin, usdc } from '@/v5/format.mjs';
-import { latest, SAMPLE_MS } from "@/v5/money-model.mjs";
+import { hasZeroExternalFlows, latest, moneySampleTimeState, SAMPLE_MS } from "@/v5/money-model.mjs";
 import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionAdmissionError, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
 import { phoneRecordTime } from "@/v5/phone-records";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
@@ -666,7 +666,6 @@ export function paperHoldSentence(controllers: { id?: string; current?: boolean;
 
 const paperMoneyDecimal = (value: unknown): value is string => typeof value === "string" && value.length <= 128 && /^-?\d+(\.\d{1,30})?$/.test(value);
 const SHOW_TODAY_WITH_MISSING_SAMPLES = true;
-const MONEY_SAMPLE_MAX_AGE_MS = SAMPLE_MS + 60_000;
 type PaperMoney = Pick<MoneyRead, "range" | "now_ms" | "daily"> & Partial<Pick<MoneyRead, "rows">>;
 
 export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete, now, valuesAt = now, money }: { walletRead?: PaperRead; accountingRead?: PaperRead; snapshot?: PaperRead; complete: boolean; now: number; valuesAt?: number; money?: PaperMoney }) {
@@ -674,8 +673,8 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
   const ownerAt = snapshot?.generated_at_ms;
   const staleOwner = typeof ownerAt === "number" && now - ownerAt > PAPER_SNAPSHOT_FRESH_MS;
   const recorded = money?.range === "7d" ? latest(money.rows ?? [], "v5").newest : null;
-  const sample = recorded && !recorded.gap && recorded.unit === "USDC" && recorded.at_ms > 0 &&
-    recorded.at_ms <= now && now - recorded.at_ms <= MONEY_SAMPLE_MAX_AGE_MS && utcExact(recorded.at_ms) ? recorded : null;
+  const sample = recorded && !recorded.gap && recorded.unit === "USDC" &&
+    moneySampleTimeState(recorded.at_ms, now) === "current" ? recorded : null;
   const useMoney = !complete || (sample !== null && staleOwner && sample.at_ms > ownerAt);
   const wallet = useMoney ? sample && {
     equity_quote: sample.equity, initial_funding_quote: sample.initial_funding, external_cash_flows_quote: sample.external_flows,
@@ -691,8 +690,8 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
       sampled };
   };
   let net: string | null = null;
-  const zeroFlows = paperMoneyDecimal(wallet?.external_cash_flows_quote) && /^-?0+(\.0+)?$/.test(wallet.external_cash_flows_quote);
-  if (zeroFlows && paperMoneyDecimal(wallet.equity_quote) && paperMoneyDecimal(wallet.initial_funding_quote)) {
+  const zeroFlows = hasZeroExternalFlows(wallet?.external_cash_flows_quote);
+  if (wallet && zeroFlows && paperMoneyDecimal(wallet.equity_quote) && paperMoneyDecimal(wallet.initial_funding_quote)) {
     const places = Math.max(wallet.equity_quote.split(".")[1]?.length ?? 0, wallet.initial_funding_quote.split(".")[1]?.length ?? 0);
     const scaled = (value: string) => BigInt(value.replace(".", "") + "0".repeat(places - (value.split(".")[1]?.length ?? 0)));
     const difference = scaled(wallet.equity_quote) - scaled(wallet.initial_funding_quote);

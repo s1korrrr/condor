@@ -9,6 +9,7 @@ import { utcExact } from "./shown.mjs";
 import { readHelm } from "./V5Helm";
 import { readMoney, V5Money } from "./V5Money";
 import "./market.css";
+import { AgentConclusions } from "./AgentConclusions";
 
 const tone = (value: unknown) => {
   const shown = ownerDisplay(value, "signed").tone;
@@ -61,6 +62,7 @@ export function V5Overview() {
         <p className="v5m-hint"><NavLink to="/helm">Helm status and coins →</NavLink></p>
       </article>
     </div>
+    <AgentConclusions />
     <V5Money embedded />
   </div>;
 }

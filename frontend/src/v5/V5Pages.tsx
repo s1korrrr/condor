@@ -9,7 +9,7 @@ import { usePaperObservation } from "./usePaperObservation";
 import type { MarketEvidence, V5Agent, V5Session, V5SessionDetail, V5TaskReport, V5Workspace } from "./contracts";
 import { cohortCoverageDisplay, formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
 import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel, paperWords } from "./policy";
-import { advisorAvailability, advisorTaskProfile, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
+import { advisorAvailability, advisorTaskProfile, agentReportStore, retainReports, scheduledAgentLines, watermarkNote, type WorkspaceRead } from "./agent-status";
 import { usePaperClock } from "./usePaperClock";
 
 function useWorkspace() {
@@ -88,9 +88,11 @@ function QueryError({ query, retry }: { query: { error: Error | null }; retry: (
 
 export function OverviewPage() {
   const query = useWorkspace();
+  const now = usePaperClock();
   if (query.isPending) return <Loading label="Loading V5 workspace" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
   const data = query.data;
+  const retained = retainReports(agentReportStore, query, now);
   return <>
     <PageHeading title="Research overview" description="A reports-only workspace for structured market review." actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh data</button>} />
     <IdentityStrip name={data.identity.name} host={data.identity.host} mode={data.identity.mode} executionEnabled={data.identity.execution_enabled} baseline={data.identity.baseline_binding} revision={data.identity.upstream_revision} />
@@ -116,7 +118,7 @@ export function OverviewPage() {
         {data.sessions.length ? <SessionRows sessions={data.sessions.slice(0, 4)} /> : <p className="v5-muted">No sessions have been recorded.</p>}
       </div>
     </section>
-    <TaskLatestReports reports={data.advisor.latest_by_task} agents={data.agents} />
+    <TaskLatestReports reports={retained.reports} failedAt={retained.failedAt} agents={data.agents} />
   </>;
 }
 
@@ -149,9 +151,13 @@ function AdvisorPanel({ profile }: { profile: V5Workspace["advisor"] }) {
   </div>;
 }
 
-const taskNames: Record<string, string> = { market_context: "Market analyst", source_quality: "Source auditor" };
+const taskNames: Record<string, string> = { market_context: "Market analyst", source_quality: "Source auditor", decision_review: "Decision reviewer" };
 
-function TaskLatestReports({ reports, agents, taskId }: { reports?: Record<string, V5TaskReport>; agents: V5Agent[]; taskId?: string | null }) {
+function utcSeconds(ms: number) {
+  return `${new Date(ms).toISOString().slice(0, 19).replace("T", " ")} UTC`;
+}
+
+function TaskLatestReports({ reports, agents, taskId, failedAt }: { reports?: Record<string, V5TaskReport | undefined>; agents: V5Agent[]; taskId?: string | null; failedAt?: Record<string, number> }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
   const tasks = taskId ? [taskId] : Object.keys(taskNames);
@@ -162,8 +168,11 @@ function TaskLatestReports({ reports, agents, taskId }: { reports?: Record<strin
       const result = record?.result;
       const agent = agents.find((row) => row.task_id === id);
       const expired = result?.expires_at_ms != null && result.expires_at_ms <= now;
+      const failed = failedAt?.[id];
+      const mark = watermarkNote(report, now);
       return <article className="v5-task-report" key={id}><div className="v5-section-heading"><div><h3>{taskNames[id] ?? id}</h3><p>Task <code>{id}</code> · {agent?.name ?? "No matching agent"}</p></div><Status state={report?.status === "CURRENT_REPORT" && !expired ? "completed" : report?.status === "HISTORICAL_REPORT" || expired ? "unknown" : "blocked"} label={expired ? "EXPIRED" : report?.status ?? "UNAVAILABLE"} /></div>
-        {result ? <><div className="v5-task-report-meta"><DataValue label="Assessment" value={result.advice?.assessment} /><DataValue label="Coverage basis" value={result.coverage_status === "COMPLETE_OBSERVED_COHORT" ? "Complete observed cohort" : result.coverage_status === "PARTIAL_OR_UNKNOWN" ? "PARTIAL SOURCE" : "Unavailable"} /><DataValue label="Model" value={result.model} /><DataValue label="Request ID" value={record?.request_id} /><DataValue label="Charge" value={result.actual_usd == null ? "UNKNOWN · reconcile the owner journal before retry" : money(result.actual_usd)} /><DataValue label="Requested" value={formatTime(result.requested_at_ms)} /><DataValue label="Received" value={formatTime(result.received_at_ms)} /><DataValue label="Expires" value={formatTime(result.expires_at_ms)} />{result.rejection && <DataValue label="Rejected because" value={result.rejection} />}{report?.status !== "CURRENT_REPORT" && report?.validity_watermark && <DataValue label="Not current since" value={`${formatTime(report.validity_watermark.watermark_ms)} · ${report.validity_watermark.reason}`} />}</div><p className="v5-task-report-summary">{result.advice?.summary || result.reason || "The owner returned no report summary."}</p>{agent && <Link className="v5-text-link" to={`/agents/${encodeURIComponent(agent.id)}`}>Open agent <ChevronRight size={14} /></Link>}</> : <p className="v5-muted">{report?.status === "SOURCE_UNAVAILABLE" ? "The advisor source is unavailable." : "No report is available for this task."}</p>}
+        {failed !== undefined && <p className="v5-source-warning" role="status"><AlertTriangle size={14} />Refresh failed at {utcSeconds(failed)} (this dashboard's read of the advisor). {result ? "Showing the last good report below." : "No earlier report is held in this tab."}</p>}
+        {result ? <><div className="v5-task-report-meta"><DataValue label="Assessment" value={result.advice?.assessment} /><DataValue label="Coverage basis" value={result.coverage_status === "COMPLETE_OBSERVED_COHORT" ? "Complete observed cohort" : result.coverage_status === "PARTIAL_OR_UNKNOWN" ? "PARTIAL SOURCE" : "Unavailable"} /><DataValue label="Model" value={result.model} /><DataValue label="Request ID" value={record?.request_id} /><DataValue label="Charge" value={result.actual_usd == null ? "UNKNOWN · reconcile the owner journal before retry" : money(result.actual_usd)} /><DataValue label="Requested" value={formatTime(result.requested_at_ms)} /><DataValue label="Received" value={formatTime(result.received_at_ms)} /><DataValue label="Expires" value={formatTime(result.expires_at_ms)} />{result.rejection && <DataValue label="Rejected because" value={result.rejection} />}{mark && <DataValue label={mark.label} value={mark.value} />}</div><p className="v5-task-report-summary">{result.advice?.summary || result.reason || "The owner returned no report summary."}</p>{agent && <Link className="v5-text-link" to={`/agents/${encodeURIComponent(agent.id)}`}>Open agent <ChevronRight size={14} /></Link>}</> : <p className="v5-muted">{failed !== undefined ? "Not read: the advisor read failed, so this page cannot say whether a report exists." : report?.status === "SOURCE_UNAVAILABLE" ? "The advisor source is unavailable." : "The owner has published no report for this task."}</p>}
       </article>;
     })}</div>
   </section>;
@@ -265,29 +274,41 @@ function DataValue({ label, value }: { label: string; value: unknown }) {
 
 export function AgentsPage() {
   const query = useWorkspace();
+  const now = usePaperClock();
   if (query.isPending) return <Loading label="Loading agent catalog" />;
-  if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
+  // One failed refresh keeps what was read before; only a read that never succeeded is an error page.
+  if (query.isError && !query.data) return <QueryError query={query} retry={() => void query.refetch()} />;
+  const lines = scheduledAgentLines(query, now, retainReports(agentReportStore, query, now));
   return <><PageHeading title="Agent catalog" description="The workspace roles and their owner-reported readiness." />
     <p><Link className="v5-text-link" to="/agents/decisions">Agent decisions <ChevronRight size={14} /></Link></p>
-    <ScheduledAgents read={query} />
-    {query.data.agents.length ? <div className="v5-agent-catalog">{query.data.agents.map((agent) => <AgentCatalogRow agent={agent} key={agent.id} />)}</div> : <EmptyState title="No agents are registered" body="The service returned an empty catalog. No demo or placeholder agents are shown." />}
+    {query.isError && <div className="v5-source-warning" role="status"><AlertTriangle size={16} />Refresh failed: {query.error?.message ?? "the workspace read failed"}. Showing the last read.</div>}
+    <ScheduledAgents lines={lines} />
+    {query.data.agents.length ? <div className="v5-agent-catalog">{query.data.agents.map((agent) => <AgentCatalogRow agent={agent} line={lines.find(line => line.id === agent.id)} key={agent.id} />)}</div> : <EmptyState title="No agents are registered" body="The service returned an empty catalog. No demo or placeholder agents are shown." />}
     {query.data.source_error && <div className="v5-source-warning"><AlertTriangle size={16} />Some catalog sources are unavailable: {query.data.source_error}</div>}
   </>;
 }
 
-function ScheduledAgents({ read, agentId }: { read: WorkspaceRead; agentId?: string }) {
-  const now = usePaperClock();
-  const lines = scheduledAgentLines(read, now).filter(line => !agentId || line.id === agentId);
+type AgentLine = ReturnType<typeof scheduledAgentLines>[number];
+
+/** A ready agent's state is its report's validity, never a bare "Ready" for an expired report. */
+function catalogState(agent: V5Agent, line?: AgentLine): { state: "ready" | "blocked" | "failed" | "unknown"; label: string } {
+  if (agent.status !== "ready") return { state: "blocked", label: "Blocked" };
+  if (!line) return { state: "ready", label: "Ready" };
+  return { state: line.state.startsWith("Current until") ? "ready" : line.state === "Last run failed" ? "failed" : "unknown", label: line.state };
+}
+
+function ScheduledAgents({ lines }: { lines: AgentLine[] }) {
   return <section className="v5-panel" aria-label="Scheduled agents"><h2>Scheduled agents</h2>
-    {lines.map(line => <p key={line.id}><Link to={`/agents/${line.id}`}>{line.name}</Link> · <strong>{line.state}</strong> · {line.reason} · Last report: {line.reportTime ? <time dateTime={line.reportTime}>{line.reportTime.replace("T", " ").replace("Z", " UTC")}</time> : "not published"} ({line.reportAge}) · Owner report: {line.reportState} / {line.reportStatus} · {line.expiry}{line.expiryTime && <> · Owner expiry: <time dateTime={line.expiryTime}>{line.expiryTime.replace("T", " ").replace("Z", " UTC")}</time> ({line.expiryRelative})</>} · {line.overdue} · {line.schedule}</p>)}
+    {lines.map(line => <p key={line.id}><Link to={`/agents/${line.id}`}>{line.name}</Link> · <strong>{line.state}</strong> · {line.reason} · Last report: {line.reportTime ? <time dateTime={line.reportTime}>{line.reportTime.replace("T", " ").replace("Z", " UTC")}</time> : "not published"} ({line.reportAge}) · Owner report: {line.reportState} / {line.reportStatus} · {line.expiry}{line.expiryTime && <> · Owner expiry: <time dateTime={line.expiryTime}>{line.expiryTime.replace("T", " ").replace("Z", " UTC")}</time> ({line.expiryRelative})</>} · {line.overdue} · {line.schedule} · <span className="v5-agent-conclusion">Advisor display text, no bot reads it: {line.conclusion ? <q>{line.conclusion}</q> : "not published"}</span></p>)}
     <p className="v5-muted">Report times, task state and shared scheduler state come from owner reads. Cadence, role rotation and overdue rules are not published. A loop recipe alone is not scheduling evidence.</p>
   </section>;
 }
 
-function AgentCatalogRow({ agent }: { agent: V5Agent }) {
+function AgentCatalogRow({ agent, line }: { agent: V5Agent; line?: AgentLine }) {
   const blockers = reasonList(agent);
+  const shown = catalogState(agent, line);
   return <Link to={`/agents/${encodeURIComponent(agent.id)}`} className="v5-catalog-row">
-    <div className="v5-agent-glyph"><Bot size={19} /></div><div className="v5-catalog-main"><div className="v5-catalog-title"><h2>{agent.name}</h2><Status state={agent.status} label={agent.status === "ready" ? "Ready" : "Blocked"} /></div><p>{agent.description}</p>
+    <div className="v5-agent-glyph"><Bot size={19} /></div><div className="v5-catalog-main"><div className="v5-catalog-title"><h2>{agent.name}</h2><Status state={shown.state} label={shown.label} /></div><p>{agent.description}</p>
       <div className="v5-catalog-meta"><span>Task <b>{agent.task_id ?? "Unavailable"}</b></span><span>Model <b>{agent.model || "Unavailable"}</b></span><span>Tools <b>{agent.tools.length}</b></span><span>Skills <b>{agent.skills.length}</b></span><span>Loops <b>{agent.loops.length}</b></span></div>
       {blockers.length > 0 && <div className="v5-blocker-inline"><AlertTriangle size={14} /><span>{blockers.join(" · ")}</span></div>}
     </div><ChevronRight className="v5-row-chevron" size={17} />
@@ -301,6 +322,7 @@ export function AgentDetailPage() {
   const [tab, setTab] = useState<"playbook" | "skills" | "tools" | "notes">("playbook");
   const detailQuery = useQuery({ queryKey: ["v5-agent", id], queryFn: () => v5Api.agent(id), enabled: !!id });
   const workspace = useWorkspace();
+  const now = usePaperClock();
   const [notes, setNotes] = useState<string | null>(null);
   const inspect = useMutation({ mutationFn: () => v5Api.inspect(id), onSuccess: (session) => { cacheSession(queryClient, session); navigate(`/sessions/${encodeURIComponent(session.id)}`); } });
   const report = useMutation({ mutationFn: () => v5Api.report(id), onSuccess: (session) => { cacheSession(queryClient, session); navigate(`/sessions/${encodeURIComponent(session.id)}`); } });
@@ -331,12 +353,15 @@ export function AgentDetailPage() {
   if (detailQuery.isError) return <QueryError query={detailQuery} retry={() => void detailQuery.refetch()} />;
   const agent = detailQuery.data;
   const blockers = reasonList(agent);
+  const retained = retainReports(agentReportStore, workspace, now);
+  const line = scheduledAgentLines(workspace, now, retained).find(row => row.id === agent.id);
+  const shown = catalogState(agent, line);
   const displayNotes = notes ?? agent.notes;
   const tabs = ["playbook", "skills", "tools", "notes"] as const;
   return <>
     <div className="v5-back-row"><Link to="/agents">Agents</Link><ChevronRight size={14} /><span>{agent.name}</span></div>
-    <PageHeading title={agent.name} description={agent.description} actions={<Status state={agent.status} label={agent.status === "ready" ? "Ready" : "Blocked"} />} />
-    <ScheduledAgents read={workspace} agentId={agent.id} />
+    <PageHeading title={agent.name} description={agent.description} actions={<Status state={shown.state} label={shown.label} />} />
+    <ScheduledAgents lines={line ? [line] : []} />
     <div className="v5-agent-meta-line"><span>Task <b>{agent.task_id ?? "Unavailable"}</b></span><span>Model <b>{agent.model || "Unavailable"}</b></span><span>Mode <b>{agent.mode}</b></span><span>Policy <b>{agent.policy.execution_enabled ? "Execution enabled" : "Execution disabled"}</b></span></div>
     {blockers.length > 0 && <section className="v5-blocker-panel"><AlertTriangle size={18} /><div><strong>Agent readiness is blocked</strong><ul>{blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul></div></section>}
     {actionError && <div className="v5-action-error" role="alert"><AlertTriangle size={15} />{actionError.message}</div>}
@@ -345,7 +370,7 @@ export function AgentDetailPage() {
       <div className="v5-safe-action"><button className="v5-button" onClick={() => report.mutate()} disabled={!canRequest || report.isPending}><FileText size={16} />{report.isPending ? "Requesting report…" : "Request report"}</button><span>{canRequest ? `Bounded to ${effectiveModel} and this agent’s configured task profile.` : unavailableReason(agent, workspace, profile?.enabled, !!effectiveModel)}</span></div>
       <div className="v5-safe-action"><button className="v5-button" onClick={() => startLoop.mutate()} disabled={!canStartLoop || startLoop.isPending}><Play size={16} />{startLoop.isPending ? "Starting report loop…" : "Start report loop"}</button><span>{agent.loops[0] ? `${agent.loops[0].name}: ≥ ${duration(boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.frequency_sec ?? 900)}, ≤ ${boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.max_ticks ?? 1} ticks` : "No report loop is configured."}</span></div>
     </section>
-    {agent.task_id && <TaskLatestReports reports={workspace.data?.advisor?.latest_by_task} agents={[agent]} taskId={agent.task_id} />}
+    {agent.task_id && <TaskLatestReports reports={retained.reports} failedAt={retained.failedAt} agents={[agent]} taskId={agent.task_id} />}
     <div className="v5-agent-layout">
       <section className="v5-panel v5-agent-content-panel">
         <div className="v5-tabs" role="tablist" aria-label="Agent details">{tabs.map((key) => <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? "is-selected" : ""} onClick={() => setTab(key)}>{key === "playbook" ? "Playbook" : key === "skills" ? `Skills (${agent.skills.length})` : key === "tools" ? "Tools & policy" : "Notes"}</button>)}</div>

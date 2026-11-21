@@ -94,7 +94,7 @@ test("enabled scheduler and recent accepted reports do not publish a role schedu
   const data = scheduledWorkspace();
   const lines = scheduledAgentLines({ data }, now);
   for (const line of lines) {
-    assert.equal(line.state, "Last report accepted");
+    assert.equal(line.state, "Current until 12:00:01 UTC");
     assert.match(line.reason, /Owner shared scheduler enabled: true/);
     assert.equal(line.schedule, "schedule not published");
     assert.doesNotMatch(JSON.stringify(line), /Running on schedule|Advisor config schedules|15-minute|45 min/);
@@ -256,7 +256,8 @@ test("the actual catalog renders owner times and expiry with unpublished schedul
   assert.match(section, /2026-11-15 11:58:00.000 UTC/);
   assert.match(section, /ago/);
   assert.match(section, / · expired · /);
-  assert.equal((section.match(/schedule not published/g) || []).length, 3);
+  // Three role lines, plus the one expired role whose state names its unpublished schedule.
+  assert.equal((section.match(/schedule not published/g) || []).length, 4);
   assert.equal((section.match(/overdue rule not published/g) || []).length, 3);
   assert.doesNotMatch(section, /Schedule \(advisor config\)|Running on schedule|15-minute|45 min|60 min/);
   assert.ok(html.indexOf(section) < html.indexOf('class="v5-agent-catalog"'));
@@ -343,11 +344,11 @@ test("round2 current report expires between owner refreshes and becomes historic
   const data = scheduledWorkspace();
   const read = { data };
   const current = scheduledAgentLines(read, now)[0];
-  assert.equal(current.state, "Last report accepted");
+  assert.equal(current.state, "Current until 12:00:01 UTC");
   assert.equal(current.reportState, "CURRENT_REPORT");
   for (const [offset, age] of [[1000, "0s ago"], [2000, "1s ago"]]) {
     const expired = scheduledAgentLines(read, now + offset)[0];
-    assert.equal(expired.state, `Last report expired at 2026-11-15 12:00:01.000 UTC (${age})`);
+    assert.equal(expired.state, `Expired ${age} · schedule not published`);
     assert.equal(expired.reportState, "was CURRENT_REPORT");
     assert.equal(expired.reportStatus, "ACCEPTED");
   }
@@ -414,7 +415,7 @@ for (const [name, record] of [["missing result", {}], ["null result", { result: 
     assert.equal(lines[0].state, "Unavailable");
     assert.match(lines[0].reason, /^Advisor state not read: .*record.result/);
     assert.equal(lines[0].reportTime, null);
-    assert.equal(lines[1].state, "Last report accepted");
+    assert.equal(lines[1].state, "Current until 12:00:01 UTC");
     assert.match(renderPage("AgentsPage", { data }), /Advisor state not read: .*record.result/);
   });
 }
@@ -452,9 +453,9 @@ test("round2 mounted agent panels advance age and expiry without a new query res
     await act(async () => { for (const { callback, delay } of intervals.values()) if (delay <= 2000) callback(); });
     const text = panelText();
     assert.ok(text.includes("2m 2s ago"), "mounted panel must advance age with unchanged query data");
-    assert.match(text, /Last report expired at 2026-11-15 12:00:01.000 UTC \(1s ago\)/);
+    assert.match(text, /Expired 1s ago · schedule not published/);
     assert.match(text, /was CURRENT_REPORT/);
-    assert.doesNotMatch(text, /Last report accepted|not expired/);
+    assert.doesNotMatch(text, /Current until|Last report accepted|not expired/);
     assert.equal([...intervals.values()].filter(timer => timer.delay === 1000).length, 1, "both panels share one clock interval");
     assert.equal(data.advisor.latest_by_task.market_context.status, "CURRENT_REPORT");
   } finally {

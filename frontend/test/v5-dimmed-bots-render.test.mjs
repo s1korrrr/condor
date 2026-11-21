@@ -263,6 +263,6 @@ test('Bots admits values at the 120 s cap and withholds them beyond it', () => {
     const html = current.render();
     assert.doesNotMatch(html, /class="paper-dimmed"/);
     assert.ok(metrics(html).every(match => !match[2].includes('USDC')));
-    assert.equal(metric(html, 'Open executors'), 'Not published');
+    assert.equal(metric(html, 'Open executors'), 'Not published', 'a read beyond the cap is not "the rows actually read"');
   } finally {current.close();}
 });

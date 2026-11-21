@@ -9,6 +9,7 @@ import { utcExact } from "./shown.mjs";
 import { readHelm } from "./V5Helm";
 import { readMoney, V5Money } from "./V5Money";
 import "./market.css";
+import { V5PauseNotice } from "./V5PauseNotice";
 
 const tone = (value: unknown) => {
   const shown = ownerDisplay(value, "signed").tone;
@@ -38,6 +39,7 @@ export function V5Overview() {
     <div className="v5m-row">
       <article className="v5m-card">
         <h3><NavLink to="/bots">V5 paper bot</NavLink></h3>
+        <V5PauseNotice />
         {money.isPending ? <p role="status" className="v5m-hint">Reading the money record…</p>
           : money.isError ? <p role="alert" className="v5m-hint">Money record unavailable: {money.error.message}.</p>
           : !v5Values ? <p className="v5m-hint">{v5.newest?.gap ? `No values recorded yet: ${String(v5.newest.gap).replaceAll("_", " ")}.` : "Nothing recorded yet."}</p>

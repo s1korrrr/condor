@@ -1,0 +1,4 @@
+/* Bots truth (W-T2): owner codes in small print, the entry-pause banner and the last-fill-per-pair list. */
+.owner-code { font-size: 0.78em; opacity: 0.75; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.paper-entry-pause p { margin: 0.15rem 0; }
+.paper-last-fills ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }

@@ -6,6 +6,7 @@ import { activeLots, breakEvenDistanceDetail, exactSignedSum, moneySampleState }
 import { PAIRS, latestFinalCandle, type Candles } from "./paper-candles";
 import type { MoneyRead } from "./money-api";
 import { utcMinute } from "./shown.mjs";
+import { executorsOpenSetUnknown, sellOrdersPartial } from "./bots-truth";
 
 export function PaperPositions({ positions, executors, decisions, wallet, now, valuesAt = now, asOf = null, prices = {}, money }: { positions?: PaperRead; executors?: PaperRead; decisions?: PaperRead; wallet?: PaperRead; now: number; valuesAt?: number; asOf?: number | null; prices?: Record<string, Candles | undefined>; money?: MoneyRead }) {
   const newest = latest(Array.isArray(money?.rows) ? money.rows : [], "v5").newest;
@@ -35,7 +36,7 @@ export function PaperPositions({ positions, executors, decisions, wallet, now, v
     const protection = projections?.map(item => item.verified ? item.protectedExit : item.ownerProtectedExit);
     const unknown = protection?.filter(item => item === null).length ?? 0;
     const ownerReported = !paperCompleteRead(executors, valuesAt);
-    const sellOrders = !protection ? "— · position read unavailable" : unknown ? `— · protection unknown for ${unknown} lot(s)` : `${protection.filter(Boolean).length} of ${protection.length} · ${ownerReported ? "owner-reported · executor cross-check unavailable" : "verified protected exits"}`;
+    const sellOrders = !protection ? "— · position read unavailable" : unknown ? `— · protection unknown for ${unknown} lot(s)` : executorsOpenSetUnknown(executors, valuesAt) ? sellOrdersPartial(executors, pair, valuesAt) : `${protection.filter(Boolean).length} of ${protection.length} · ${ownerReported ? "owner-reported · executor cross-check unavailable" : "verified protected exits"}`;
     return <article className="paper-pair" key={pair}><h3>{coin}</h3><p><strong title={profit === null ? undefined : `${ownerTitleText(coinMoney?.realized)} + ${ownerTitleText(coinMoney?.unrealized)} = ${ownerTitleText(profit)}`}>{profit === null ? "—" : usdc(profit)}</strong> · profit or loss</p><p className="paper-caption">{profit === null ? "— · per-coin profit sample not published" : `Realized plus unrealized · sample as of ${paperTime(newest?.at_ms, now)} · ${sample?.state === "late" ? "late; next sample was due" : "next sample due"} ${utcMinute(sample?.next) ?? "unknown"}`}</p>
       <p className="paper-caption">Price: {price ? <><span title={ownerTitleText(String(price.close))}>{formatPrice(price.close)} USDC</span> · {paperTime(price.at, now)}</> : "— · latest closed candle unavailable or old"}</p>
       {asOf !== null && <p className="paper-caption">Position and breakeven below are not current · {paperTime(asOf, now)}</p>}

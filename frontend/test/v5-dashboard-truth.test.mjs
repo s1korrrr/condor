@@ -129,8 +129,9 @@ test('position cards cross-check protections and retain the snapshot buy decisio
   const verified = {...final3.executors, data:[executor]};
   assert.match(render(verified), /1 of 1 · verified protected exits/);
   assert.match(render({...verified,data:[{...executor,protected_exit:false}]}), /— · protection unknown for 1 lot\(s\)/);
-  assert.match(render({...verified,completeness:'partial'}), /1 of 1 · owner-reported · executor cross-check unavailable/);
-  assert.match(render(undefined), /1 of 1 · owner-reported · executor cross-check unavailable/);
+  // W-T2: an executors read that cannot prove the open set is partial · not published, never an owner-flag count.
+  assert.match(render({...verified,completeness:'partial'}), /partial · not published · 1 active executor for BNB among the 1 row read/);
+  assert.match(render(undefined), /partial · not published · no executor rows read/);
   const unknownPositions = {...positions, data:[{...row, protected_exit:null}]};
   assert.match(renderToStaticMarkup(React.createElement(PaperPositions,{positions:unknownPositions,executors:{...verified,completeness:'partial'},now})), /— · protection unknown for 1 lot\(s\)/);
   assert.match(render(verified), /Buy decision: Held · Candle gap · .*UTC/);

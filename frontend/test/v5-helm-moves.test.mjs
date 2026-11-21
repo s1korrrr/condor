@@ -47,7 +47,7 @@ test('a recent decision keeps the page from saying idle and is named in the head
 
 test('no executor count appears on the page, whatever the status carries', context => {
   context.mock.method(Date, 'now', () => NOW_S * 1000);
-  const html = render({ active_executors: { count: 3, observed_at: NOW_S - 5 }, symbols: [coin('BNB-USDC', { at: NOW_S - 40, reason: 'sell_placed' })] });
+  const html = render({ symbols: [coin('BNB-USDC', { at: NOW_S - 40, reason: 'sell_placed' })] });
   assert.doesNotMatch(html, /executors/i);
   assert.doesNotMatch(html, /Active executor/i);
 });
@@ -64,7 +64,7 @@ function renderOverview(extra) {
 
 test('Overview names the same latest decision and no count', context => {
   context.mock.method(Date, 'now', () => NOW_S * 1000);
-  const html = renderOverview({ active_executors: { count: 3, observed_at: NOW_S - 5 }, symbols: [coin('BNB-USDC', { at: NOW_S - 125, reason: 'store_executor_action' })] });
+  const html = renderOverview({ symbols: [coin('BNB-USDC', { at: NOW_S - 125, reason: 'store_executor_action' })] });
   assert.match(html, /<strong>Running, waiting for a signal<\/strong>/);
   assert.match(html, /Latest decision: BNB-USDC 6 Nov 01:49 UTC · 2 min ago · store executor action\./);
   assert.doesNotMatch(html, /active executor/i);

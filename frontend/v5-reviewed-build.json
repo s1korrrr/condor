@@ -1,14 +1,14 @@
 {
-  "entry": "assets/v5-BUc4Xxob.js",
-  "entrySha256": "1b7f6ee3e1dd3a8ce8d1f13071cf994ef7dd76b119b5cd01d7d5a5945108b42a",
+  "entry": "assets/v5-C-a-Ikzx.js",
+  "entrySha256": "b14a95e0953a720a291b37d9e428a18acaed6f938e2ed9d21f244d6e03d86a4b",
   "files": {
-    "assets/ArchivedBotsTab-CwTEH-7y.js": "30ab630216b1f31c55880da594eb1974679f9bfc5d10844cb7d1f0c1fdb8900d",
-    "assets/BacktestingTab-CCinGmmw.js": "8ed90bd8237c828ee7f9cd5ce33ca55796e50ccb658557c9f2fb6210d79c26c6",
-    "assets/BotRunsTab-COlFTjXS.js": "a80f9342a515e96ad589f5f262786ee326b32276bc54401f7d741547dea5b18f",
-    "assets/Bots-CvvnN7l0.js": "d38a2b858155f07bf48db015ef0455fbaa06e68d45c3b38c11f49281e463ff42",
-    "assets/EditorTab-CP_8fAIA.js": "c32e563445d046b332a278bd989cbbeb19083a43a5d68d174f199964073e8f32",
-    "assets/ReportingDesk-BMRwpQwC.js": "9280befb692bc2e02843414423c66e29546123c79888927f6b10b2c41bee806e",
-    "assets/Research-BAnITMnH.js": "eeb8392372ddc46dcdea75de311c4a4b0b6c90cd1031fa1d8409fb40ef593a39",
+    "assets/ArchivedBotsTab-Czlhx0JL.js": "eac682d6669e1622ad4663e1450ef42b8be662b9d2037d1a8e7a868cfc0cb6c8",
+    "assets/BacktestingTab-CTbGMu8I.js": "3485de55981046dde28beb3db7debd83f2fdbf9486f9e33794b2ab61b01fe95e",
+    "assets/BotRunsTab-C6RD13Om.js": "f233bfd397ef571dc4bfc8760963448c501edd44ac8098e837c731e5e09d784a",
+    "assets/Bots-DhA0wffJ.js": "745b25d14859bbd37a401df23be60a90045f7314c7fb31c38ae77b8326ee3e6d",
+    "assets/EditorTab-DOqSMU7K.js": "94daaaa46dfe78970d90f8218d8062d093d91a0acb808264d016244209d332f0",
+    "assets/ReportingDesk-UKl7GiWN.js": "b87bf381de0f31a575eebe3fc2dc222d9efc7e7766d549d3f927c29981f2d258",
+    "assets/Research-Bhk4Z_Dw.js": "f24427ab1dd58a8d72e2e3006eca272157dcb35dc4ca9e03cb5f343570bb2c6d",
     "assets/Research-Cvfp2KsA.css": "916f31a5135daa527b09a463a4025d2c79f0045b3e12e373ed7174ffdc792e0a",
     "assets/createLucideIcon-CHYez9aM.js": "21500e156f72d7ccb10855d4c226a2fbba081c982e81e341da3e0a937e0939fd",
     "assets/database-jgzHY8Ha.js": "68aa74896b301b7706f352f22d460b4a63ece13b5fce363e9156ded6233f0290",
@@ -17,16 +17,16 @@
     "assets/lightweight-charts.production-B93ZwU1a.js": "bfac31718fca0d415c952dd791888bfb90da775f5d6e558dbd4eb796d75968df",
     "assets/preload-helper-Czpn1I53.js": "aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152",
     "assets/refresh-cw-CiCzW4Mf.js": "5a58c1d3afe4ffa5da62ca220066b9838b18ec2059bf4233a948c308b5688fc3",
+    "assets/src-BJWs1sz8.js": "9f5b6add5bbff7182ea33007c7c6110c0abda705ae3daf5bff8378070b988f96",
     "assets/src-DouG0c8k.css": "6ee32649831c059ae3714774049bd80ee83255b9fdf1a9621454388ba846acc9",
-    "assets/src-bPgnpckE.js": "33fc789112b3e788f8c2509518fa02ccb2e24eba29d6b4ac4439c69b2e7fda6a",
     "assets/trash-2--xYHccbr.js": "2c77f5a47adfe9a6ee901356cd2ad909e307808e81834997d4f258d68d1c3fc1",
-    "assets/v5-BUc4Xxob.js": "1b7f6ee3e1dd3a8ce8d1f13071cf994ef7dd76b119b5cd01d7d5a5945108b42a",
+    "assets/v5-C-a-Ikzx.js": "b14a95e0953a720a291b37d9e428a18acaed6f938e2ed9d21f244d6e03d86a4b",
     "assets/v5-DSJ6Mp_S.css": "5ca2edd63874303b6d5ccf8ce6568b4a35d670f518608aec7be3abb1abbf252f",
     "condor.png": "4c13a4b5ea445054b56a1cb54e0f5c8e7b2e2982e5d1f8611fa6254836901e90",
     "condor_old.jpeg": "c6e93221b2367b263f24813ba4ac5957b20ceb5b13a2773d6f8e219167bdb8e5",
     "favicon.svg": "61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66",
     "hyperliquid.png": "faa5f91aec8158bd69c5fca8e48f61985ab410eddc8e0d6c867325bbb709e419",
     "icons.svg": "b45fa506195cfcdef406ba9f0c77b36ddc1a7c224040926ec70abc2fdea7b93a",
-    "v5.html": "c652e7088a360c2cf80c51e61cce1051e6bd98d69546c604071e6c43921af737"
+    "v5.html": "575a3e4c008f0bd3616d00f2d895d0712524849d0f6a2e19210e109f332860a1"
   }
 }

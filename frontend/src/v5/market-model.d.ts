@@ -2,7 +2,7 @@ import type { SeriesPoint } from "@/features/quant-ops/kit/series";
 
 export type MarketCoin = "BTC" | "ETH" | "BNB" | "SOL" | "XRP";
 export const MARKET_COINS: MarketCoin[];
-export const REFERENCE: { venue: string; quote: string; spot: string; perpetual: string };
+export const REFERENCE: { venue: string; quote: string; spot: string; perpetual: string; basis: string };
 export const BOT_MARKET: { venue: string; quote: string; spot: string };
 export const STALE_AFTER_S: number;
 

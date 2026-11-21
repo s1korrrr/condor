@@ -12,7 +12,9 @@ import { decimalShift, fixed, ownerDisplay, ownerTitleText } from './format.mjs'
 
 export const MARKET_COINS = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP'];
 /** Reference lanes for prices and the spot/perpetual premium: one venue so both legs share quote and clock. */
-export const REFERENCE = { venue: 'binance', quote: 'USDT', spot: 'binance__spot', perpetual: 'binance__perpetual' };
+export const REFERENCE = { venue: 'binance', quote: 'USDT', spot: 'binance__spot', perpetual: 'binance__perpetual',
+  /** Said wherever a Binance reference price is shown: the bots trade the OKX -USDC pairs (BOT_MARKET), not these. */
+  basis: 'Binance spot, USDT pairs; not the OKX USDC pairs the bots trade (Market › Bot market)' };
 /** The market the V5 bots trade: the candle store's OKX spot lane, quoted in USDC (the Bots page reads the same lane). */
 export const BOT_MARKET = { venue: 'okx', quote: 'USDC', spot: 'okx__spot' };
 /** A price older than this (owner time plus time since the read arrived) is marked as old on its tile. */

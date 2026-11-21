@@ -1,5 +1,5 @@
 import { readCandleStore } from "./candle-store-api";
-import { BOT_MARKET, MARKET_COINS, REFERENCE, type CandleRead } from "./market-model.mjs";
+import { BOT_MARKET, MARKET_COINS, type CandleRead } from "./market-model.mjs";
 import { hasPaperCandlePair, type Symbols } from "./paper-candles";
 
 /** The owner's candle response for one pair; `pair` and `venue` are what the owner says it served. */
@@ -13,9 +13,6 @@ export const venueTitle = (venue: string) => VENUES[venue] ?? venue.replace("_io
 /** "OKX spot · BNB-USDC": the venue and the pair a price is for, so no price is read as another market's. */
 export const marketLabel = (venue: string, pair: string) => `${venueTitle(venue)} spot · ${pair}`;
 export const botPair = (coin: string) => `${coin}-${BOT_MARKET.quote}`;
-export const referencePair = (coin: string) => `${coin}-${REFERENCE.quote}`;
-/** One line that says which market the Binance reference views use, and that it is not the bots'. */
-export const referenceBasis = () => `${venueTitle(REFERENCE.venue)} spot, ${REFERENCE.quote} pairs; not the ${venueTitle(BOT_MARKET.venue)} ${BOT_MARKET.quote} pairs the bots trade (Market › Bot market)`;
 
 /** true / false from the store's symbol list; null when the list was not read (the price read then answers). */
 export function botPresence(symbols: Symbols | undefined, pair: string): boolean | null {

@@ -8,7 +8,6 @@ import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
 import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
-import { referenceBasis } from "./market-bot";
 import { ownerTitleText, axis, count, decimalPercentChange, fixed, ownerDisplay, pct, pnl, rationalPercent, signed, usdc, utcMin, type OwnerValueKind } from './format.mjs';
 import { exactSignedSum } from "./bots-position-model.mjs";
 import { OwnerValue } from "./OwnerValue";
@@ -115,7 +114,7 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
       <div className="v5m-row">
         <article className="v5m-card"><h3>By coin</h3><p className="v5m-hint">Lifetime closed-trade profit and held-coin gain or loss per coin, latest sample</p>
           <BarsChart rows={coinRows} bars={[{ id: "realized", label: "Closed-trade profit", color: CHART.positive }, { id: "unrealized", label: "Held-coin gain or loss", color: CHART.negative }]} height={200} ariaLabel="V5 P&L by coin" emptyText="No per-coin values in the latest sample." /></article>
-        <article className="v5m-card"><h3>Against holding the five coins</h3><p className="v5m-hint">Equal weights in {MARKET_COINS.join(", ")} over the candle store's 7 days ({referenceBasis()})</p>
+        <article className="v5m-card"><h3>Against holding the five coins</h3><p className="v5m-hint">Equal weights in {MARKET_COINS.join(", ")} over the candle store's 7 days ({REFERENCE.basis})</p>
           {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : hold.isPending ? <p role="status" className="v5m-hint">Reading 7 days of prices…</p> : !holdView || holdView.pct == null ? <p className="v5m-hint">Holding comparison unavailable{holdView?.missing.length ? `: no 7-day closes for ${holdView.missing.join(", ")}` : ": the five coins share no first and last minute"}. The basket is never reduced to fewer coins.</p> : <div className="v5m-stats">
             <Stat label="Holding the five coins" value={pct(holdView.pct)} title={holdView.title} note={`from ${at(holdView.startS! * 1000)} to ${at(holdView.endS! * 1000)}`} />
             <Stat label="V5 wallet equity" value={pct(v5View?.pct)} title={v5View?.title} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${utcExact(v5View.startMs) ?? "unknown time"} to ${utcExact(v5View.endMs) ?? "unknown time"}${sameWindow ? " · same window" : " · its own record, not the same window"}`} />

@@ -18,11 +18,12 @@ const modules = () => frontendModules({ '@/features/quant-ops/kit/charts': { Spa
 const bot = () => modules().load('v5/market-bot.ts');
 
 test('labels name the venue and the pair; the Binance basis says it is not the bots market', () => {
-  const { marketLabel, botPair, referenceBasis } = bot();
+  const { marketLabel, botPair } = bot();
+  const { REFERENCE } = modules().load('v5/market-model.mjs');
   assert.equal(marketLabel('okx', 'BNB-USDC'), 'OKX spot · BNB-USDC');
   assert.equal(marketLabel('binance', 'BNB-USDT'), 'Binance spot · BNB-USDT');
   assert.deepEqual(COINS.map(botPair), ['BTC-USDC', 'ETH-USDC', 'BNB-USDC', 'SOL-USDC', 'XRP-USDC']);
-  assert.equal(referenceBasis(), 'Binance spot, USDT pairs; not the OKX USDC pairs the bots trade (Market › Bot market)');
+  assert.equal(REFERENCE.basis, 'Binance spot, USDT pairs; not the OKX USDC pairs the bots trade (Market › Bot market)');
 });
 
 test('the Market page labels the Binance coin cards and mounts the Bot market lane; Money labels its benchmark venue', () => {

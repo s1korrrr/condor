@@ -67,6 +67,39 @@ export function helmCoinRow(row, { fresh, nowS }) {
   return result;
 }
 
+/** Time, age and reason of a published point in time; "not published" when the owner gives nothing, never a guess. */
+function whenAndWhy(atS, reason, nowS) {
+  const time = utcMin(typeof atS === 'number' ? atS * 1000 : null, typeof nowS === 'number' ? nowS * 1000 : undefined);
+  const why = typeof reason === 'string' && reason ? words(reason) : null;
+  if (!time) return why ? `time not published · ${why}` : 'not published';
+  const ago = typeof nowS !== 'number' ? '' : nowS < atS ? ' · ahead of this read' : ` · ${age(nowS - atS)} ago`;
+  return `${time}${ago} · ${why ?? 'reason not published'}`;
+}
+
+/** One coin's last decision as Helm published it (condor's `last_decision {at, reason}`). */
+export function helmLastDecision(row, { nowS } = {}) {
+  return whenAndWhy(row?.last_decision?.at, row?.last_decision?.reason, nowS);
+}
+
+/** Helm's active-executor count with the time of the report it came from; "Not published" when the read is not complete. */
+export function helmExecutors(status, { nowS } = {}) {
+  const read = status?.active_executors;
+  if (!read || typeof read.count !== 'number') return { value: 'Not published', note: 'the Helm runtime status has no complete executor report', count: null };
+  const time = utcMin(typeof read.observed_at === 'number' ? read.observed_at * 1000 : null, typeof nowS === 'number' ? nowS * 1000 : undefined);
+  const ago = time && typeof nowS === 'number' && nowS >= read.observed_at ? ` · ${age(nowS - read.observed_at)} ago` : '';
+  return { value: count(read.count), note: time ? `reported ${time}${ago}` : 'report time not published', count: read.count };
+}
+
+/** What Helm itself says it has been doing: active executors and the newest published decision, each "not published" when it is. */
+function helmActivity(status, nowS) {
+  const executors = helmExecutors(status, { nowS }).count;
+  const parts = [executors == null ? 'active executors not published' : executors === 0 ? 'no active executors' : `${count(executors)} active executor${executors === 1 ? '' : 's'}`];
+  const decided = (Array.isArray(status.symbols) ? status.symbols : []).filter(row => typeof row?.last_decision?.at === 'number');
+  const newest = decided.reduce((best, row) => (best && best.last_decision.at >= row.last_decision.at ? best : row), null);
+  parts.push(newest ? `latest decision ${newest.pair ?? 'a coin'} ${helmLastDecision(newest, { nowS })}` : 'no decision time published');
+  return `Activity: ${parts.join(' · ')}.`;
+}
+
 /**
  * Entry-check results that mean "no entry signal yet" in the engine's signal policies (modular_spot_core/signals.py).
  * Only these upgrade a ready gate to "waiting for a signal"; any other coin hold (planner codes such as bag_gap_not_met,
@@ -74,7 +107,7 @@ export function helmCoinRow(row, { fresh, nowS }) {
  */
 const SIGNAL_WAIT = new Set(['no_rebound', 'low_volatility', 'high_volatility', 'no_turn', 'score_below_minimum', 'no_breakout']);
 
-export function helmHeadline(read) {
+export function helmHeadline(read, { nowS } = {}) {
   if (!read) return { text: '', good: false };
   if (read.state === 'UNBOUND') return { text: 'Not connected to this dashboard', good: false };
   // No status file: only absence is known. The runtime may be stopped or still starting; neither is claimed.
@@ -102,9 +135,13 @@ export function helmHeadline(read) {
     const symbols = Array.isArray(status.symbols) ? status.symbols : [];
     const other = symbols.filter(row => !SIGNAL_WAIT.has(row?.candidate_hold));
     if (symbols.length && !other.length) {
-      return { text: 'Running, waiting for a signal', good: true, detail: `Every coin idle: ${[...new Set(symbols.map(row => row.candidate_hold))].map(words).join(', ')}.` };
+      // "No entry signal" is all the holds say. Idle would also claim no executor and no decision, which they do not show.
+      const active = helmExecutors(status, { nowS }).count;
+      return { text: active ? `Running, no entry signal · ${count(active)} active executor${active === 1 ? '' : 's'}` : 'Running, waiting for a signal', good: true,
+        detail: `No coin has an entry signal: ${[...new Set(symbols.map(row => row.candidate_hold))].map(words).join(', ')}. ${helmActivity(status, nowS)}` };
     }
-    return { text: 'Running, entry gate ready', good: null, detail: other.map(row => `${row?.pair ?? 'a coin'}: ${row?.candidate_hold ? words(row.candidate_hold) : 'no entry check published this tick'}`).join(' · ') || undefined };
+    const holds = other.map(row => `${row?.pair ?? 'a coin'}: ${row?.candidate_hold ? words(row.candidate_hold) : 'no entry check published this tick'}`).join(' · ');
+    return { text: 'Running, entry gate ready', good: null, detail: `${holds ? `${holds}. ` : ''}${helmActivity(status, nowS)}` };
   }
   return { text: `Publishing status, ready: ${tri(status?.ready, 'yes', 'no')}`, good: false };
 }

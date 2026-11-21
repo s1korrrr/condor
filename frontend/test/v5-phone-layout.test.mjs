@@ -227,7 +227,7 @@ test('Helm native phone cards retain every desktop coin field and withhold stale
     window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Helm));
     const phone = window.document.querySelector('.v5m-helm-mobile');
     const cells = window.document.querySelectorAll('.v5m-helm-table tbody td');
-    assert.equal(cells.length, 5);
+    assert.equal(cells.length, 6);
     for (const cell of cells) assert.ok(phone.textContent.includes(cell.textContent), cell.textContent);
     return phone;
   };

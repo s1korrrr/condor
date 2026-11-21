@@ -30,6 +30,7 @@ PLAIN = re.compile(r"[A-Za-z0-9 _.,:;()'%+=-]{1,256}")  # sentences: no / \ @ ~ 
 DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,30})?")
 PAIR = re.compile(r"[A-Z0-9]{1,16}-[A-Z0-9]{1,16}")
 MAX_SAFE = 2**53 - 1
+MAX_EXECUTOR_ROWS = 512  # per native report; more is treated as an unreadable report, not truncated
 
 
 def _code(value: Any) -> str | None:
@@ -104,6 +105,27 @@ def _money(payload: dict) -> dict[str, str | None] | None:
                 break
         totals[key] = None if total is None else format(total.quantize(Decimal("0.00000001")), "f")
     return totals
+
+
+def _active_executors(shown: Any, payload: dict) -> dict[str, Any] | None:
+    """Executors the runtime reports active, with the time of that report; unknown unless every current report is complete.
+
+    Same completeness rule as ``_money``: no reports, a controller without a current report or an unreadable executor
+    row means the count is not published, never zero. Only the count leaves this module (no executor ids or configs).
+    """
+    reports = payload.get("native_reports")
+    if not isinstance(reports, dict) or not reports or payload.get("unavailable_controller_ids") or len(reports) > 16:
+        return None
+    active = 0
+    for report in reports.values():
+        executors = report.get("executors") if isinstance(report, dict) else None
+        if not isinstance(executors, list):
+            return None
+        if len(executors) > MAX_EXECUTOR_ROWS or any(not isinstance(row, dict) or not isinstance(row.get("is_active"), bool) for row in executors):
+            shown.withheld += 1
+            return None
+        active += sum(row["is_active"] for row in executors)
+    return {"count": active, "observed_at": shown.one(payload.get("report_observed_at"), _epoch_s)}
 
 
 class _Projection:
@@ -228,6 +250,7 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         # One recipe across controllers, or None when none or several are published (never a guess).
         "recipe_version": recipes[0] if len(recipes) == 1 else None,
         "money": _money(payload),
+        "active_executors": _active_executors(shown, payload),
     }
     status["withheld"] = shown.withheld
     stale = now - generated > STALE_AFTER_SECONDS

@@ -4,7 +4,7 @@ import { RotateCw } from "lucide-react";
 import { ownerTitleText, age, count, usdc, utcMin } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { tri } from "./shown.mjs";
-import { helmCoinRow, helmHeadline } from "./helm-model.mjs";
+import { helmCoinRow, helmExecutors, helmHeadline, helmLastDecision } from "./helm-model.mjs";
 import "./market.css";
 
 type Amount = number | string | null;
@@ -26,6 +26,8 @@ export type HelmStatus = {
   gates: ({ gate: string | null; note: string | null } | null)[];
   symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: { held_amount: Amount; breakeven_price: Amount } | null; last_decision: { at: number | null; reason: string | null } | null; signal: HelmSignal | null }[];
   withheld: number;
+  /** Executors the runtime reports active and when it reported them; null when no complete report is published. */
+  active_executors?: { count: number; observed_at: number | null } | null;
 };
 export type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; status: HelmStatus | null };
 
@@ -52,7 +54,11 @@ export function V5Helm() {
   const rejectionCount = status?.control_rejections?.count;
   const noRejections = rejectionCount === 0 || typeof rejectionCount === "string" && /^-?0+(?:\.0+)?$/.test(rejectionCount);
   const lastAt = at(status ? status.generated_at * 1000 : null);
-  const { text: headline, good, detail } = helmHeadline(read);
+  const nowS = status ? status.generated_at + (ageS ?? status.age_s) : undefined;
+  const { text: headline, good, detail } = helmHeadline(read, { nowS });
+  const executors = helmExecutors(status, { nowS });
+  // The coin rows are derived views; the decision comes from the owner row of the same pair.
+  const decisions = new Map((status?.symbols ?? []).map(row => [row.pair, helmLastDecision(row, { nowS })]));
   return <div className="v5m">
     <header className="v5m-head">
       <div><h1>Helm</h1><p>Helm paper bot ({read?.bot ?? "helm_v5_paper"}) · its own published runtime state · read-only, no controls on this page.</p></div>
@@ -79,17 +85,18 @@ export function V5Helm() {
           <Stat label="Kill switch" value={tri(status.kill_switch, "On", "Off")} warn={status.kill_switch !== false} />
           <Stat label="Phase · profile" value={status.phase ?? "—"} note={status.profile_id ?? undefined} />
           <Stat label="Runtime actions" value={count(status.actions)} note={`${count(status.steps)} engine steps`} />
+          <Stat label="Active executors" value={executors.value} note={executors.note} warn={executors.count == null} />
           <Stat label="Funding" value={words(status.funding)} note={`adaptive actions ${words(status.adaptive_actions)}`} />
         </div>
         <section className="v5m-section"><header><h2>Coins</h2><span>Why each coin is or is not buying, and its bag</span></header>
           {coins.length ? <>
-            <div className="v5m-card v5m-helm-table"><table className="v5m-heat v5m-helm-coins"><thead><tr><th>Pair</th><th>Buy rule</th><th>Where it is now</th><th className="is-number">Held</th><th className="is-number">Breakeven</th></tr></thead><tbody>{coins.map(row => <tr key={row.pair}>
-              <td>{row.pair}</td><td>{row.rule}</td><td><CoinSignal row={row} /></td>
+            <div className="v5m-card v5m-helm-table"><table className="v5m-heat v5m-helm-coins"><thead><tr><th>Pair</th><th>Buy rule</th><th>Where it is now</th><th>Last decision</th><th className="is-number">Held</th><th className="is-number">Breakeven</th></tr></thead><tbody>{coins.map(row => <tr key={row.pair}>
+              <td>{row.pair}</td><td>{row.rule}</td><td><CoinSignal row={row} /></td><td><Decision text={decisions.get(row.pair)} /></td>
               <td className="is-number">{row.held}{row.bagNote && <small>{row.bagNote}</small>}</td><td className="is-number">{row.breakeven}</td>
             </tr>)}</tbody></table></div>
             <div className="v5m-helm-mobile">{coins.map(row => <article className="v5m-card v5m-helm-coin" key={row.pair}>
               <h3>{row.pair}</h3><p>{row.rule}</p><CoinSignal row={row} />
-              <dl className="v5m-kv"><dt>Held</dt><dd>{row.held}</dd><dt>Breakeven</dt><dd>{row.breakeven}</dd></dl>
+              <dl className="v5m-kv"><dt>Last decision</dt><dd><Decision text={decisions.get(row.pair)} /></dd><dt>Held</dt><dd>{row.held}</dd><dt>Breakeven</dt><dd>{row.breakeven}</dd></dl>
               {row.bagNote && <small>{row.bagNote}</small>}
             </article>)}</div>
           </> : <p className="v5m-hint">No per-coin state published.</p>}
@@ -105,6 +112,11 @@ export function V5Helm() {
 
 function CoinSignal({ row }: { row: ReturnType<typeof helmCoinRow> }) {
   return <div className="v5m-helm-signal"><span className={row.rsi.startsWith("—") ? "v5m-muted" : undefined} title={ownerTitleText(row.rsiTitle)}>{row.rsi}</span><span className={row.atr.startsWith("—") ? "v5m-muted" : undefined}>{row.atr}</span><small>{row.decision}</small><small>{row.owner}</small><small>{row.sample}</small></div>;
+}
+
+/** One coin's last decision as Helm published it; "not published" is muted so it never reads as a value. */
+function Decision({ text = "not published" }: { text?: string }) {
+  return <span className={text === "not published" ? "v5m-muted" : undefined}>{text}</span>;
 }
 
 function Stat({ label, value, note, warn, title }: { label: string; value: ReactNode; note?: ReactNode; warn?: boolean; title?: string }) {

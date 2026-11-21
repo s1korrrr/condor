@@ -28,8 +28,8 @@ test('labels name the venue and the pair; the Binance basis says it is not the b
 
 test('the Market page labels the Binance coin cards and mounts the Bot market lane; Money labels its benchmark venue', () => {
   const market = readFileSync(new URL('../src/v5/V5Market.tsx', import.meta.url), 'utf8');
-  assert.match(market, /Coin cards: \{venueName\(REFERENCE\.venue\)\} spot, \{REFERENCE\.quote\} pairs\. These are not the \{BOT_MARKET\.quote\} pairs the bots trade/);
-  assert.match(market, /<V5BotMarket range=\{range\} enabled=\{\(coins\.isSuccess \|\| coins\.isError\) && !coins\.isFetching\}/);
+  assert.match(market, /Coin cards: \{venueTitle\(REFERENCE\.venue\)\} spot, \{REFERENCE\.quote\} pairs\. These are not the \{BOT_MARKET\.quote\} pairs the bots trade/);
+  assert.match(market, /<V5BotMarket range=\{range\} enabled=\{binanceViewSettled\}/);
   const { load } = frontendModules({
     '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: queryKey[0] === 'v5-money' ? { rows: [], daily: [], range: '7d', sampler: true } : queryKey[0] === 'v5-profile' ? { candle_store: { configured: true } } : undefined, isPending: false, refetch() {} }) },
     '@/features/quant-ops/kit/charts': { BarsChart: () => null, TimeSeriesChart: () => null },

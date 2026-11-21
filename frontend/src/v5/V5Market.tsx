@@ -12,6 +12,7 @@ import { cohortCoverageDisplay, selectedCohortCoverage } from "./evidence";
 import { V5MarketDetail, type DetailRead } from "./V5MarketDetail";
 import { V5MarketFeatures } from "./V5MarketFeatures";
 import { V5BotMarket } from "./V5MarketBot";
+import { venueTitle } from "./market-bot";
 import { v5Api } from "./api";
 import { candleCurrent, hourlyReturns, marketAverageTitle, marketHolding, marketSentence, windowChange } from "./market-header";
 import { readMarketPaper } from "./market-paper";
@@ -116,6 +117,9 @@ export function V5Market() {
   const retryCandles = () => void coins.refetch();
   const crossFailure = cross.isError ? failure(cross.error) : cross.data?.find(read => read.error)?.error;
   const crossVenues = [...new Set((cross.data ?? []).flatMap(read => (read.table ?? []).map(row => row.venue)))].sort();
+  // The Bot lane starts only once the whole Binance view has settled: the coin reads and the cross-venue reads (which start when the coins settle).
+  // Mid-batch it also waits before every read, so it never starts one next to a Binance or cross-venue read in flight.
+  const binanceViewSettled = (coins.isSuccess || coins.isError) && !coins.isFetching && !cross.isPending && !cross.isFetching;
 
   return <div className="v5m">
     <header className="v5m-head">
@@ -132,7 +136,7 @@ export function V5Market() {
       : <p className="v5m-summary" title={ownerTitleText(marketAverageTitle(changes))}>{marketSentence(changes, range)}</p>}
     {failed.length > 0 && !candlesUnavailable && <ReadNotice kind="unavailable" title="Some prices could not be loaded" reason={`The candle store did not return prices for ${failed.join(", ")}. ${candleFailureReason}`} onRetry={retryCandles} />}
 
-    <p className="v5m-hint v5m-basis">Coin cards: {venueName(REFERENCE.venue)} spot, {REFERENCE.quote} pairs. These are not the {BOT_MARKET.quote} pairs the bots trade; see Bot market below.</p>
+    <p className="v5m-hint v5m-basis">Coin cards: {venueTitle(REFERENCE.venue)} spot, {REFERENCE.quote} pairs. These are not the {BOT_MARKET.quote} pairs the bots trade; see Bot market below.</p>
     <TileGrid label="Coins" min={200}>{tiles.map((tile, index) => tile ? <article key={tile.coin} className={`v5m-card v5m-coin is-clickable${selected === tile.coin ? " is-selected" : ""}`} role="button" tabIndex={0} aria-pressed={selected === tile.coin} aria-label={`${tile.coin}: open statistics, candles and venue detail`} onClick={() => select(tile.coin)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(tile.coin); } }}>
       <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span><span className="v5m-change" title={changes[tile.coin] == null ? undefined : `result ${ownerTitleText(changes[tile.coin])}%; first close ${ownerTitleText(reads[tile.coin]?.spot?.buckets[0]?.[4])}; last close ${ownerTitleText(reads[tile.coin]?.spot?.buckets.at(-1)?.[4])}`}>{range} {changes[tile.coin] == null ? "—" : pct(changes[tile.coin])}</span></div>
       <strong className="v5m-price" title={ownerTitleText(current[tile.coin] ? String(tile.last) : undefined)}>{current[tile.coin] ? `${price(tile.last)} ${REFERENCE.quote}` : "—"}</strong><small className={`v5m-asof${current[tile.coin] ? "" : " is-old"}`}>{current[tile.coin] ? "Close" : "— close not current"} · {minuteText(tile.lastTime + 60)} · {ageText(age(tile.coin, tile.lastTime))}</small>
@@ -145,7 +149,7 @@ export function V5Market() {
       {reads[MARKET_COINS[index]]?.error && <small className="v5m-asof">{reads[MARKET_COINS[index]].error}</small>}
       <HoldingLine holding={holdings[MARKET_COINS[index]]} error={paper.isError ? paper.error.message : null} now={now} />
     </article>)}</TileGrid>
-    <V5BotMarket range={range} enabled={(coins.isSuccess || coins.isError) && !coins.isFetching} now={now} color={COIN_COLOR} holding={(coin, last) => <HoldingLine holding={marketHolding(coin, paper.isSuccess ? paper.data : undefined, bot, last, BOT_MARKET.quote, now, paper.isPending)} error={paper.isError ? paper.error.message : null} now={now} />} />
+    <V5BotMarket range={range} enabled={binanceViewSettled} now={now} color={COIN_COLOR} holding={(coin, last) => <HoldingLine holding={marketHolding(coin, paper.isSuccess ? paper.data : undefined, bot, last, BOT_MARKET.quote, now, paper.isPending)} error={paper.isError ? paper.error.message : null} now={now} />} />
     {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} tileRead={range === "24h" && coins.isSuccess && reads[selected]?.spot ? reads[selected] as unknown as DetailRead : null} /> : tiles.some(Boolean) && <p className="v5m-hint v5m-tip">Choose a coin for its prices, coverage and price gaps across venues.</p>}
 
     {candlesReady && <>

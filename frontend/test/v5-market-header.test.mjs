@@ -331,3 +331,33 @@ test('Market candle requests use the selected range for both lanes of every coin
     assert.deepEqual(calls.map(url => url.searchParams.get('lane')), coins.flatMap(() => ['binance__spot', 'binance__perpetual']));
   } finally { globalThis.fetch = original; }
 });
+
+test('a bag equal to the pair total does not hide a different bag subtotal; whole-position wording needs no active lots', () => {
+  const replay = () => ['status', 'positions', 'decisions'].map(fixture);
+  const reads = replay(), now = reads[0].generated_at_ms, bot = reads[0].bot_id;
+  // BTC: active 0.00256705, held reconciliation 0.002483, pair total 0.00505005; the owner's bag is the held reconciliation rows.
+  const honest = marketHolding('BTC', reads, bot, 90000, 'USDC', now);
+  assert.equal(honest.text, 'V5 holds 0.00505 · bag 0.002483 · +12.1% to bag breakeven');
+  assert.equal(honest.warning, undefined);
+  const wrong = replay();
+  wrong[2].data.controllers.find(row => row.pair === 'BTC-USDC').custom_info.bag.held_amount = '0.00505005';
+  const mismatch = marketHolding('BTC', wrong, bot, 90000, 'USDC', now);
+  assert.equal(mismatch.text, 'V5 holds 0.00505 · — to breakeven');
+  assert.equal(mismatch.warning, 'bag-mismatch');
+  assert.match(mismatch.reason, /^No breakeven shown: the strategy's bag is 0\.00505 BTC; the position rows total 0\.00505 \(0\.002483 in held reconciliation rows\)\. .*active lots included/);
+  assert.doesNotMatch(mismatch.text + (mismatch.exact ?? '') + (mismatch.title ?? ''), /12\.1|breakeven price|bag 0/);
+  // The same bag with the active lots gone is the whole position: no "bag" qualifier.
+  const whole = replay(), btc = whole[1].data.filter(row => row.trading_pair !== 'BTC-USDC' || row.state !== 'active');
+  whole[1].data = btc;
+  whole[2].data.controllers.find(row => row.pair === 'BTC-USDC').custom_info.bag.held_amount = '0.002483000';
+  const only = marketHolding('BTC', whole, bot, 90000, 'USDC', now);
+  assert.equal(only.text, 'V5 holds 0.002483 · +12.1% to breakeven');
+  assert.equal(only.warning, undefined);
+  // With no retained-bag rows reported, a bag equal to the total is still the whole position only while no active lot is held.
+  const lots = paper(), plain = marketHolding('BTC', lots, lots[0].bot_id, 90.8, 'USDT', lots[0].generated_at_ms);
+  assert.equal(plain.warning, undefined);
+  lots[1].data[1].state = 'active';
+  const withActive = marketHolding('BTC', lots, lots[0].bot_id, 90.8, 'USDT', lots[0].generated_at_ms);
+  assert.equal(withActive.warning, 'bag-mismatch');
+  assert.match(withActive.text, / · — to breakeven$/);
+});

@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { readCandleStore } from "./candle-store-api";
 import { BOT_MARKET, MARKET_COINS, type CandleRead } from "./market-model.mjs";
 import { hasPaperCandlePair, type Symbols } from "./paper-candles";
@@ -19,20 +20,43 @@ export function botPresence(symbols: Symbols | undefined, pair: string): boolean
   return Array.isArray(symbols?.rows) ? hasPaperCandlePair(symbols, pair) : null;
 }
 
+/** Market's other candle reads: the Binance coin queries and the cross-venue query (`V5Market`). */
+const NEIGHBOURS = [["v5-market", "coins"], ["v5-market", "cross"]];
+
+/**
+ * Resolves once none of Market's Binance coin reads or cross-venue reads is in flight (their fetch state, read now and on
+ * every change); rejects with the abort reason as soon as `signal` aborts, so a superseded batch waits no longer.
+ */
+export function whenNeighboursIdle(client: QueryClient, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      if (!signal.aborted && NEIGHBOURS.some(queryKey => client.isFetching({ queryKey }) > 0)) return;
+      stop();
+      if (signal.aborted) reject(signal.reason); else resolve();
+    };
+    const stop = () => { unsubscribe(); signal.removeEventListener("abort", check); };
+    const unsubscribe = client.getQueryCache().subscribe(check);
+    signal.addEventListener("abort", check);
+    check();
+  });
+}
+
 /**
  * The five bot coins' OKX -USDC candles, one read at a time (the candle owner serves two reads at once and the
  * Binance view and the cross-venue table share them). Each coin is reported as soon as it is read.
+ * `before` runs ahead of every read (not once per batch): the page waits there until its other reads are idle.
  * A pair the symbol list lacks is "missing" without a read; a read that fails or answers for another pair is an error.
- * An abort is checked again after each read settles: an abandoned batch reports nothing more and reads nothing more.
+ * An abort is checked again after each wait and read: an abandoned batch reports nothing more and reads nothing more.
  * (The owner may still finish the read it admitted, so an abort does not free its slot.)
  */
-export async function readBotMarket({ range, symbols, signal, onCoin, read = readCandleStore }: { range: string; symbols?: Symbols; signal?: AbortSignal; onCoin?: (row: BotCoin) => void; read?: Reader }): Promise<BotCoin[]> {
+export async function readBotMarket({ range, symbols, signal, onCoin, before, read = readCandleStore }: { range: string; symbols?: Symbols; signal?: AbortSignal; onCoin?: (row: BotCoin) => void; before?: () => Promise<void>; read?: Reader }): Promise<BotCoin[]> {
   const rows: BotCoin[] = [];
   for (const coin of MARKET_COINS) {
     signal?.throwIfAborted();
     const pair = botPair(coin);
     let row: BotCoin = { coin, pair, state: "missing", read: null, error: null, receivedAt: Date.now() };
     if (botPresence(symbols, pair) !== false) {
+      if (before) { await before(); signal?.throwIfAborted(); }
       try {
         const candles = await read<BotCandles>("candles", { lane: BOT_MARKET.spot, pair, range }, signal);
         const wrong = candles.pair !== undefined && candles.pair !== pair ? candles.pair : candles.venue !== undefined && candles.venue !== BOT_MARKET.venue ? `${candles.venue} ${candles.pair ?? pair}` : null;

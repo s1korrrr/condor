@@ -106,13 +106,16 @@ export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot:
   if (!holdings || (positions.data as Record<string, unknown>[]).filter(row => row.trading_pair === pair).some(row => decimal(row.quantity) == null)) return unavailable('V5 has not reported exact amounts for all positions.');
   let reason: string | null = null, gap: string | null = null;
   let warning: 'bag-mismatch' | undefined;
-  // The bag's amount equals the whole pair (nothing else held) or exactly its retained-bag rows. Anything else is a real disagreement.
+  // The breakeven belongs to the bag: the owner's retained-bag rows. The bag's amount must equal their subtotal, whatever the pair holds
+  // besides. It is the whole position only when nothing else is held: no active lots (or, with no retained-bag rows reported, every row together).
   const bagRows = holdings.states.find(row => row.state === BAG_ROWS)?.quantity ?? null;
-  const covers = !bag?.heldAmount || decimal(bag.heldAmount) == null ? null : decimal(bag.heldAmount) === decimal(holdings.total) ? 'all' : bagRows != null && decimal(bag.heldAmount) === decimal(bagRows) ? 'bag' : 'none';
-  const base = pair.split('-')[1];
+  const amount = decimal(bag?.heldAmount), total = decimal(holdings.total), subtotal = decimal(bagRows);
+  const activeLots = holdings.states.some(row => row.state === 'active');
+  const covers = amount == null ? null : subtotal != null ? (amount !== subtotal ? 'none' : subtotal === total ? 'all' : 'bag') : amount === total && !activeLots ? 'all' : 'none';
+  const pairQuote = pair.split('-')[1];
   if (!covers) reason = 'Breakeven comparison needs an exact amount from the strategy.';
-  else if (covers === 'none') { warning = 'bag-mismatch'; reason = `No breakeven shown: the strategy's bag is ${formatCoin(bag!.heldAmount)} ${coin}; the position rows total ${formatCoin(holdings.total)}${bagRows != null ? ` (${formatCoin(bagRows)} in ${BAG_ROWS.replace('_', ' ')} rows)` : ''}. The breakeven belongs to the bag, and no group of rows matches it.`; }
-  else if (base !== quote) reason = `The market price on this card is in ${quote}. Breakeven is in ${base}. The Bot market card compares in ${base}.`;
+  else if (covers === 'none') { warning = 'bag-mismatch'; reason = `No breakeven shown: the strategy's bag is ${formatCoin(bag!.heldAmount)} ${coin}; the position rows total ${formatCoin(holdings.total)}${bagRows != null ? ` (${formatCoin(bagRows)} in ${BAG_ROWS.replace('_', ' ')} rows)` : ''}. ${amount === total ? "The bag's amount equals every row together, active lots included, and the breakeven belongs to the bag's own rows alone." : 'The breakeven belongs to the bag, and no group of rows matches it.'}`; }
+  else if (pairQuote !== quote) reason = `The market price on this card is in ${quote}. Breakeven is in ${pairQuote}. The Bot market card compares in ${pairQuote}.`;
   else if (last == null) reason = 'Breakeven comparison needs a recent price.';
   else if (decimal(bag!.breakevenPrice) == null || decimal(bag!.breakevenPrice)! <= 0n) reason = 'V5 has not reported a usable breakeven price.';
   else gap = change(last, bag!.breakevenPrice!, 1);

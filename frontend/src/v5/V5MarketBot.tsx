@@ -4,7 +4,7 @@ import { SparkChart } from "@/features/quant-ops/kit/charts";
 import { TileGrid } from "@/features/quant-ops/kit/grid";
 import { ageSeconds, BOT_MARKET, coinTile, MARKET_COINS } from "./market-model.mjs";
 import { candleCurrent, missingEnd, windowChange } from "./market-header";
-import { botPair, marketLabel, readBotMarket, withCoin, type BotCoin } from "./market-bot";
+import { botPair, marketLabel, readBotMarket, whenNeighboursIdle, withCoin, type BotCoin } from "./market-bot";
 import { usePaperCandleSymbols } from "./paper-candles";
 import { age as ageShort, ownerTitleText, pct, price, utcMin } from "./format.mjs";
 
@@ -14,7 +14,8 @@ const ageText = (seconds: number | null) => seconds == null ? "age unknown" : `$
 
 /**
  * "Bot market": the candle store's okx__spot -USDC series for the five bot coins, the market the bots trade.
- * Starts after the Binance view settles and reads one coin at a time, painting each coin as it arrives.
+ * Starts after the Binance view settles and reads one coin at a time, painting each coin as it arrives. Before every read it waits
+ * until Market's Binance coin and cross-venue reads are idle, so it never starts a read while either is in flight.
  * A refresh paints over the last complete read, one coin at a time; a finished read replaces any partial one.
  */
 export function V5BotMarket({ range, enabled, now, color, holding }: { range: string; enabled: boolean; now: number; color: Record<string, string>; holding: (coin: string, last: number | null) => ReactNode }) {
@@ -23,10 +24,10 @@ export function V5BotMarket({ range, enabled, now, color, holding }: { range: st
   // run may publish: a run the user left, or one a newer run replaced, can still finish a read after its abort and must not overwrite.
   const [progress, setProgress] = useState<{ range: string; run: number; rows: BotCoin[] } | null>(null);
   const newest = useRef(0);
-  const reads = useQuery({ queryKey: ["v5-market", "bot", range], enabled: enabled && !symbols.isPending, retry: false, refetchInterval: REFRESH_MS, queryFn: ({ signal }) => {
+  const reads = useQuery({ queryKey: ["v5-market", "bot", range], enabled: enabled && !symbols.isPending, retry: false, refetchInterval: REFRESH_MS, queryFn: ({ client, signal }) => {
     const run = ++newest.current;
     setProgress({ range, run, rows: [] });
-    return readBotMarket({ range, symbols: symbols.data, signal, onCoin: row => { if (newest.current === run) setProgress(previous => ({ range, run, rows: withCoin(previous?.run === run ? previous.rows : [], row) })); } });
+    return readBotMarket({ range, symbols: symbols.data, signal, before: () => whenNeighboursIdle(client, signal), onCoin: row => { if (newest.current === run) setProgress(previous => ({ range, run, rows: withCoin(previous?.run === run ? previous.rows : [], row) })); } });
   } });
   // The last complete read stays under a refresh, so the coins not yet re-read keep their prices; a finished query beats partial progress.
   const partial = reads.isFetching && progress?.range === range ? progress.rows : [];
@@ -34,7 +35,7 @@ export function V5BotMarket({ range, enabled, now, color, holding }: { range: st
   const waiting = !enabled ? "Waiting for the Binance view…" : symbols.isPending ? "Reading the store's symbol list…" : "Reading…";
   return <section className="v5m-section" aria-label="Bot market">
     <header><h2>Bot market</h2><span>{marketLabel(BOT_MARKET.venue, `*-${BOT_MARKET.quote}`)} · the pairs the V5 bots trade · {range}</span></header>
-    <p className="v5m-hint">The candle store's {BOT_MARKET.spot} lane, one coin at a time after the Binance view (5 price reads and one symbol list per refresh).{symbols.isError ? ` The symbol list could not be read (${symbols.error.message}); each price read says whether its pair exists.` : ""}</p>
+    <p className="v5m-hint">The candle store's {BOT_MARKET.spot} lane, one coin at a time after the Binance view (5 price reads per refresh; the symbol list is read once per session).{symbols.isError ? ` The symbol list could not be read (${symbols.error.message}); each price read says whether its pair exists.` : ""}</p>
     <TileGrid label="Bot market coins" min={200}>{MARKET_COINS.map(coin => {
       const row = rows.find(item => item.coin === coin);
       const pair = botPair(coin);

@@ -1,9 +1,8 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useMatch } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useMatch, useOutletContext } from "react-router-dom";
 import { ServerContext } from "@/hooks/useServer";
 import { AuthContext, type AuthState } from "@/lib/auth";
-import type { User } from "@/lib/auth-session";
 import { V5ApiError, v5Api } from "./api";
 import { botsOwnerUnavailableReason, paperWorkspaceReads } from "./policy";
 import { AgentsPage, AgentDetailPage, SessionDetailPage, SessionsPage } from "./V5Pages";
@@ -65,25 +64,32 @@ function AuthGate() {
   useEffect(() => { if (auth.data?.authenticated === false || (auth.isError && auth.error instanceof V5ApiError && auth.error.status === 401)) client.removeQueries({ predicate: query => query.queryKey[0] !== "v5-auth" }); }, [auth.isError, auth.error, auth.data?.authenticated]);
   if (auth.isPending) return <main className="v5-loading-screen"><div className="v5-spinner" /><span>Connecting to the V5 workspace…</span></main>;
   if (auth.isError && auth.error instanceof V5ApiError && auth.error.status === 401) return <LoginPage />;
-  if (auth.isError) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>Workspace connection failed</strong><span>{auth.error.message}</span><button className="v5-button" onClick={() => void auth.refetch()}>Retry connection</button></div></main>;
-  if (!auth.data.authenticated) return <LoginPage />;
-  return <Outlet />;
+  if (auth.isError && !auth.data) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>Workspace connection failed</strong><span>{auth.error.message}</span><button className="v5-button" onClick={() => void auth.refetch()}>Retry connection</button></div></main>;
+  if (!auth.data?.authenticated) return <LoginPage />;
+  return <Outlet context={auth.isError} />;
 }
 
 function ProfileGate() {
   const onBots = useMatch("/bots");
+  const authReconnecting = useOutletContext<boolean>();
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
+  const profileReconnecting = profile.error instanceof V5ApiError && [0, 502, 503].includes(profile.error.status);
   if (profile.isPending) return <main className="v5-loading-screen" role="status"><div className="v5-spinner" /><span>Loading RSIBOT V5…</span></main>;
-  if (profile.isError) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>V5 profile unavailable</strong><span>{profile.error.message}</span><button className="v5-button" onClick={() => void profile.refetch()}>Retry</button></div></main>;
+  if (profile.isError && (!profileReconnecting || !profile.data)) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>V5 profile unavailable</strong><span>{profile.error.message}</span><button className="v5-button" onClick={() => void profile.refetch()}>Retry</button></div></main>;
   if (profile.data.schema_version !== "v5-dashboard-profile.v1" || profile.data.server.server_id !== "rsibot-v5" || profile.data.server.host !== "razer" || profile.data.server.mode !== "reports-only" || profile.data.server.execution_enabled !== false || profile.data.condor.base_revision !== "ff8858df765cffe4d325fde384f7a2eecdf51641") return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>V5 profile rejected</strong><span>The server returned an unexpected identity, baseline, mode, or execution state.</span></div></main>;
-  return <V5Providers><V5AppShell>{!onBots && profile.data.readiness.paper_owner?.bot_name && <PaperJournalNotice bot={profile.data.readiness.paper_owner.bot_name} />}<SystemPauseProvider><Suspense fallback={<p role="status">Loading page…</p>}><Outlet /></Suspense></SystemPauseProvider></V5AppShell></V5Providers>;
+  const reconnecting = authReconnecting || profileReconnecting;
+  return <V5Providers isAuthenticated={!reconnecting}>
+    <V5AppShell reconnecting={reconnecting}>
+      {!onBots && profile.data.readiness.paper_owner?.bot_name && <PaperJournalNotice bot={profile.data.readiness.paper_owner.bot_name} />}
+      <SystemPauseProvider><Suspense fallback={<p role="status">Loading page…</p>}><Outlet /></Suspense></SystemPauseProvider>
+    </V5AppShell>
+  </V5Providers>;
 }
 
-function V5Providers({ children }: { children: React.ReactNode }) {
+function V5Providers({ children, isAuthenticated }: { children: React.ReactNode; isAuthenticated: boolean }) {
   const [logoutError, setLogoutError] = useState(false);
-  const user: User | null = null;
-  const auth: AuthState = useMemo(() => ({ user, token: null, recoveryReason: null, isAuthenticated: true, loginWithToken: async () => false, loginWithTailscale: async () => false, logout: () => { setLogoutError(false); void confirmLogout(v5Api.logout, () => clearSessionCache(client), () => setLogoutError(true)); } }), []);
-  return <AuthContext value={auth}><ServerContext value={{ server: "rsibot-v5", setServer: () => {} }}>{logoutError && <div role="alert" className="fixed right-4 top-16 z-50 rounded-md border border-[var(--color-red)] bg-[var(--color-surface)] p-4 text-sm">Sign out failed. Your session is still active; please retry.</div>}{children}</ServerContext></AuthContext>;
+  const auth: AuthState = useMemo(() => ({ user: null, token: null, recoveryReason: null, isAuthenticated, loginWithToken: async () => false, loginWithTailscale: async () => false, logout: () => { setLogoutError(false); void confirmLogout(v5Api.logout, () => clearSessionCache(client), () => setLogoutError(true)); } }), [isAuthenticated]);
+  return <AuthContext value={auth}><ServerContext value={{ server: "rsibot-v5", setServer: () => {} }}>{logoutError && <div role="alert" className="fixed right-4 top-16 z-50 rounded-md border border-[var(--color-red)] bg-[var(--color-surface)] p-4 text-sm">Sign out failed. Please retry.</div>}{children}</ServerContext></AuthContext>;
 }
 
 export function V5App() {

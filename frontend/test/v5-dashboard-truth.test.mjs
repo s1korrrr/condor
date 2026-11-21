@@ -80,6 +80,10 @@ test('paper read failures are typed: timeouts are transient, invalid publication
   assert.match(invalid, /failed validation/);
   assert.doesNotMatch(invalid, /Transient/);
   assert.match(paperReadFailureMessage(502, null), /^Paper observations are unavailable \(HTTP 502\)/);
+  const rejected = paperReadFailureMessage(502, {detail:{code:'upstream_auth_rejected'}});
+  assert.match(rejected, /owner rejected the dashboard's credentials/i);
+  assert.doesNotMatch(rejected, /sign in again/i);
+  assert.match(paperReadFailureMessage(401, null), /sign in again/i);
   assert.match(paperReadFailureMessage(409, null), /snapshot changed/);
 });
 

@@ -38,13 +38,16 @@ from .learning_projection import PROJECTION_PATHS, ResearchOwnerLearningSource
 from .paper import PaperObservation, read_paper_status
 from .read_bridge import read_research, read_tradepad, research_route, tradepad_route
 from .state import StateCapacityError, WorkspaceState
-from .upstream import UpstreamError, V5Upstream
+from .upstream import UPSTREAM_AUTH_REJECTION_STATUSES, UpstreamError, V5Upstream
 
 logger = logging.getLogger(__name__)
 COOKIE_NAME = "rsi_v5_session"
 SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 MARKET_PAGE_COINS = frozenset({"BTC", "ETH", "BNB", "SOL", "XRP"})
 MAX_JSON_BODY_BYTES = 16_384
+LOGIN_FAILURE_WINDOW_SEC = 60
+LOGIN_FAILURE_LIMIT = 8
+MAX_LOGIN_FAILURE_KEYS = 1024
 MAX_TICKS_PER_LOOP = 96
 MIN_LOOP_FREQUENCY_SEC = 900
 ADVISOR_TASK_IDS = ("market_context", "source_quality")
@@ -331,9 +334,10 @@ def create_app(
     money_task: asyncio.Task | None = None
     # The recorder's own last failure, shown by the money route; a failure never stops the loop.
     money_errors: dict[str, Any] = {"count": 0, "last": None, "at_ms": None}
-    active_loop_task: asyncio.Task | None = None
+    active_loop_task: asyncio.Task[dict[str, Any] | None] | None = None
     active_loop_stop: asyncio.Event | None = None
     login_failures: dict[str, list[float]] = {}
+    dashboard_token_error_logged = False
 
     async def money_section(path: str) -> dict | None:
         """The same validated paper read the pages use; None when the owner read is refused or fails."""
@@ -430,9 +434,17 @@ def create_app(
         return response
 
     def dashboard_token() -> str:
+        nonlocal dashboard_token_error_logged
         token = read_secret_file(config.dashboard_token_file)
-        if not 32 <= len(token) <= 256:
-            raise HTTPException(503, detail={"code": "dashboard_auth_unavailable"})
+        if not token:
+            if not dashboard_token_error_logged:
+                logger.error(
+                    "V5 dashboard token file is unreadable or invalid; "
+                    "check the V5_DASHBOARD_TOKEN_FILE mount and permissions"
+                )
+                dashboard_token_error_logged = True
+            raise HTTPException(503, detail={"code": "server_token_unavailable"})
+        dashboard_token_error_logged = False
         return token
 
     def caller_key(request: Request) -> str:
@@ -488,9 +500,7 @@ def create_app(
 
     @app.get("/api/v5/auth")
     async def auth_status(request: Request):
-        token = read_secret_file(config.dashboard_token_file)
-        if not 32 <= len(token) <= 256:
-            return {"authenticated": False}
+        token = dashboard_token()
         supplied = request.cookies.get(COOKIE_NAME, "")
         authenticated = bool(supplied and hmac.compare_digest(supplied, token))
         if authenticated and projection is not None:
@@ -636,6 +646,10 @@ def create_app(
             try:
                 payload = await api.observation(result["source_route"])
             except UpstreamError as exc:
+                if exc.http_status in UPSTREAM_AUTH_REJECTION_STATUSES:
+                    raise HTTPException(
+                        502, detail={"code": "upstream_auth_rejected"}
+                    ) from None
                 if result.get("section") == "accounting" and exc.http_status in {
                     404,
                     501,
@@ -656,19 +670,26 @@ def create_app(
     @app.post("/api/v5/auth/login")
     async def login(payload: LoginBody, request: Request, response: Response):
         check_origin(request)
-        now = time.monotonic()
-        key = caller_key(request)
-        attempts = [time for time in login_failures.get(key, []) if now - time < 60]
-        if len(attempts) >= 8:
-            raise HTTPException(429, detail={"code": "login_rate_limited"})
-        expected = read_secret_file(config.dashboard_token_file)
-        if not 32 <= len(expected) <= 256 or not hmac.compare_digest(
-            payload.token, expected
-        ):
+        expected = dashboard_token()
+        if not hmac.compare_digest(payload.token.encode(), expected.encode("ascii")):
+            now = time.monotonic()
+            key = caller_key(request)
+            if key not in login_failures and len(login_failures) >= MAX_LOGIN_FAILURE_KEYS:
+                for caller, recorded in list(login_failures.items()):
+                    if now - recorded[-1] >= LOGIN_FAILURE_WINDOW_SEC:
+                        del login_failures[caller]
+                if len(login_failures) >= MAX_LOGIN_FAILURE_KEYS:
+                    raise HTTPException(429, detail={"code": "login_rate_limited"})
+            attempts = [
+                stamp
+                for stamp in login_failures.get(key, [])
+                if now - stamp < LOGIN_FAILURE_WINDOW_SEC
+            ]
+            if len(attempts) >= LOGIN_FAILURE_LIMIT:
+                raise HTTPException(429, detail={"code": "login_rate_limited"})
             attempts.append(now)
             login_failures[key] = attempts
             raise HTTPException(401, detail={"code": "invalid_dashboard_token"})
-        login_failures.pop(key, None)
         response.set_cookie(
             COOKIE_NAME,
             expected,
@@ -1215,9 +1236,9 @@ def create_app(
         frequency_sec: int,
         max_ticks: int,
         stop: asyncio.Event,
-    ):
+    ) -> dict[str, Any] | None:
         try:
-            for index in range(max_ticks):
+            for _ in range(max_ticks):
                 try:
                     await asyncio.wait_for(stop.wait(), timeout=frequency_sec)
                     break
@@ -1245,24 +1266,15 @@ def create_app(
                     error=latest.get("error"),
                 )
                 current = store.session(session_id)
-                if current and current.get("status") != "RUNNING":
-                    break
-                if index + 1 >= max_ticks:
-                    store.finish_session(
-                        session_id,
-                        "COMPLETED",
-                        f"Bounded loop completed {max_ticks} report ticks",
-                    )
-                    break
+                if current is None or current["status"] != "RUNNING":
+                    return current
             else:
-                store.finish_session(
+                return store.finish_session(
                     session_id,
                     "COMPLETED",
                     f"Bounded loop completed {max_ticks} report ticks",
                 )
-            current = store.session(session_id)
-            if current and current.get("status") == "RUNNING":
-                store.finish_session(session_id, "STOPPED", "Report loop stopped")
+            return store.finish_session(session_id, "STOPPED", "Report loop stopped")
         except asyncio.CancelledError:
             store.finish_session(
                 session_id,
@@ -1277,7 +1289,7 @@ def create_app(
                 if isinstance(exc, StateCapacityError)
                 else "Report loop stopped after an internal error"
             )
-            store.finish_session(session_id, "FAILED", summary)
+            return store.finish_session(session_id, "FAILED", summary)
 
     @app.post("/api/v5/agents/{agent_id}/loops/start")
     async def start_loop(agent_id: str, payload: ReportLoopBody, request: Request):
@@ -1350,17 +1362,21 @@ def create_app(
             return session
         if active_loop_stop:
             active_loop_stop.set()
-        if active_loop_task is not None:
+        task = active_loop_task
+        if task is not None:
             # Let an in-flight upstream call reach its bounded timeout and be
-            # journaled before the loop exits; do not cancel a possible charge.
-            await active_loop_task
-            active_loop_task = None
-            active_loop_stop = None
-        if store.session(session_id).get("status") == "RUNNING":
-            store.finish_session(
+            # journaled. The task carries the terminal receipt through pruning.
+            terminal = await task
+            if active_loop_task is task:
+                active_loop_task = None
+                active_loop_stop = None
+        else:
+            terminal = store.finish_session(
                 session_id, "STOPPED", "Report loop stopped by operator"
             )
-        return session_response(session_id)
+        if terminal is None:
+            raise HTTPException(404, detail={"code": "session_not_found"})
+        return terminal
 
     @app.get("/api/v5/sessions", dependencies=[Depends(require_auth)])
     async def list_sessions():

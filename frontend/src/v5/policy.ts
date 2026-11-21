@@ -513,6 +513,9 @@ export function paperReadFailureMessage(status: number, body: unknown): string {
   const typed = [`HTTP ${status}`, code, upstreamCode, upstreamReason].filter(Boolean).join(" · ");
   if (status === 409) return "The owner snapshot changed. Refresh to read a coherent snapshot.";
   if (status === 401) return "Your workspace session expired. Sign in again.";
+  if (status === 502 && code === "upstream_auth_rejected") {
+    return "The observation owner rejected the dashboard's credentials. Check the observation API token configuration; your workspace session is still active.";
+  }
   if (status === 503 && (code === "upstream_timeout" || upstreamCode === "PAPER_READ_CAPACITY" && PAPER_TRANSIENT_UPSTREAM.has(upstreamReason ?? ""))) {
     return `Transient: the observation service did not answer within its read deadline (${typed}). This happens under host CPU load; the next refresh retries. No numbers are shown from an incomplete read.`;
   }

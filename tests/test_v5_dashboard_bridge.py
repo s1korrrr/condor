@@ -288,6 +288,7 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
             "/system/engine-inputs",
             "/system/readiness",
             "/system/settings",
+            "/system/operations",
             "/research",
             "/learning",
             "/research-factory",
@@ -314,14 +315,14 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
             "/secrets",
             "/agents/unknown",
             "/sessions/wrong",
-            "/system/operations",
+            "/system/unknown",
         ):
             response = client.get(path)
             assert response.status_code == 404
             assert "full V5 dashboard" not in response.text
         # A browser asking for an unknown page gets the app with 404 (it shows "Page not found"), never raw JSON;
         # API and asset paths, and non-HTML clients, keep the JSON 404.
-        for path in ("/nope", "/system/unknown", "/system/operations", "/market/DOGE", "/agents/unknown", "/sessions/wrong"):
+        for path in ("/nope", "/system/unknown", "/market/DOGE", "/agents/unknown", "/sessions/wrong"):
             response = client.get(path, headers=html)
             assert response.status_code == 404 and "full V5 dashboard" in response.text, path
         bare_api = client.get("/api", headers={"Accept": "text/html"})

@@ -1506,6 +1506,7 @@ def create_app(
         "/system/engine-inputs",
         "/system/readiness",
         "/system/settings",
+        "/system/operations",
         "/research",
         "/learning",
         "/research-factory",

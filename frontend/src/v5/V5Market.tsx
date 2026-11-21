@@ -145,7 +145,7 @@ export function V5Market() {
       {reads[MARKET_COINS[index]]?.error && <small className="v5m-asof">{reads[MARKET_COINS[index]].error}</small>}
       <HoldingLine holding={holdings[MARKET_COINS[index]]} error={paper.isError ? paper.error.message : null} now={now} />
     </article>)}</TileGrid>
-    <V5BotMarket range={range} enabled={coins.isSuccess || coins.isError} now={now} color={COIN_COLOR} holding={(coin, last) => <HoldingLine holding={marketHolding(coin, paper.isSuccess ? paper.data : undefined, bot, last, BOT_MARKET.quote, now, paper.isPending)} error={paper.isError ? paper.error.message : null} now={now} />} />
+    <V5BotMarket range={range} enabled={(coins.isSuccess || coins.isError) && !coins.isFetching} now={now} color={COIN_COLOR} holding={(coin, last) => <HoldingLine holding={marketHolding(coin, paper.isSuccess ? paper.data : undefined, bot, last, BOT_MARKET.quote, now, paper.isPending)} error={paper.isError ? paper.error.message : null} now={now} />} />
     {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} tileRead={range === "24h" && coins.isSuccess && reads[selected]?.spot ? reads[selected] as unknown as DetailRead : null} /> : tiles.some(Boolean) && <p className="v5m-hint v5m-tip">Choose a coin for its prices, coverage and price gaps across venues.</p>}
 
     {candlesReady && <>

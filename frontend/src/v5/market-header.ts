@@ -34,9 +34,17 @@ export function candleCurrent(read: CandleRead | null | undefined, received: num
   return Number.isFinite(age) && age >= 0 && age <= STALE_AFTER_S;
 }
 
+const usable = (row: CandleRead['buckets'][number] | undefined) => row?.[6] === 1 && row[4] != null;
+
+/** Which end of the window has no usable close: "start", "end" or "both"; "either" when both have one (the change itself was unusable). */
+export function missingEnd(read: CandleRead | null | undefined): 'start' | 'end' | 'both' | 'either' {
+  const start = usable(read?.buckets[0]), end = usable(read?.buckets.at(-1));
+  return !start && !end ? 'both' : !start ? 'start' : !end ? 'end' : 'either';
+}
+
 export function windowChange(read: CandleRead | null | undefined): string | null {
   const first = read?.buckets[0], last = read?.buckets.at(-1);
-  return first?.[6] === 1 && last?.[6] === 1 && first[4] != null && last[4] != null ? change(last[4], first[4]) : null;
+  return usable(first) && usable(last) ? change(last![4]!, first![4]!) : null;
 }
 
 export function marketAverageTitle(changes: Record<string, string | null>): string | undefined {

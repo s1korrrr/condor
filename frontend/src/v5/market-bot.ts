@@ -5,7 +5,7 @@ import { hasPaperCandlePair, type Symbols } from "./paper-candles";
 /** The owner's candle response for one pair; `pair` and `venue` are what the owner says it served. */
 export type BotCandles = CandleRead & { pair?: string; venue?: string };
 export type BotCoin = { coin: string; pair: string; state: "ok" | "missing" | "error"; read: BotCandles | null; error: string | null; receivedAt: number };
-type Reader = <T>(view: string, params?: Record<string, string>) => Promise<T>;
+type Reader = <T>(view: string, params?: Record<string, string>, signal?: AbortSignal) => Promise<T>;
 
 const VENUES: Record<string, string> = { binance: "Binance", okx: "OKX" };
 export const venueTitle = (venue: string) => VENUES[venue] ?? venue.replace("_io", ".io");
@@ -23,6 +23,8 @@ export function botPresence(symbols: Symbols | undefined, pair: string): boolean
  * The five bot coins' OKX -USDC candles, one read at a time (the candle owner serves two reads at once and the
  * Binance view and the cross-venue table share them). Each coin is reported as soon as it is read.
  * A pair the symbol list lacks is "missing" without a read; a read that fails or answers for another pair is an error.
+ * An abort is checked again after each read settles: an abandoned batch reports nothing more and reads nothing more.
+ * (The owner may still finish the read it admitted, so an abort does not free its slot.)
  */
 export async function readBotMarket({ range, symbols, signal, onCoin, read = readCandleStore }: { range: string; symbols?: Symbols; signal?: AbortSignal; onCoin?: (row: BotCoin) => void; read?: Reader }): Promise<BotCoin[]> {
   const rows: BotCoin[] = [];
@@ -32,13 +34,14 @@ export async function readBotMarket({ range, symbols, signal, onCoin, read = rea
     let row: BotCoin = { coin, pair, state: "missing", read: null, error: null, receivedAt: Date.now() };
     if (botPresence(symbols, pair) !== false) {
       try {
-        const candles = await read<BotCandles>("candles", { lane: BOT_MARKET.spot, pair, range });
+        const candles = await read<BotCandles>("candles", { lane: BOT_MARKET.spot, pair, range }, signal);
         const wrong = candles.pair !== undefined && candles.pair !== pair ? candles.pair : candles.venue !== undefined && candles.venue !== BOT_MARKET.venue ? `${candles.venue} ${candles.pair ?? pair}` : null;
         row = wrong ? { ...row, state: "error", error: `The owner answered for ${wrong}, not ${marketLabel(BOT_MARKET.venue, pair)}.`, receivedAt: Date.now() } : { ...row, state: "ok", read: candles, receivedAt: Date.now() };
       } catch (cause) {
         row = { ...row, state: "error", error: cause instanceof Error ? cause.message : "owner read unavailable", receivedAt: Date.now() };
       }
     }
+    signal?.throwIfAborted();
     rows.push(row);
     onCoin?.(row);
   }

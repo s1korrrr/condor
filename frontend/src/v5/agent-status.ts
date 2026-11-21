@@ -70,12 +70,19 @@ export function usableReport(report: unknown, taskId: string): report is V5TaskR
 }
 
 /**
- * The last good report per role, held in this browser tab, and when each role's read last failed.
+ * The last good report per role, held in this browser tab for the authenticated session, and when each role's read last failed.
  * It only bridges a failed read: an owner-published "no report" clears it, so an old report is never resurrected.
+ * `clearReportStore` empties it when the session ends.
  */
 export interface ReportStore { good: Map<string, V5TaskReport>; failedAt: Map<string, number> }
 export const createReportStore = (): ReportStore => ({ good: new Map(), failedAt: new Map() });
 export const agentReportStore = createReportStore();
+
+/** Retention belongs to one authenticated session: sign-out and auth loss end it, a transient reconnect does not. */
+export function clearReportStore(store: ReportStore = agentReportStore) {
+  store.good.clear();
+  store.failedAt.clear();
+}
 
 export interface RetainedReports {
   /** What to show per role: the owner's current report, or the last good one while a read is failing. */
@@ -158,19 +165,20 @@ export function reportConclusion(report: V5TaskReport | undefined): string | nul
 }
 
 /**
- * What a source-change watermark means: reports requested before it cannot be current. It is not the time a report
- * stopped being current, and it says nothing about a report requested after it.
+ * What the owner's validity cutoff means: the owner rejects a report requested at or before it. The owner moves the cutoff
+ * for several reasons (a source change, an observation gap, a source outage), so `reason` is its own code, not a guess.
+ * It is not the time a report stopped being current, and it says nothing about a report requested after it.
  */
 export function watermarkNote(report: V5TaskReport | undefined, nowMs: number) {
   const watermark = report?.validity_watermark;
   if (!watermark || report?.status === "CURRENT_REPORT" || !publishedTimestamp(watermark.watermark_ms)) return null;
   const requested = report?.record?.result?.requested_at_ms;
   const at = clock(watermark.watermark_ms, nowMs);
-  const applies = publishedTimestamp(requested) ? requested < watermark.watermark_ms : null;
+  const applies = publishedTimestamp(requested) ? requested <= watermark.watermark_ms : null;
   return {
-    label: "Owner source-change mark",
-    value: `${at} · ${watermark.reason} · reports requested before this time cannot be current`
-      + (applies === false ? ". This report was requested after it, so the mark is not why it is not current" : applies === null ? ". The request time of this report is not published" : ""),
+    label: "Owner validity cutoff",
+    value: `${at} · ${watermark.reason} · reports requested at or before this time cannot be current`
+      + (applies === false ? ". This report was requested after it, so the cutoff is not why it is not current" : applies === null ? ". The request time of this report is not published" : ""),
   };
 }
 
@@ -215,6 +223,10 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now(), ret
     } else if (report?.status && failedReports.has(report.status)) {
       state = "Last run failed";
       reason = [report.status, report.reason, report.rejection].filter(Boolean).join(" · ");
+    } else if (held && report?.status === "ACCEPTED") {
+      // The failed read cannot confirm validity, and the owner can end it before the published expiry.
+      state = `Last known report · current validity unavailable (refresh failed at ${clock(refreshFailed, nowMs)})`;
+      reason = "The owner's current validity for this report was not read; it can change before the published expiry.";
     } else if (report?.status === "ACCEPTED" && expired) {
       state = `Expired ${elapsedTime(nowMs - expiry)} ago · ${schedule}`;
       reason = "The owner's published report expiry has passed. Expiry alone is not a run failure.";
@@ -234,13 +246,14 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now(), ret
       reportTime: received === null ? null : new Date(received).toISOString(),
       reportAge: reportAge(received, nowMs),
       reportStatus: typeof report?.status === "string" ? report.status : "not published",
-      reportState: expired && latest?.status === "CURRENT_REPORT" ? "was CURRENT_REPORT" : typeof latest?.status === "string" ? latest.status : "not published",
-      expiry: expiry === null ? "expiry not published" : !Number.isFinite(nowMs) ? "expiry unavailable (clock mismatch)" : nowMs >= expiry ? "expired" : "not expired",
+      reportState: held && typeof latest?.status === "string" ? `last read as ${latest.status}` : expired && latest?.status === "CURRENT_REPORT" ? "was CURRENT_REPORT" : typeof latest?.status === "string" ? latest.status : "not published",
+      expiry: expiry === null ? "expiry not published" : held ? `was valid until ${clock(expiry, nowMs)}` : !Number.isFinite(nowMs) ? "expiry unavailable (clock mismatch)" : nowMs >= expiry ? "expired" : "not expired",
       expiryTime: expiry === null ? null : new Date(expiry).toISOString(),
-      expiryRelative: expiry === null ? "expiry not published" : !Number.isFinite(nowMs) ? "relative time unavailable (clock mismatch)" : expired ? reportAge(expiry, nowMs) : `in ${elapsedTime(expiry - nowMs)}`,
+      expiryRelative: expiry === null ? "expiry not published" : held ? "current validity unavailable" : !Number.isFinite(nowMs) ? "relative time unavailable (clock mismatch)" : expired ? reportAge(expiry, nowMs) : `in ${elapsedTime(expiry - nowMs)}`,
       overdue: "overdue rule not published",
       schedule,
       refreshFailedAt: refreshFailed === undefined ? null : new Date(refreshFailed).toISOString(),
+      lastKnown: held,
       conclusion: reportConclusion(latest),
     };
   });

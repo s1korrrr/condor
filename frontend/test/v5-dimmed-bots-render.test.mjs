@@ -145,12 +145,34 @@ test('flat position cards retain zero under the dimmed snapshot stamp without in
 
 test('dimmed fill records keep real UTC ages rather than the admission age', () => {
   const current = harness();
+  const browser = new Window();
   try {
     current.reads.find(read => read.section === 'fills').data[0].event_at_ms = current.at;
     const timestamp = new Date(current.at).toISOString().slice(0, 19).replace('T', ' ');
-    assert.ok(current.render().includes(`title="${timestamp} UTC · 1m ago"`));
-    current.setNow(current.at + 75_000);
-    assert.ok(current.render().includes(`title="${timestamp} UTC · 1m 15s ago"`));
+    const expected = `${timestamp} UTC · 1m 30s ago`;
+    current.setNow(current.at + 90_000);
+    browser.document.body.innerHTML = current.render();
+    const dimmed = browser.document.querySelector('.paper-dimmed');
+    assert.ok(dimmed);
+    const recent = dimmed.querySelector('[aria-label="Paper fills"]');
+    assert.equal(recent?.querySelector(`[title="${expected}"]`)?.textContent, expected);
+    const last = [...dimmed.querySelectorAll('[aria-label="Last fill per pair"] li')].find(row => row.querySelector('strong')?.textContent === 'BNB');
+    assert.equal(last?.textContent.split(' · ').slice(-2).join(' · '), expected);
+  } finally {
+    current.close();
+    void browser.happyDOM.close();
+  }
+});
+
+test('dimmed partial executors keep the real owner read age', () => {
+  const current = harness();
+  try {
+    current.reads.find(read => read.section === 'executors').completeness = 'partial';
+    current.setNow(current.at + 90_000);
+    const html = current.render();
+    assert.equal(metric(html, 'Open executors'), 'partial · not published');
+    const note = html.match(/<dt>Open executors<\/dt><dd[^>]*>[^<]*<\/dd><small>([^<]*)<\/small>/)?.[1];
+    assert.match(note ?? '', /not a total · owner read [^<]+ UTC · 1m 30s ago$/);
   } finally {current.close();}
 });
 

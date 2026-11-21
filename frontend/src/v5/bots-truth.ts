@@ -52,9 +52,9 @@ export function executorsPartialRead(read: PaperRead | undefined, now: number): 
 export const executorsOpenSetUnknown = (read: PaperRead | undefined, now: number) => paperOpenExecutorCount(read, now) === null;
 
 /** Open executors tile when the open set is not provable: "partial · not published" plus the count actually read. */
-export function openExecutorsPartial(read: PaperRead | undefined, now: number): { value: string; note: string } | null {
-  if (!executorsOpenSetUnknown(read, now)) return null;
-  const partial = executorsPartialRead(read, now);
+export function openExecutorsPartial(read: PaperRead | undefined, now: number, valuesAt = now): { value: string; note: string } | null {
+  if (!executorsOpenSetUnknown(read, valuesAt)) return null;
+  const partial = executorsPartialRead(read, valuesAt);
   const when = typeof read?.generated_at_ms === "number" ? ` · owner read ${paperTime(read.generated_at_ms, now)}` : "";
   if (!partial) return { value: "Not published", note: `Executors read unavailable or not current · no executor count is inferred${when}` };
   return {
@@ -87,8 +87,8 @@ export function newestFirstFills(rows: Row[] | null, timeOf: (row: Row) => numbe
 export interface LastFill { pair: string; side: string | null; at: number | null; price: string | null; rows: number }
 
 /** Newest fill per pair among the rows this read actually published; a pair with none says so. */
-export function lastFillPerPair(read: PaperRead | undefined, pairs: readonly string[], now: number): { complete: boolean; rows: LastFill[] } | null {
-  const fills = paperRetainedRecords(read, now);
+export function lastFillPerPair(read: PaperRead | undefined, pairs: readonly string[], now: number, valuesAt = now): { complete: boolean; rows: LastFill[] } | null {
+  const fills = paperRetainedRecords(read, valuesAt);
   if (!read || !fills) return null;
   const timeOf = (row: Row) => phoneRecordTime(row, now, read.generated_at_ms);
   const rows = pairs.map(pair => {
@@ -96,7 +96,7 @@ export function lastFillPerPair(read: PaperRead | undefined, pairs: readonly str
     const newest = newestFirstFills(mine, timeOf)?.[0];
     return { pair, rows: mine.length, side: typeof newest?.side === "string" ? newest.side : null, at: newest ? timeOf(newest) : null, price: typeof newest?.price === "string" ? newest.price : null };
   });
-  return { complete: paperCompleteRead(read, now), rows };
+  return { complete: paperCompleteRead(read, valuesAt), rows };
 }
 
 interface EntryPause {

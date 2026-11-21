@@ -22,8 +22,8 @@ export function EntryPauseBanner({ decisions, riskPaused = false, now, compact =
 }
 
 /** The newest fill per pair among the rows the owner published, with its time and age. */
-export function LastFillPerPair({ read, pairs, now }: { read?: PaperRead; pairs: readonly string[]; now: number }) {
-  const last = lastFillPerPair(read, pairs, now);
+export function LastFillPerPair({ read, pairs, now, valuesAt = now }: { read?: PaperRead; pairs: readonly string[]; now: number; valuesAt?: number }) {
+  const last = lastFillPerPair(read, pairs, now, valuesAt);
   if (!last) return null;
   return <section className="paper-section paper-last-fills" aria-label="Last fill per pair">
     <h3>Last fill per pair</h3>

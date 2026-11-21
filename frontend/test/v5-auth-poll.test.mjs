@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import * as ReactQuery from '@tanstack/react-query';
@@ -12,8 +12,9 @@ for (const name of ['window', 'document', 'navigator', 'HTMLElement', 'Element',
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const { createRoot } = await import('react-dom/client');
+after(() => browser.happyDOM.close());
 
-test('auth and profile 503s retain the routed draft until auth is revoked', async (context) => {
+async function checkDraftDuringReconnect(context, profileFailure, revokedAuth) {
   const AuthContext = React.createContext(null);
   const unrelatedViews = Object.fromEntries([
     './V5Pages', './AgentDecisionsPage',
@@ -40,14 +41,15 @@ test('auth and profile 503s retain the routed draft until auth is revoked', asyn
   };
   const unavailable = () => Response.json({ detail: { code: 'server_token_unavailable' } }, { status: 503 });
   let authPolls = 0;
-  let profileUnavailable = false;
+  let profileUnavailable = true;
   context.mock.method(globalThis, 'fetch', async (url) => {
-    if (url === '/api/v5/dashboard/profile') return profileUnavailable ? unavailable() : Response.json(profile);
+    if (url === '/api/v5/dashboard/profile') return profileUnavailable ? profileFailure() : Response.json(profile);
     assert.equal(url, '/api/v5/auth');
     authPolls += 1;
     if (authPolls === 1) return firstResponse;
     if (authPolls === 2) return unavailable();
-    return Response.json({ authenticated: authPolls === 3 });
+    if (authPolls === 3) return Response.json({ authenticated: true });
+    return revokedAuth();
   });
   const container = document.body.appendChild(document.createElement('div'));
   const root = createRoot(container);
@@ -74,10 +76,16 @@ test('auth and profile 503s retain the routed draft until auth is revoked', asyn
     resolveFirst(Response.json({ authenticated: true }));
     await poll('v5-auth');
     await poll('v5-profile');
+    assert.match(container.textContent, /V5 profile unavailable/);
+    assert.equal(container.querySelector('#v5-shell-status-slot'), null);
+    profileUnavailable = false;
+    await poll('v5-profile');
     assert.equal(authPolls, 1);
     const draft = container.querySelector('[aria-label="Draft"]');
     assert.ok(draft);
     draft.value = 'unsaved notes';
+    const shell = container.querySelector('#v5-shell-status-slot');
+    assert.ok(shell);
     assert.equal(draft.dataset.authenticated, 'true');
     assert.equal(scope(), 'PAPER');
 
@@ -86,7 +94,9 @@ test('auth and profile 503s retain the routed draft until auth is revoked', asyn
     const statusDuringAuth503 = status();
     profileUnavailable = true;
     await poll('v5-profile');
-    assert.equal(container.querySelector('[aria-label="Draft"]'), draft, 'profile 503 must keep the editor mounted');
+    assert.ok(container.querySelector('[aria-label="Draft"]') === draft, 'profile refetch failure must keep the editor mounted');
+    assert.ok(container.querySelector('#v5-shell-status-slot') === shell, 'profile refetch failure must keep the shell mounted');
+    assert.equal(draft.value, 'unsaved notes');
     assert.equal(authDuring503, 'false');
     assert.match(statusDuringAuth503, /session reconnecting/i);
     assert.equal(draft.dataset.authenticated, 'false');
@@ -110,6 +120,17 @@ test('auth and profile 503s retain the routed draft until auth is revoked', asyn
     await React.act(async () => root.unmount());
     client.clear();
     container.remove();
-    await browser.happyDOM.close();
   }
-});
+}
+
+test('profile 503 retains the routed draft until auth returns authenticated:false', context => checkDraftDuringReconnect(
+  context, () => new Response(null, { status: 503 }), () => Response.json({ authenticated: false }),
+));
+
+test('profile 502 retains the routed draft until auth returns 401', context => checkDraftDuringReconnect(
+  context, () => new Response(null, { status: 502 }), () => new Response(null, { status: 401 }),
+));
+
+test('profile network failure retains the routed draft until auth returns authenticated:false', context => checkDraftDuringReconnect(
+  context, () => { throw new TypeError('Failed to fetch'); }, () => Response.json({ authenticated: false }),
+));

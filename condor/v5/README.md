@@ -7,9 +7,10 @@ agent routes, MCP tools, Hummingbot client, or deployment controls.
 
 ## V5 dashboard environment
 
-Machine-local Compose overlays supply deployment values and bind mounts. They
-are private by design and are tracked in neither Condor nor rsibot. This table
-describes the inputs, not the contents of those overlays.
+The rsibot repository tracks `compose.v5-dashboard.yaml`,
+`compose.v5-candle-store.yaml`, and `compose.v5-paper-binding.yaml` under
+`deploy/rsibot-stack/`. These overlays set `V5_*` environment values and define
+bind mounts. The mounted secrets remain machine-local.
 
 | Setting | Where it comes from and what it does | When unset |
 | --- | --- | --- |

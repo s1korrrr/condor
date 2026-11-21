@@ -90,6 +90,15 @@ def test_a_controller_that_does_not_name_itself_makes_the_roster_unreadable(tmp_
     assert project(tmp_path, value)["active_executors"] is None
 
 
+def test_a_published_roster_that_is_not_a_list_of_controllers_is_never_zero(tmp_path):
+    # An empty unavailable list proves coverage only of a roster that can be read; here the first controller reports
+    # no executors and the roster names a second one in a shape nobody can match against the reports.
+    for roster in ({"id": CONTROLLER, "pending": "second_controller"}, {}, "second_controller", 7, True):
+        value = status_with([])
+        value["controllers"] = roster
+        assert project(tmp_path, value)["active_executors"] is None, roster
+
+
 def test_without_a_published_roster_the_marker_and_the_reports_decide(tmp_path):
     value = status_with([executor(True)])
     value["controllers"] = []

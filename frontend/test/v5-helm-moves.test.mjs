@@ -15,7 +15,7 @@ const status = (extra = {}) => ({ generated_at: NOW_S, age_s: 0, reasons: [], re
 
 function render(extra = {}) {
   const { load } = frontendModules({
-    '@tanstack/react-query': { useQuery: () => ({ data: { state: 'FRESH', status: status(extra), bot: 'helm_v5_paper' }, dataUpdatedAt: Date.now(), refetch() {} }) },
+    '@tanstack/react-query': { useQuery: () => ({ data: { state: 'FRESH', status: status(extra), bot: 'helm_v5_paper', observed_at: NOW_S }, dataUpdatedAt: Date.now(), refetch() {} }) },
   });
   return renderToStaticMarkup(React.createElement(load('v5/V5Helm').V5Helm));
 }
@@ -88,9 +88,9 @@ test('a partly covered roster says how many controllers it covered and never rea
 });
 
 function renderOverview(extra) {
-  const data = { state: 'FRESH', status: status(extra), bot: 'helm_v5_paper' };
+  const data = { state: 'FRESH', status: status(extra), bot: 'helm_v5_paper', observed_at: NOW_S };
   const { load } = frontendModules({
-    '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: queryKey[0] === 'v5-helm' ? data : undefined, isPending: queryKey[0] !== 'v5-helm' }) },
+    '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: queryKey[0] === 'v5-helm' ? data : undefined, dataUpdatedAt: NOW_S * 1000, isPending: queryKey[0] !== 'v5-helm' }) },
     './V5Money': { V5Money: () => null, readMoney() {} },
     './V5Helm': { readHelm() {} },
   });

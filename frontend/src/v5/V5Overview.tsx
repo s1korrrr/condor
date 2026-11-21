@@ -7,6 +7,7 @@ import { ownerTitleText, ownerDisplay, usdc } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
 import { readHelm } from "./V5Helm";
+import { useHelmClock } from "./useHelmClock";
 import { readMoney, V5Money } from "./V5Money";
 import "./market.css";
 
@@ -31,9 +32,8 @@ export function V5Overview() {
   const sinceStart = exactSignedSum(equity, oppositeFunding);
   const sinceExact = sinceStart == null ? undefined : `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(sinceStart.replace(/^-/, "−"))}`;
   const realized = v5Values?.realized, unrealized = v5Values?.unrealized;
-  // The server's own clock at read time (generated_at + age_s): the count's age is judged as of this read, the same way the status's freshness is.
-  const helmStatus = helm.data?.status;
-  const nowS = helmStatus ? helmStatus.generated_at + helmStatus.age_s : undefined;
+  // The same live read clock as the Helm page, so a count ages here exactly as it does there.
+  const { nowS } = useHelmClock(helm.data, helm.dataUpdatedAt);
   const headline = helmHeadline(helm.data, { nowS });
   const helmMoney = helmRow.withValues;
   return <div className="v5m v5-overview">

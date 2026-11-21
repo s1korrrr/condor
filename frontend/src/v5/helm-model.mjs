@@ -16,10 +16,20 @@ function points(value) {
   return `${value / SCALE}${fraction ? `.${fraction}` : ''}`;
 }
 
+/**
+ * The server's own time at the read, moved on by the seconds since the response arrived: the one clock every age on
+ * the Helm surfaces is judged against. Undated reads give undefined, and nothing is then called current.
+ */
+export function helmReadTimeS(read, elapsedS) {
+  const readAt = read?.observed_at, now = typeof readAt === 'number' ? readAt + elapsedS : NaN;
+  return Number.isFinite(now) ? now : undefined;
+}
+
 export function helmCoinRow(row, { fresh, nowS }) {
   const signal = row.signal;
-  const time = utcMin(signal?.at == null ? null : signal.at * 1000, nowS * 1000);
-  const ageS = time == null ? null : nowS - signal.at;
+  const known = typeof nowS === 'number';
+  const time = utcMin(signal?.at == null ? null : signal.at * 1000, known ? nowS * 1000 : undefined);
+  const ageS = time == null || !known ? null : nowS - signal.at;
   const problem = !signal ? 'Signal not published by Helm' : !fresh ? 'Helm status is stale'
     : ageS == null ? 'Signal time not published' : ageS < 0 ? 'Signal time is in the future'
     : ageS > 30 ? 'Signal is stale' : null;
@@ -33,7 +43,7 @@ export function helmCoinRow(row, { fresh, nowS }) {
     rsi: `— · ${problem ?? 'RSI or line not published by Helm'}`, rsiTitle: undefined,
     atr: `— · ${problem ?? 'ATR not published by Helm'}`,
     decision: `— · ${problem ?? 'Entry decision not published'}`,
-    sample: !time ? 'Signal time not published' : `${time} · ${ageS < 0 ? 'ahead of this read' : `${age(ageS)} ago`}${!fresh || ageS > 30 ? ' · stale' : ''}`,
+    sample: !time ? 'Signal time not published' : ageS == null ? `${time} · age unknown` : `${time} · ${ageS < 0 ? 'ahead of this read' : `${age(ageS)} ago`}${!fresh || ageS > 30 ? ' · stale' : ''}`,
     owner: fresh ? `State: ${words(row.status)} · entry hold: ${words(row.candidate_hold)}` : '— · Helm status is stale',
     held: '—', breakeven: '—', bagNote: !fresh ? 'Helm status is stale' : 'Bag not published by Helm',
   };

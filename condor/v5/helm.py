@@ -121,7 +121,9 @@ def _active_executors(shown: Any, payload: dict) -> dict[str, Any] | None:
     if not isinstance(reports, dict) or not reports or len(reports) > 16 or not isinstance(unavailable, list):
         return None
     controllers = payload.get("controllers")
-    if isinstance(controllers, list) and controllers:
+    if controllers is not None and controllers != []:
+        if not isinstance(controllers, list):
+            return None  # A roster is published but unreadable; an empty unavailable list says nothing about it.
         roster = [controller.get("id") if isinstance(controller, dict) else None for controller in controllers]
         if not all(isinstance(ident, str) for ident in roster):
             return None

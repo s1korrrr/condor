@@ -220,7 +220,7 @@ test('Helm native phone cards retain every desktop coin field and withhold stale
     symbols: [{ pair: 'BNB-USDC', status: 'held', candidate_hold: 'operator_entry_pause', bag: { held_amount: '123.456789', breakeven_price: '432.10' },
       signal: { at: now / 1000 - 10, rsi: '40.5', oversold: '31', rsi_length: 21, atr_fraction: null, decision: { enter: false, reason: 'owner_journal_held' } } }] };
   let state = 'FRESH';
-  const { load } = frontendModules({ '@tanstack/react-query': { useQuery: () => ({ data: { state, reason: state === 'STALE' ? 'HELM_STATUS_STALE' : null, bot: 'helm_v5_paper', status }, dataUpdatedAt: now, refetch() {} }) } });
+  const { load } = frontendModules({ '@tanstack/react-query': { useQuery: () => ({ data: { state, reason: state === 'STALE' ? 'HELM_STATUS_STALE' : null, bot: 'helm_v5_paper', observed_at: status.generated_at + status.age_s, status }, dataUpdatedAt: now, refetch() {} }) } });
   const window = new Window();
   const Helm = load('v5/V5Helm.tsx').V5Helm;
   const render = () => {
@@ -247,7 +247,7 @@ test('a long owner reason in the Helm and Overview summaries wraps instead of wi
   const status = { generated_at: now / 1000, age_s: 0, ready: true, reasons: [], actions: 1, steps: 1, withheld: 0, gates: [{ gate: 'ready', note: '' }], control_rejections: { count: 0, recent: [] },
     active_executors: { count: 3, observed_at: now / 1000 - 5 },
     symbols: [{ pair: 'BNB-USDC', status: 'held', candidate_hold: 'no_rebound', bag: null, signal: null, last_decision: { at: now / 1000 - 20, reason } }] };
-  const helm = { state: 'FRESH', reason: 'HELM_STATUS_FRESH', bot: 'helm_v5_paper', status };
+  const helm = { state: 'FRESH', reason: 'HELM_STATUS_FRESH', bot: 'helm_v5_paper', observed_at: now / 1000, status };
   const { load } = frontendModules({
     '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: queryKey[0] === 'v5-helm' ? helm : undefined, isPending: queryKey[0] !== 'v5-helm', dataUpdatedAt: now, refetch() {} }) },
     './V5Money': { V5Money: () => null, readMoney() {} },

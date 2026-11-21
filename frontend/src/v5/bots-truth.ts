@@ -14,7 +14,8 @@ type Row = Record<string, unknown>;
 const TERMINAL = new Set(["closed", "completed", "terminated"]);
 const ACTIVE = new Set(["active", "running", "partial_close", "open", "not_started", "shutting_down"]);
 const state = (row: Row) => String(row.state).toLowerCase();
-const isActive = (row: Row) => row.terminal !== true && !TERMINAL.has(state(row)) && ACTIVE.has(state(row));
+const isTerminal = (row: Row) => row.terminal === true || TERMINAL.has(state(row));
+const isActive = (row: Row) => !isTerminal(row) && ACTIVE.has(state(row));
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 const coinOf = (pair: unknown) => typeof pair === "string" && pair ? pair.split("-")[0] : null;
 
@@ -23,6 +24,7 @@ export interface ExecutorsRead {
   rows: number;
   /** Rows of those that are active executors. */
   active: number;
+  unknownStates: number;
   /** Active executors that name no trading pair. */
   unpaired: number;
   byPair: Record<string, number>;
@@ -41,11 +43,12 @@ export function executorsPartialRead(read: PaperRead | undefined, now: number): 
   if (paperSectionError(read) || !Array.isArray(read.data) || read.data.some(row => !row || typeof row !== "object")) return null;
   const rows = read.data as Row[];
   const active = rows.filter(isActive);
+  const unknownStates = rows.length - active.length - rows.filter(isTerminal).length;
   const byPair: Record<string, number> = {};
   for (const row of active) if (typeof row.trading_pair === "string" && row.trading_pair) byPair[row.trading_pair] = (byPair[row.trading_pair] ?? 0) + 1;
   const reason = read.stale_reason ?? read.reason;
   const known = ownerCodeWords(reason);
-  return { rows: rows.length, active: active.length, unpaired: active.filter(row => typeof row.trading_pair !== "string" || !row.trading_pair).length, byPair, why: known ? known.words ?? known.code : null };
+  return { rows: rows.length, active: active.length, unknownStates, unpaired: active.filter(row => typeof row.trading_pair !== "string" || !row.trading_pair).length, byPair, why: known ? known.words ?? known.code : null };
 }
 
 /** True when the executors read cannot prove the open set, so no executor or sell-order figure may be presented as a count. */
@@ -57,9 +60,12 @@ export function openExecutorsPartial(read: PaperRead | undefined, now: number, v
   const partial = executorsPartialRead(read, valuesAt);
   const when = typeof read?.generated_at_ms === "number" ? ` · owner read ${paperTime(read.generated_at_ms, now)}` : "";
   if (!partial) return { value: "Not published", note: `Executors read unavailable or not current · no executor count is inferred${when}` };
+  const incomplete = read?.completeness !== "complete" || !!read.next_cursor;
+  const reason = incomplete ? ` · the owner's list is incomplete${partial.why ? `: ${partial.why}` : ""}` : "";
+  const unknown = partial.unknownStates ? ` · ${partial.unknownStates} in an unknown state` : "";
   return {
-    value: "partial · not published",
-    note: `${plural(partial.active, "active executor", "active executors")} among the ${plural(partial.rows, "row", "rows")} actually read · the owner's list is incomplete${partial.why ? `: ${partial.why}` : ""} · not a total${when}`,
+    value: incomplete ? "partial · not published" : "Not published",
+    note: `${plural(partial.active, "active executor", "active executors")} among the ${plural(partial.rows, "row", "rows")} actually read${unknown}${reason} · not a total${when}`,
   };
 }
 
@@ -84,7 +90,7 @@ export function newestFirstFills(rows: Row[] | null, timeOf: (row: Row) => numbe
   return [...dated, ...rows.filter(row => timeOf(row) === null)];
 }
 
-export interface LastFill { pair: string; side: string | null; at: number | null; price: string | null; rows: number }
+export interface LastFill { pair: string; side: string | null; at: number | null; price: string | null; rows: number; undated: number }
 
 /** Newest fill per pair among the rows this read actually published; a pair with none says so. */
 export function lastFillPerPair(read: PaperRead | undefined, pairs: readonly string[], now: number, valuesAt = now): { complete: boolean; rows: LastFill[] } | null {
@@ -94,7 +100,7 @@ export function lastFillPerPair(read: PaperRead | undefined, pairs: readonly str
   const rows = pairs.map(pair => {
     const mine = fills.filter(row => row.trading_pair === pair);
     const newest = newestFirstFills(mine, timeOf)?.[0];
-    return { pair, rows: mine.length, side: typeof newest?.side === "string" ? newest.side : null, at: newest ? timeOf(newest) : null, price: typeof newest?.price === "string" ? newest.price : null };
+    return { pair, rows: mine.length, undated: mine.filter(row => timeOf(row) === null).length, side: typeof newest?.side === "string" ? newest.side : null, at: newest ? timeOf(newest) : null, price: typeof newest?.price === "string" ? newest.price : null };
   });
   return { complete: paperCompleteRead(read, valuesAt), rows };
 }

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Window } from 'happy-dom';
@@ -116,13 +117,116 @@ test('Bots shows the pause update and reason without asserting exits, and reject
   assert.doesNotMatch(html, /Protective exits keep running/);
   assert.match(render(decisionsWith({...operator, reason: null})), /reason not published \(owner field custom_info\.operator\.reason\)/);
   const dimmed = render(decisionsWith(operator), {now: pausedNow + 26_000, valuesAt: pausedNow});
-  assert.match(dimmed, /Pause state not current · last read .*31s ago/);
+  assert.match(dimmed, /Pause state not current · read .*31s ago/);
   assert.doesNotMatch(dimmed, /Entries paused|Not paused/);
 });
 
 const overviewModules = (result, overrides) => frontendModules({
   '@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? {data: {readiness: {paper_owner: {bot_name: 'meridian_v5_paper'}}}} : result},
   ...overrides,
+});
+
+for (const [label, profile] of [
+  ['profile pending', {isPending: true}],
+  ['profile unavailable', {isError: true, data: {readiness: {paper_owner: {bot_name: 'meridian_v5_paper'}}}}],
+  ['no paper owner bound', {data: {readiness: {paper_owner: {bot_name: null}}}}],
+]) {
+  test(`Overview says pause state not read: ${label}`, () => {
+    const {V5PauseNotice} = frontendModules({
+      '@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? profile : {data: decisionsWith(operator)}},
+      './usePaperClock': {usePaperClock: () => pausedNow},
+    }).load('v5/V5PauseNotice.tsx');
+    const html = renderToStaticMarkup(React.createElement(V5PauseNotice));
+    assert.ok(html.includes(`Pause state not read (${label})`), html);
+    assert.doesNotMatch(html, /Entries paused|Not paused/);
+  });
+}
+
+async function mountOverview(t, statusForRequest) {
+  const browser = new Window({url: 'https://fixture.invalid/'});
+  const restoreGlobals = [];
+  const globals = {window: browser, document: browser.document, localStorage: browser.localStorage, MutationObserver: browser.MutationObserver, IS_REACT_ACT_ENVIRONMENT: true};
+  for (const [key, value] of Object.entries(globals)) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, {value, configurable: true});
+    restoreGlobals.push(() => previous ? Object.defineProperty(globalThis, key, previous) : Reflect.deleteProperty(globalThis, key));
+  }
+  const {QueryClientProvider, environmentManager, onlineManager} = createRequire(import.meta.url)('@tanstack/react-query');
+  const isServer = environmentManager.isServer();
+  environmentManager.setIsServer(() => false);
+  t.mock.timers.enable({apis: ['Date', 'setInterval', 'setTimeout'], now: pausedNow});
+  const {load} = frontendModules({'lightweight-charts': {}}, {'v5/V5App.tsx': ['client']});
+  const {client} = load('v5/V5App.tsx');
+  const {V5PauseNotice} = load('v5/V5PauseNotice.tsx');
+  const {createRoot} = await import('react-dom/client');
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  const online = onlineManager.isOnline();
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async request => {
+    const url = new URL(request, 'https://fixture.invalid');
+    assert.equal(url.pathname, '/api/v5/dashboard/read');
+    assert.equal(url.searchParams.get('path'), '/api/v1/servers/rsibot-v5/bots/meridian_v5_paper/decisions');
+    const status = statusForRequest(requests.length);
+    requests.push(Date.now() - pausedNow);
+    return new Response(JSON.stringify(status === 200 ? decisionsWith(operator) : {}), {status});
+  });
+  const settle = () => React.act(async () => {
+    await new Promise(setImmediate);
+    t.mock.timers.tick(0);
+  });
+  const tick = async ms => {
+    await React.act(async () => {
+      t.mock.timers.tick(ms);
+      browser.dispatchEvent(new browser.Event('focus'));
+    });
+    await settle();
+  };
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    client.clear();
+    onlineManager.setOnline(online);
+    environmentManager.setIsServer(() => isServer);
+    await browser.close();
+    restoreGlobals.forEach(restore => restore());
+  });
+  onlineManager.setOnline(true);
+  client.setQueryData(['v5-profile'], {readiness: {paper_owner: {bot_name: 'meridian_v5_paper'}}});
+  await React.act(async () => root.render(React.createElement(QueryClientProvider, {client}, React.createElement(V5PauseNotice))));
+  await settle();
+  return {container, requests, onlineManager, tick, settle};
+}
+
+test('Overview makes only one decisions read in the first minute despite reconnect at 20s', async t => {
+  const {container, requests, onlineManager, tick, settle} = await mountOverview(t, () => 200);
+  assert.match(container.textContent, /Entries paused/);
+  assert.deepEqual(requests, [0]);
+  await tick(20_000);
+  await React.act(async () => {
+    onlineManager.setOnline(false);
+    onlineManager.setOnline(true);
+  });
+  await settle();
+  await tick(39_999);
+  assert.deepEqual(requests, [0]);
+});
+
+test('Overview distinguishes a 503 after a successful read from an aged publication', async t => {
+  const {container, requests, tick} = await mountOverview(t, index => index === 0 ? 200 : 503);
+  assert.match(container.textContent, /Entries paused/);
+  await tick(26_000);
+  assert.match(container.textContent, /Pause state not current · read .*31s ago/);
+  assert.doesNotMatch(container.textContent, /Latest read failed/);
+  await tick(34_000);
+  assert.deepEqual(requests, [0, 60_000]);
+  assert.match(container.textContent, /Latest read failed at 2026-11-21 14:41:00 UTC.*\(Paper observations are unavailable \(HTTP 503\).*\) · last successful read 2026-11-21 14:40:00 UTC/);
+  assert.doesNotMatch(container.textContent, /Entries paused|Not paused|not current/);
+});
+
+test('a failed first decisions request says never read', async t => {
+  const {container} = await mountOverview(t, () => 503);
+  assert.match(container.textContent, /Latest read failed at .*HTTP 503.* · never read/);
+  assert.doesNotMatch(container.textContent, /last (successful )?read|Entries paused|Not paused/);
 });
 
 test('Overview distinguishes accepted but unusable HTTP 200 reads from a fresh explicit not-paused report', async t => {
@@ -134,7 +238,7 @@ test('Overview distinguishes accepted but unusable HTTP 200 reads from a fresh e
     const data = await readPaperDecisions('meridian_v5_paper', new AbortController().signal);
     fetch.mock.restore();
     const html = mount({data, dataUpdatedAt: pausedNow, isPending: false, isError: false});
-    assert.match(html, /Pause state not current · last read .*5s ago/);
+    assert.match(html, /Pause state not current · read .*5s ago/);
     assert.doesNotMatch(html, /Entries paused|Not paused/);
   }
   const fresh = decisionsWith({entry_paused: false});
@@ -144,10 +248,6 @@ test('Overview distinguishes accepted but unusable HTTP 200 reads from a fresh e
   assert.match(incomplete, /Pause state not current.*1 unknown/);
   assert.doesNotMatch(incomplete, /Not paused/);
   assert.match(mount({isPending: true, isError: false}), /Reading the entry-pause state/);
-  const failed = mount({data: decisionsWith(operator), isError: true, error: new Error('HTTP 503')});
-  assert.match(failed, /Pause state not current · last read .*5s ago/);
-  assert.match(failed, /HTTP 503/);
-  assert.doesNotMatch(failed, /Entries paused|Not paused/);
   const sourceOverview = fs.readFileSync(new URL('../src/v5/V5Overview.tsx', import.meta.url), 'utf8');
   assert.match(sourceOverview, /<h3><NavLink to="\/bots">V5 paper bot<\/NavLink><\/h3>\s*<V5PauseNotice \/>/);
 });
@@ -175,7 +275,7 @@ test('the mounted Overview ages a 20-second-old publication past freshness witho
     assert.match(container.textContent, /Entries paused.*20s ago/);
     currentTime += 11_000;
     if (tick) await React.act(async () => tick());
-    assert.match(container.textContent, /Pause state not current · last read .*31s ago/);
+    assert.match(container.textContent, /Pause state not current · read .*31s ago/);
     assert.doesNotMatch(container.textContent, /Entries paused|Not paused/);
   } finally {
     await React.act(async () => root.unmount());
@@ -252,4 +352,23 @@ test('a stale executors read gives no partial row count; fills with no qualified
   const last = lastFillPerPair(read, ['BNB-USDC', 'BTC-USDC', 'ETH-USDC'], now);
   assert.deepEqual(last.rows.map(item => [item.pair, item.rows, item.at]), [['BNB-USDC', 1, null], ['BTC-USDC', 1, snapshotAt - 1000], ['ETH-USDC', 0, null]]);
   assert.deepEqual(newestFirstFills([future, old], item => item.event_at_ms <= snapshotAt ? item.event_at_ms : null).map(item => item.trade_id), ['old', 'future']);
+});
+
+test('a complete executor read names unknown states without claiming missing rows or a total', () => {
+  const {openExecutorsPartial} = model();
+  const read = {...final3.executors, data: [runningBtc, {...row, state: 'FUTURE_STATE', terminal: false}, ...terminal]};
+  const tile = openExecutorsPartial(read, now);
+  assert.equal(tile.value, 'Not published');
+  assert.match(tile.note, /1 active executor among the 102 rows actually read · 1 in an unknown state · not a total/);
+  assert.doesNotMatch(tile.note, /incomplete/);
+});
+
+test('a pair with an undated fill labels the timestamped fill as newest dated', () => {
+  const {LastFillPerPair} = frontendModules().load('v5/BotsTruth.tsx');
+  const at = final3.fills.generated_at_ms;
+  const fill = {...final3.fills.data[0], trading_pair: 'BNB-USDC', side: 'SELL'};
+  const read = {...final3.fills, next_cursor: null, data: [{...fill, event_at_ms: at - 1000}, {...fill, event_at_ms: at + 3_600_000}]};
+  const html = renderToStaticMarkup(React.createElement(LastFillPerPair, {read, pairs: ['BNB-USDC'], now}));
+  assert.match(html, /Sell · .* UTC · .* ago · newest dated fill · 1 undated/);
+  assert.doesNotMatch(html, /Newest fill of every owner record/);
 });

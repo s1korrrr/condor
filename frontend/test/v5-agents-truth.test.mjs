@@ -76,7 +76,8 @@ for (const taskId of tasks) {
     assert.match(html, /Showing the last good report below/);
     assert.match(html, new RegExp(`${taskId} says wait`));
     assert.match(html, /Last known report · current validity unavailable \(refresh failed at 11:59:59 UTC\)/);
-    assert.match(html, /was valid until 12:13:00 UTC/);
+    assert.match(html, /published expiry 12:13:00 UTC/);
+    assert.doesNotMatch(html, /valid until/i);
     assert.doesNotMatch(html, /Current until|No report is available|has published no report|Not read:/);
     env.read = { data: workspace(), dataUpdatedAt: now };
     assert.doesNotMatch(render("AgentDetailPage"), /Refresh failed/);
@@ -99,8 +100,9 @@ test("a retained report is never called current after a failed refresh: catalog,
   }
   const detail = render("AgentDetailPage");
   // Published expiry stays visible, separately and in the past tense; no current or completed badge for the held report.
-  assert.match(detail, /was valid until 12:05:00 UTC/);
-  assert.match(detail, /Was valid until<\/span><strong>Nov 15, 2026, 12:05 PM UTC/);
+  assert.match(detail, /published expiry 12:05:00 UTC/);
+  assert.match(detail, /Published expiry<\/span><strong>Nov 15, 2026, 12:05 PM UTC/);
+  assert.doesNotMatch(detail, /valid until/i);
   assert.match(detail, /is-unknown"><i><\/i>LAST KNOWN</);
   assert.doesNotMatch(detail, />CURRENT_REPORT<|is-completed|is-ready"><i><\/i>Current/);
   const store = createReportStore();
@@ -286,7 +288,7 @@ test("the Overview agent block shows what the Agents views read, as read at, and
   let html = block();
   assert.match(html, /aria-label="Agent conclusions"/);
   assert.match(html, /advisor.{1,6}s own display text for its latest report\. No bot reads it/);
-  assert.match(html, /As read at 12:00:00 UTC · <button[^>]*>Refresh<\/button>/);
+  assert.match(html, /As read at 2026-11-15 12:00:00 UTC · <button[^>]*>Refresh<\/button>/);
   for (const taskId of tasks) {
     assert.match(html, new RegExp(`<q>CAUTION — ${taskId} says wait</q>`));
     assert.match(html, /<strong>Current until 12:13:00 UTC<\/strong> · report 11:58:00 UTC \(2m 0s ago\)/);
@@ -346,7 +348,7 @@ test("mounting the Overview agent block makes no workspace read, and Refresh mak
     // What the Agents views cached is shown as read at its time, still without a read of its own.
     // react-query notifies observers on a zero-delay timer, which the mocked clock only runs when ticked.
     await act(async () => { client.setQueryData(["v5-workspace"], workspace()); context.mock.timers.tick(10); });
-    assert.match(text(renderer.root), /As read at 12:00:00 UTC · Refresh/);
+    assert.match(text(renderer.root), /As read at 2026-11-15 12:00:00 UTC · Refresh/);
     assert.match(text(renderer.root), /market_context says wait/);
     await act(async () => { context.mock.timers.tick(150_000); });
     assert.equal(reads, 0);
@@ -366,45 +368,96 @@ test("retained reports end with the session: sign-out and auth loss clear them, 
   context.mock.method(Date, "now", () => now);
   const { QueryClient } = await import("@tanstack/query-core");
   const { clearSessionCache, dropSessionReads, sessionEnded } = await import("../src/v5/session-policy.mjs");
+  const { agentReportStore } = agentStatus;
   const unauthorized = error => error?.status === 401;
   const hold = () => {
-    const store = createReportStore();
-    retainReports(store, { data: workspace(), dataUpdatedAt: now - 60_000 }, now);
-    return store;
+    agentStatus.clearReportStore();
+    retainReports(agentReportStore, { data: workspace(), dataUpdatedAt: now - 60_000 }, now);
+    assert.ok(agentReportStore.good.has("market_context"));
   };
-  const newSessionFirstRead = store => retainReports(store, failedRead("market_context"), now);
+  const newSessionFirstRead = () => retainReports(agentReportStore, failedRead("market_context"), now);
   const client = () => { const c = new QueryClient(); c.setQueryData(["v5-auth"], { authenticated: true }); c.setQueryData(["v5-workspace"], workspace()); return c; };
 
-  // Confirmed sign-out, then sign in again: the first read of the new session fails and shows nothing of the old one.
-  let store = hold();
-  clearSessionCache(client(), () => agentStatus.clearReportStore(store));
-  let next = newSessionFirstRead(store);
+  // Confirmed sign-out (the logout path is clearSessionCache alone), then sign in again: the first read of the new session shows nothing of the old one.
+  hold();
+  clearSessionCache(client());
+  let next = newSessionFirstRead();
   assert.equal(next.reports.market_context.record, null);
   assert.deepEqual(Object.keys(next.failedAt), ["market_context"]);
 
-  // Auth loss: authenticated:false, and 401 on the auth read.
+  // Auth loss: authenticated:false, and 401 on the auth read, through the path AuthGate takes.
   for (const auth of [{ data: { authenticated: false } }, { isError: true, error: { status: 401 } }]) {
     assert.equal(sessionEnded(auth, unauthorized), true);
-    store = hold();
-    dropSessionReads(client(), () => agentStatus.clearReportStore(store));
-    assert.equal(newSessionFirstRead(store).reports.market_context.record, null);
+    hold();
+    dropSessionReads(client());
+    assert.equal(newSessionFirstRead().reports.market_context.record, null);
   }
 
   // A transient reconnect (network error, 5xx, an authenticated answer) is not the end of the session.
   for (const auth of [{ isError: true, error: new Error("offline") }, { isError: true, error: { status: 503 } }, { data: { authenticated: true } }, {}]) {
     assert.equal(sessionEnded(auth, unauthorized), false);
   }
-  store = hold();
-  next = newSessionFirstRead(store);
+  hold();
+  next = newSessionFirstRead();
   assert.equal(next.reports.market_context.record.result.advice.summary, "market_context says wait");
+  agentStatus.clearReportStore();
 
   // The same through the pages: after sign-out the first failed read says nothing was read, never the old report.
   const { env, render, load } = pageEnv({ data: workspace() });
   render("AgentDetailPage");
   env.read = failedRead("market_context");
   assert.match(render("AgentDetailPage"), /market_context says wait/);
-  load("v5/agent-status.ts").clearReportStore();
+  load("v5/session-policy.mjs").clearSessionCache(client());
   const html = render("AgentDetailPage");
   assert.match(html, /No earlier report is held in this tab/);
   assert.doesNotMatch(html, /market_context says wait/);
+});
+
+// R2 round 3 (#154): the published expiry is not a validity claim, the owner's HISTORICAL_REPORT is named, an unrequested task says so.
+test("a last-known HISTORICAL report shows the published expiry, never 'valid until'", context => {
+  context.mock.method(Date, "now", () => now);
+  const data = workspace();
+  // Requested 11:58, nominally expiring 12:05; the owner read at 11:59 said HISTORICAL_REPORT with the cutoff at 11:59; the refresh fails at 12:00.
+  data.advisor.latest_by_task.decision_review = { ...goodReport("decision_review", { requested_at_ms: now - 120_000, received_at_ms: now - 110_000, expires_at_ms: now + 300_000 }), status: "HISTORICAL_REPORT", validity_watermark: { watermark_ms: now - 60_000, reason: "CHANGED:decision_review_scope" } };
+  const { env, render } = pageEnv({ data, dataUpdatedAt: now - 60_000 }, "decision_reviewer");
+  render("AgentDetailPage");
+  env.read = failedRead("decision_review");
+  env.read.data.advisor.latest_by_task.decision_review = noReport("decision_review");
+  for (const name of ["AgentDetailPage", "AgentsPage"]) {
+    const html = render(name);
+    assert.match(html, /published expiry 12:05:00 UTC/, name);
+    assert.doesNotMatch(html, /valid until/i, name);
+  }
+  const detail = render("AgentDetailPage");
+  assert.match(detail, /Published expiry<\/span><strong>Nov 15, 2026, 12:05 PM UTC/);
+  assert.match(detail, /LAST KNOWN/);
+  assert.match(detail, /CHANGED:decision_review_scope/);
+});
+
+test("an owner-published HISTORICAL_REPORT is named on the catalog, the detail and the Overview, never 'State not published'", context => {
+  context.mock.method(Date, "now", () => now);
+  const data = workspace();
+  for (const task of tasks) data.advisor.latest_by_task[task] = { ...goodReport(task), status: "HISTORICAL_REPORT", validity_watermark: { watermark_ms: now - 60_000, reason: "CHANGED:source_scope" } };
+  const lines = scheduledAgentLines({ data }, now);
+  for (const line of lines) assert.equal(line.state, "Historical · not current");
+  const { render } = pageEnv({ data, dataUpdatedAt: now });
+  const catalog = render("AgentsPage").match(/<div class="v5-agent-catalog">[\s\S]*<\/div><\/div>/)[0];
+  assert.equal((catalog.match(/Historical · not current/g) || []).length, 3);
+  assert.doesNotMatch(catalog, /State not published|>Ready</);
+  assert.match(render("AgentDetailPage"), /Historical · not current/);
+  const overview = render("AgentConclusions", "v5/AgentConclusions.tsx");
+  assert.match(overview, /<strong>Historical · not current<\/strong>[^<]*(?:<[^q][^>]*>[^<]*)*<q>CAUTION — market_context says wait<\/q>/);
+  assert.doesNotMatch(overview, /State not published|Current until/);
+});
+
+test("a decision review the dashboard never asked for says so, not that the owner published nothing", context => {
+  context.mock.method(Date, "now", () => now);
+  const data = workspace();
+  delete data.advisor.latest_by_task.decision_review;
+  const html = pageEnv({ data, dataUpdatedAt: now }, "decision_reviewer").render("AgentDetailPage");
+  assert.match(html, /not requested: no paper status file/);
+  assert.doesNotMatch(html, /has published no report/);
+  // A task the owner was asked about and answered "none" for still says exactly that.
+  data.advisor.latest_by_task.decision_review = noReport("decision_review");
+  assert.match(pageEnv({ data, dataUpdatedAt: now }, "decision_reviewer").render("AgentDetailPage"), /The owner has published no report for this task/);
 });

@@ -13,7 +13,7 @@ import { usePaperClock } from "./usePaperClock";
 export function AgentConclusions() {
   const workspace = useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, enabled: false });
   const now = usePaperClock();
-  const readAt = workspace.data && workspace.dataUpdatedAt ? new Date(workspace.dataUpdatedAt).toISOString().slice(11, 19) : null;
+  const readAt = workspace.data && workspace.dataUpdatedAt ? new Date(workspace.dataUpdatedAt).toISOString().slice(0, 19).replace("T", " ") : null;
   const lines = workspace.data ? scheduledAgentLines(workspace, now, retainReports(agentReportStore, workspace, now)) : [];
   const refresh = <button className="v5-button" type="button" disabled={workspace.isFetching} onClick={() => void workspace.refetch()}>{workspace.data ? "Refresh" : "Read now"}</button>;
   return <section className="v5m-card" aria-label="Agent conclusions">

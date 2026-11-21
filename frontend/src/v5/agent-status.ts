@@ -1,4 +1,5 @@
 import type { V5TaskReport, V5Workspace } from "./contracts";
+import { onSessionEnd } from "./session-policy.mjs";
 
 export interface WorkspaceRead {
   data?: V5Workspace;
@@ -78,17 +79,20 @@ export interface ReportStore { good: Map<string, V5TaskReport>; failedAt: Map<st
 export const createReportStore = (): ReportStore => ({ good: new Map(), failedAt: new Map() });
 export const agentReportStore = createReportStore();
 
-/** Retention belongs to one authenticated session: sign-out and auth loss end it, a transient reconnect does not. */
+/** Retention belongs to one authenticated session: sign-out and auth loss end it (session-policy calls this), a transient reconnect does not. */
 export function clearReportStore(store: ReportStore = agentReportStore) {
   store.good.clear();
   store.failedAt.clear();
 }
+onSessionEnd(() => clearReportStore());
 
 export interface RetainedReports {
   /** What to show per role: the owner's current report, or the last good one while a read is failing. */
   reports: Record<string, V5TaskReport | undefined>;
   /** Roles whose advisor read failed, with the dashboard's time of that failed read. */
   failedAt: Record<string, number>;
+  /** Roles the dashboard never asked the owner for, with why. */
+  notRequested: Record<string, string>;
 }
 
 /** The role's report read failed; a failing advisor status read only counts when there is no current report to show. */
@@ -104,8 +108,9 @@ export function retainReports(store: ReportStore, read: WorkspaceRead, nowMs: nu
   const latest: Record<string, unknown> = isRecord(advisor) && isRecord(advisor.latest_by_task) ? advisor.latest_by_task : {};
   const reports: RetainedReports["reports"] = {};
   const failedAt: Record<string, number> = {};
+  const notRequested: Record<string, string> = {};
   // Still loading the first read: nothing is known yet, and what is held must survive until it answers.
-  if (!read.data && !read.isError) return { reports, failedAt };
+  if (!read.data && !read.isError) return { reports, failedAt, notRequested };
   for (const taskId of scheduledTaskIds) {
     const current = latest[taskId];
     const usable = usableReport(current, taskId);
@@ -116,6 +121,8 @@ export function retainReports(store: ReportStore, read: WorkspaceRead, nowMs: nu
       if (!usable && read.data) store.good.delete(taskId);
       store.failedAt.delete(taskId);
       reports[taskId] = current as V5TaskReport | undefined;
+      // The owner's list leaves the decision review out when the dashboard has no paper status file to ask about.
+      if (taskId === "decision_review" && current === undefined && isRecord(advisor) && isRecord(advisor.latest_by_task)) notRequested[taskId] = "not requested: no paper status file";
       continue;
     }
     const stamp = read.isError ? read.errorUpdatedAt : read.dataUpdatedAt;
@@ -124,7 +131,7 @@ export function retainReports(store: ReportStore, read: WorkspaceRead, nowMs: nu
     failedAt[taskId] = at;
     reports[taskId] = usable ? current : store.good.get(taskId) ?? (current as V5TaskReport | undefined);
   }
-  return { reports, failedAt };
+  return { reports, failedAt, notRequested };
 }
 
 function elapsedTime(durationMs: number) {
@@ -227,6 +234,9 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now(), ret
       // The failed read cannot confirm validity, and the owner can end it before the published expiry.
       state = `Last known report · current validity unavailable (refresh failed at ${clock(refreshFailed, nowMs)})`;
       reason = "The owner's current validity for this report was not read; it can change before the published expiry.";
+    } else if (latest?.status === "HISTORICAL_REPORT") {
+      state = "Historical · not current";
+      reason = "The owner published this report as HISTORICAL_REPORT: it is not the current report. Its published expiry is shown separately.";
     } else if (report?.status === "ACCEPTED" && expired) {
       state = `Expired ${elapsedTime(nowMs - expiry)} ago · ${schedule}`;
       reason = "The owner's published report expiry has passed. Expiry alone is not a run failure.";
@@ -247,7 +257,7 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now(), ret
       reportAge: reportAge(received, nowMs),
       reportStatus: typeof report?.status === "string" ? report.status : "not published",
       reportState: held && typeof latest?.status === "string" ? `last read as ${latest.status}` : expired && latest?.status === "CURRENT_REPORT" ? "was CURRENT_REPORT" : typeof latest?.status === "string" ? latest.status : "not published",
-      expiry: expiry === null ? "expiry not published" : held ? `was valid until ${clock(expiry, nowMs)}` : !Number.isFinite(nowMs) ? "expiry unavailable (clock mismatch)" : nowMs >= expiry ? "expired" : "not expired",
+      expiry: expiry === null ? "expiry not published" : held ? `published expiry ${clock(expiry, nowMs)}` : !Number.isFinite(nowMs) ? "expiry unavailable (clock mismatch)" : nowMs >= expiry ? "expired" : "not expired",
       expiryTime: expiry === null ? null : new Date(expiry).toISOString(),
       expiryRelative: expiry === null ? "expiry not published" : held ? "current validity unavailable" : !Number.isFinite(nowMs) ? "relative time unavailable (clock mismatch)" : expired ? reportAge(expiry, nowMs) : `in ${elapsedTime(expiry - nowMs)}`,
       overdue: "overdue rule not published",

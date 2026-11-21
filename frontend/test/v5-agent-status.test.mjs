@@ -188,7 +188,7 @@ test("historical ACCEPTED reports are not promoted to current by an unexpired ti
   data.advisor.latest_by_task.market_context.status = "HISTORICAL_REPORT";
   const line = scheduledAgentLines({ data }, now)[0];
   assert.equal(line.expiry, "not expired");
-  assert.equal(line.state, "State not published");
+  assert.equal(line.state, "Historical · not current");
   assert.equal(line.reportState, "HISTORICAL_REPORT");
 });
 

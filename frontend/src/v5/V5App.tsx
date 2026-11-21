@@ -12,7 +12,6 @@ import { SystemPauseProvider, V5System } from "./V5System";
 import { V5MarketHome } from "./V5MarketHome";
 import { V5AppShell } from "./V5AppShell";
 import { clearSessionCache, confirmLogout, dropSessionReads, sessionEnded } from "./session-policy.mjs";
-import { clearReportStore } from "./agent-status";
 import { V5PaperBots } from "@/pages/tabs/ActiveBotsTab";
 import { LearningPage } from './LearningPanel';
 import { ResearchFactoryPage } from './ResearchFactoryPanel';
@@ -63,7 +62,7 @@ function LoginPage() {
 
 function AuthGate() {
   const auth = useQuery({ queryKey: ["v5-auth"], queryFn: v5Api.auth, retry: false, refetchInterval: 15_000, refetchOnWindowFocus: true });
-  useEffect(() => { if (sessionEnded({ data: auth.data, isError: auth.isError, error: auth.error }, error => error instanceof V5ApiError && error.status === 401)) dropSessionReads(client, clearReportStore); }, [auth.isError, auth.error, auth.data]);
+  useEffect(() => { if (sessionEnded({ data: auth.data, isError: auth.isError, error: auth.error }, error => error instanceof V5ApiError && error.status === 401)) dropSessionReads(client); }, [auth.isError, auth.error, auth.data]);
   if (auth.isPending) return <main className="v5-loading-screen"><div className="v5-spinner" /><span>Connecting to the V5 workspace…</span></main>;
   if (auth.isError && auth.error instanceof V5ApiError && auth.error.status === 401) return <LoginPage />;
   if (auth.isError) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>Workspace connection failed</strong><span>{auth.error.message}</span><button className="v5-button" onClick={() => void auth.refetch()}>Retry connection</button></div></main>;
@@ -83,7 +82,7 @@ function ProfileGate() {
 function V5Providers({ children }: { children: React.ReactNode }) {
   const [logoutError, setLogoutError] = useState(false);
   const user: User | null = null;
-  const auth: AuthState = useMemo(() => ({ user, token: null, recoveryReason: null, isAuthenticated: true, loginWithToken: async () => false, loginWithTailscale: async () => false, logout: () => { setLogoutError(false); void confirmLogout(v5Api.logout, () => clearSessionCache(client, clearReportStore), () => setLogoutError(true)); } }), []);
+  const auth: AuthState = useMemo(() => ({ user, token: null, recoveryReason: null, isAuthenticated: true, loginWithToken: async () => false, loginWithTailscale: async () => false, logout: () => { setLogoutError(false); void confirmLogout(v5Api.logout, () => clearSessionCache(client), () => setLogoutError(true)); } }), []);
   return <AuthContext value={auth}><ServerContext value={{ server: "rsibot-v5", setServer: () => {} }}>{logoutError && <div role="alert" className="fixed right-4 top-16 z-50 rounded-md border border-[var(--color-red)] bg-[var(--color-surface)] p-4 text-sm">Sign out failed. Your session is still active; please retry.</div>}{children}</ServerContext></AuthContext>;
 }
 

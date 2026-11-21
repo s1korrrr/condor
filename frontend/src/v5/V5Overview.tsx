@@ -31,7 +31,10 @@ export function V5Overview() {
   const sinceStart = exactSignedSum(equity, oppositeFunding);
   const sinceExact = sinceStart == null ? undefined : `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(sinceStart.replace(/^-/, "−"))}`;
   const realized = v5Values?.realized, unrealized = v5Values?.unrealized;
-  const headline = helmHeadline(helm.data);
+  // The server's own clock at read time (generated_at + age_s): the count's age is judged as of this read, the same way the status's freshness is.
+  const helmStatus = helm.data?.status;
+  const nowS = helmStatus ? helmStatus.generated_at + helmStatus.age_s : undefined;
+  const headline = helmHeadline(helm.data, { nowS });
   const helmMoney = helmRow.withValues;
   return <div className="v5m v5-overview">
     <header className="v5m-head"><div><h1>Overview</h1><p>Both paper bots and their money. Simulated wallets only; nothing here places orders.</p></div></header>

@@ -44,6 +44,57 @@ def test_no_native_reports_means_not_published(tmp_path):
 
 def test_a_controller_without_a_current_report_is_not_a_count(tmp_path):
     value = status_with([executor(True)], unavailable_controller_ids=[CONTROLLER])
+    assert project(tmp_path, value)["active_executors"] == {"count": None, "covered": 0, "of": 1}
+
+
+def two_controllers(value, second="second_controller"):
+    value["controllers"].append({**copy.deepcopy(value["controllers"][0]), "id": second})
+    return value
+
+
+def test_a_published_controller_with_no_report_is_not_zero_even_when_nothing_is_listed_unavailable(tmp_path):
+    # Two published controllers, an empty executor list for the first and no report at all for the second.
+    value = two_controllers(status_with([]))
+    assert project(tmp_path, value)["active_executors"] == {"count": None, "covered": 1, "of": 2}
+    value["unavailable_controller_ids"] = ["second_controller"]  # listed or not, the second one is not covered
+    assert project(tmp_path, value)["active_executors"] == {"count": None, "covered": 1, "of": 2}
+
+
+def test_every_published_controller_with_a_report_is_a_count(tmp_path):
+    value = two_controllers(status_with([executor(True, "a")]))
+    value["native_reports"]["second_controller"] = {"executors": [executor(True, "b"), executor(False, "c")], "positions": []}
+    assert project(tmp_path, value)["active_executors"] == {"count": 2, "observed_at": NOW - 5}
+    value["native_reports"]["second_controller"]["executors"] = []
+    assert project(tmp_path, value)["active_executors"]["count"] == 1
+
+
+def test_a_report_for_a_controller_that_is_not_in_the_roster_is_not_a_count(tmp_path):
+    value = status_with([executor(True)])
+    value["native_reports"]["stranger"] = {"executors": [], "positions": []}
+    assert project(tmp_path, value)["active_executors"] is None
+
+
+def test_without_the_coverage_marker_even_a_matching_roster_is_not_a_count(tmp_path):
+    for marker in (None, "none", {"a": 1}):
+        value = status_with([executor(True)])
+        if marker is None:
+            del value["unavailable_controller_ids"]
+        else:
+            value["unavailable_controller_ids"] = marker
+        assert project(tmp_path, value)["active_executors"] is None
+
+
+def test_a_controller_that_does_not_name_itself_makes_the_roster_unreadable(tmp_path):
+    value = status_with([executor(True)])
+    del value["controllers"][0]["id"]
+    assert project(tmp_path, value)["active_executors"] is None
+
+
+def test_without_a_published_roster_the_marker_and_the_reports_decide(tmp_path):
+    value = status_with([executor(True)])
+    value["controllers"] = []
+    assert project(tmp_path, value)["active_executors"] == {"count": 1, "observed_at": NOW - 5}
+    value["unavailable_controller_ids"] = ["x"]
     assert project(tmp_path, value)["active_executors"] is None
 
 

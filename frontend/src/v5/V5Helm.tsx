@@ -26,8 +26,8 @@ export type HelmStatus = {
   gates: ({ gate: string | null; note: string | null } | null)[];
   symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: { held_amount: Amount; breakeven_price: Amount } | null; last_decision: { at: number | null; reason: string | null } | null; signal: HelmSignal | null }[];
   withheld: number;
-  /** Executors the runtime reports active and when it reported them; null when no complete report is published. */
-  active_executors?: { count: number; observed_at: number | null } | null;
+  /** Executors the runtime reports active and when it reported them; null when no complete report is published, and `count: null` with `covered` of `of` controllers when the roster is only partly covered. */
+  active_executors?: { count: number; observed_at: number | null } | { count: null; covered: number; of: number } | null;
 };
 export type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; status: HelmStatus | null };
 

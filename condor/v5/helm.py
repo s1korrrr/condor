@@ -108,13 +108,29 @@ def _money(payload: dict) -> dict[str, str | None] | None:
 
 
 def _active_executors(shown: Any, payload: dict) -> dict[str, Any] | None:
-    """Executors the runtime reports active, with the time of that report; unknown unless every current report is complete.
+    """Executors the runtime reports active, with the time of that report; unknown without positive proof of coverage.
 
-    Same completeness rule as ``_money``: no reports, a controller without a current report or an unreadable executor
-    row means the count is not published, never zero. Only the count leaves this module (no executor ids or configs).
+    A count needs the runtime's coverage marker (``unavailable_controller_ids`` written as a list, empty) and, when the
+    controller roster is published, a report for exactly those controllers. Silence about a controller is not zero:
+    a roster with a controller that has no report publishes ``count: None`` and how many controllers it did cover. An
+    unreadable executor row also withholds the count. Only counts leave this module (no executor ids or configs).
+    (``_money`` still uses the older rule: no reports or a listed unavailable controller; that gap is not changed here.)
     """
     reports = payload.get("native_reports")
-    if not isinstance(reports, dict) or not reports or payload.get("unavailable_controller_ids") or len(reports) > 16:
+    unavailable = payload.get("unavailable_controller_ids")
+    if not isinstance(reports, dict) or not reports or len(reports) > 16 or not isinstance(unavailable, list):
+        return None
+    controllers = payload.get("controllers")
+    if isinstance(controllers, list) and controllers:
+        roster = [controller.get("id") if isinstance(controller, dict) else None for controller in controllers]
+        if not all(isinstance(ident, str) for ident in roster):
+            return None
+        covered = len((set(roster) & reports.keys()) - {ident for ident in unavailable if isinstance(ident, str)})
+        if covered < len(set(roster)):
+            return {"count": None, "covered": covered, "of": len(set(roster))}
+        if set(roster) != reports.keys():
+            return None
+    if unavailable:
         return None
     active = 0
     for report in reports.values():

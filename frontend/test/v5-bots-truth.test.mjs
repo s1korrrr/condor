@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { Window } from 'happy-dom';
 import { frontendModules, paperWorkspaceModules } from './helpers/frontend-module.mjs';
 
 // W-T2, live 2026-11-21 (install 10, condor 45ec2f82): Bots said "Sell orders placed 0 of 15" for BTC while the owner has one
 // active BTC executor, because the executors read hit its byte budget ("primary byte budget recent window"); the V5 entry pause
-// (owner custom_info.operator, since 14 Nov 14:40Z) showed neither its start nor its reason; fills listed oldest first with no
+// (owner custom_info.operator, updated 14 Nov 14:40Z) showed neither its update time nor its reason; fills listed oldest first with no
 // last fill per pair; owner codes such as journal.reader_capacity_near showed raw.
 const final3 = Object.fromEntries(['status','wallet','positions','executors','fills','risk','decisions','history','operations'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)))]));
 const now = final3.status.read_at_ms;
@@ -62,61 +63,123 @@ test('the Open executors tile says partial · not published with the rows actual
   assert.match(exact, /<dt>Open executors<\/dt><dd[^>]*>1<\/dd>/);
 });
 
-test('entry pause: since, reason, each missing part named, and never silent', () => {
+test('entry pause: equal updates show one time, reason and missing fields are named', () => {
   const {entryPause, entryPauseText} = model();
   const full = entryPause(decisionsWith(operator), pausedNow);
-  assert.equal(full.coins.length, 5);
-  assert.equal(full.since, PAUSED_AT);
   assert.deepEqual(full.reasons, ['Approved paper journal-cap maintenance']);
   const text = entryPauseText(full, pausedNow);
-  assert.match(text.lead, /^Entries paused \(5 of 5 pairs\) since 2026-11-14 14:40:00 UTC · 7d ago$/);
+  assert.equal(text.lead, 'Entries paused (5 of 5 pairs) · updated 2026-11-14 14:40:00 UTC · 7d ago');
   assert.equal(text.missing, null);
   const noReason = entryPauseText(entryPause(decisionsWith({...operator, reason: null}), pausedNow), pausedNow);
-  assert.match(noReason.lead, /since 2026-11-14 14:40:00 UTC/);
+  assert.match(noReason.lead, /updated 2026-11-14 14:40:00 UTC/);
   assert.deepEqual(noReason.reasons, []);
   assert.match(noReason.missing, /^reason not published \(owner field custom_info\.operator\.reason\)$/);
-  const noStart = entryPauseText(entryPause(decisionsWith({...operator, updated_at: null}), pausedNow), pausedNow);
-  assert.equal(noStart.lead, 'Entries paused (5 of 5 pairs)');
-  assert.match(noStart.missing, /^start time not published \(owner field custom_info\.operator\.updated_at\)$/);
+  const noUpdate = entryPauseText(entryPause(decisionsWith({...operator, updated_at: null}), pausedNow), pausedNow);
+  assert.equal(noUpdate.lead, 'Entries paused (5 of 5 pairs)');
+  assert.match(noUpdate.missing, /^update time not published \(owner field custom_info\.operator\.updated_at\)$/);
   const neither = entryPauseText(entryPause(decisionsWith({entry_paused: true}), pausedNow), pausedNow);
-  assert.match(neither.missing, /start time not published .* · reason not published/);
-  // Epoch milliseconds and ISO text are both read; a time in the future is not a start time.
-  assert.equal(entryPause(decisionsWith({...operator, updated_at: PAUSED_AT}), pausedNow).since, PAUSED_AT);
-  assert.equal(entryPause(decisionsWith({...operator, updated_at: '2026-11-14T14:40:00Z'}), pausedNow).since, PAUSED_AT);
-  assert.equal(entryPause(decisionsWith({...operator, updated_at: pausedNow / 1000 + 86400}), pausedNow).since, null);
+  assert.match(neither.missing, /update time not published .* · reason not published/);
+  for (const updated_at of [PAUSED_AT, '2026-11-14T14:40:00Z']) {
+    assert.equal(entryPauseText(entryPause(decisionsWith({...operator, updated_at}), pausedNow), pausedNow).lead, text.lead);
+  }
+  assert.equal(entryPauseText(entryPause(decisionsWith({...operator, updated_at: pausedNow / 1000 + 86400}), pausedNow), pausedNow).lead, noUpdate.lead);
 });
 
-test('entry pause: the risk flag alone still shows the pause and says the decisions read does not carry it; no pause shows nothing', () => {
+test('entry pause: distinct expected pairs and an update range, not a fleet-wide start', () => {
   const {entryPause, entryPauseText} = model();
-  assert.equal(entryPause(decisionsWith({...operator, entry_paused: false}), pausedNow), null);
-  assert.equal(entryPause(undefined, pausedNow, false), null);
+  const decisions = decisionsWith(operator);
+  const [first, second, third, fourth] = decisions.data.controllers;
+  decisions.data.controllers = [first, second, third, fourth];
+  fourth.custom_info.operator = {...operator, updated_at: (PAUSED_AT + DAY) / 1000};
+  const {lead} = entryPauseText(entryPause(decisions, pausedNow), pausedNow);
+  assert.match(lead, /Entries paused \(4 of 5 paused · 1 unknown\)/);
+  assert.match(lead, /updated 2026-11-14 14:40:00 UTC.*–.*2026-11-15 14:40:00 UTC/);
+  assert.doesNotMatch(lead, /since/);
+  decisions.data.controllers.push({...first, pair: 'DOGE-USDC'});
+  assert.equal(entryPauseText(entryPause(decisions, pausedNow), pausedNow).lead, lead);
+});
+
+test('entry pause: the current risk flag still shows a pause when decisions do not carry it', () => {
+  const {entryPause, entryPauseText} = model();
   const risk = entryPauseText(entryPause(undefined, pausedNow, true), pausedNow);
   assert.equal(risk.lead, 'Entries paused');
-  assert.match(risk.missing, /start time not published .* · reason not published .* · decisions read not available/);
+  assert.match(risk.missing, /update time not published .* · reason not published .* · decisions read not available/);
   const stale = entryPauseText(entryPause(decisionsWith(operator, pausedNow - 120_000), pausedNow, true), pausedNow);
   assert.match(stale.missing, /decisions read stale/);
 });
 
-test('the Bots page shows the entry pause with its start and owner reason, and names a missing reason', () => {
+test('Bots shows the pause update and reason without asserting exits, and rejects a dimmed snapshot', () => {
   const {PaperWorkspace} = paperWorkspaceModules().load('pages/tabs/ActiveBotsTab.tsx');
-  const render = decisions => renderToStaticMarkup(React.createElement(PaperWorkspace, {reads: Object.values({...final3, decisions}), now: pausedNow, reportAt: pausedNow - 5_000, heartbeat: 'Fresh', bot: 'meridian_v5_paper'}));
+  const render = (decisions, clocks = {}) => renderToStaticMarkup(React.createElement(PaperWorkspace, {reads: [decisions], now: pausedNow, reportAt: pausedNow - 5_000, heartbeat: 'Fresh', bot: 'meridian_v5_paper', ...clocks}));
   const html = render(decisionsWith(operator));
-  assert.match(html, /<strong>Entries paused \(5 of 5 pairs\) since 2026-11-14 14:40:00 UTC · 7d ago: <\/strong><span>Approved paper journal-cap maintenance<\/span>/);
+  assert.match(html, /<strong>Entries paused \(5 of 5 pairs\) · updated 2026-11-14 14:40:00 UTC · 7d ago: <\/strong><span>Approved paper journal-cap maintenance<\/span>/);
+  assert.doesNotMatch(html, /Protective exits keep running/);
   assert.match(render(decisionsWith({...operator, reason: null})), /reason not published \(owner field custom_info\.operator\.reason\)/);
-  assert.doesNotMatch(render(decisionsWith({...operator, entry_paused: false})), /Entries paused/);
+  const dimmed = render(decisionsWith(operator), {now: pausedNow + 26_000, valuesAt: pausedNow});
+  assert.match(dimmed, /Pause state not current · last read .*31s ago/);
+  assert.doesNotMatch(dimmed, /Entries paused|Not paused/);
 });
 
-test('the Overview V5 card shows the same pause banner from the owner decisions read, and says so when that read failed', () => {
-  const read = decisionsWith(operator);
-  const mount = result => {
-    const {V5PauseNotice} = frontendModules({'@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? {data: {readiness: {paper_owner: {bot_name: 'meridian_v5_paper'}}}} : result}}).load('v5/V5PauseNotice.tsx');
-    return renderToStaticMarkup(React.createElement(V5PauseNotice));
-  };
-  assert.match(mount({data: read, dataUpdatedAt: pausedNow, isPending: false, isError: false}), /Entries paused \(5 of 5 pairs\) since 2026-11-14 14:40:00 UTC · 7d ago: <\/strong><span>Approved paper journal-cap maintenance<\/span>/);
+const overviewModules = (result, overrides) => frontendModules({
+  '@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? {data: {readiness: {paper_owner: {bot_name: 'meridian_v5_paper'}}}} : result},
+  ...overrides,
+});
+
+test('Overview distinguishes accepted but unusable HTTP 200 reads from a fresh explicit not-paused report', async t => {
+  const mount = result => renderToStaticMarkup(React.createElement(overviewModules(result, {'./usePaperClock': {usePaperClock: () => pausedNow}}).load('v5/V5PauseNotice.tsx').V5PauseNotice));
+  for (const state of ['stale', 'collecting', 'degraded']) {
+    const read = {...decisionsWith(operator), state};
+    const fetch = t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(read), {status: 200}));
+    const {readPaperDecisions} = overviewModules({}).load('v5/paper-pause.ts');
+    const data = await readPaperDecisions('meridian_v5_paper', new AbortController().signal);
+    fetch.mock.restore();
+    const html = mount({data, dataUpdatedAt: pausedNow, isPending: false, isError: false});
+    assert.match(html, /Pause state not current · last read .*5s ago/);
+    assert.doesNotMatch(html, /Entries paused|Not paused/);
+  }
+  const fresh = decisionsWith({entry_paused: false});
+  assert.match(mount({data: fresh, dataUpdatedAt: pausedNow}), /Not paused/);
+  fresh.data.controllers.pop();
+  const incomplete = mount({data: fresh, dataUpdatedAt: pausedNow});
+  assert.match(incomplete, /Pause state not current.*1 unknown/);
+  assert.doesNotMatch(incomplete, /Not paused/);
   assert.match(mount({isPending: true, isError: false}), /Reading the entry-pause state/);
-  assert.match(mount({isPending: false, isError: true, error: new Error('HTTP 503')}), /Entry-pause state not read: HTTP 503\. Not paused is not implied\./);
+  const failed = mount({data: decisionsWith(operator), isError: true, error: new Error('HTTP 503')});
+  assert.match(failed, /Pause state not current · last read .*5s ago/);
+  assert.match(failed, /HTTP 503/);
+  assert.doesNotMatch(failed, /Entries paused|Not paused/);
   const sourceOverview = fs.readFileSync(new URL('../src/v5/V5Overview.tsx', import.meta.url), 'utf8');
   assert.match(sourceOverview, /<h3><NavLink to="\/bots">V5 paper bot<\/NavLink><\/h3>\s*<V5PauseNotice \/>/);
+});
+
+test('the mounted Overview ages a 20-second-old publication past freshness without another fetch', async t => {
+  const browser = new Window();
+  const globals = {window: browser, document: browser.document, IS_REACT_ACT_ENVIRONMENT: true};
+  for (const [key, value] of Object.entries(globals)) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, {value, configurable: true});
+    t.after(() => previous ? Object.defineProperty(globalThis, key, previous) : Reflect.deleteProperty(globalThis, key));
+  }
+  t.after(() => browser.close());
+  let currentTime = pausedNow;
+  let tick;
+  t.mock.method(Date, 'now', () => currentTime);
+  t.mock.method(browser, 'setInterval', callback => { tick = callback; return 1; });
+  t.mock.method(browser, 'clearInterval', () => {});
+  const {createRoot} = await import('react-dom/client');
+  const {V5PauseNotice} = overviewModules({data: decisionsWith(operator, pausedNow - 15_000), dataUpdatedAt: pausedNow}).load('v5/V5PauseNotice.tsx');
+  const container = browser.document.createElement('div');
+  const root = createRoot(container);
+  try {
+    await React.act(async () => root.render(React.createElement(V5PauseNotice)));
+    assert.match(container.textContent, /Entries paused.*20s ago/);
+    currentTime += 11_000;
+    if (tick) await React.act(async () => tick());
+    assert.match(container.textContent, /Pause state not current · last read .*31s ago/);
+    assert.doesNotMatch(container.textContent, /Entries paused|Not paused/);
+  } finally {
+    await React.act(async () => root.unmount());
+  }
 });
 
 test('fills are listed newest first and a last fill per pair line gives each pair its time and age', () => {
@@ -143,6 +206,19 @@ test('model helpers: newest-first keeps undated rows last and never mutates the 
   assert.deepEqual(newestFirstFills(rows).map(item => item.id), ['c', 'd', 'a', 'b']);
   assert.deepEqual(rows.map(item => item.id), ['a', 'b', 'c', 'd']);
   assert.equal(newestFirstFills(null), null);
+});
+
+test('equal-time fills use the owner order ID then trade ID for both the list and the last fill', () => {
+  const {lastFillPerPair, newestFirstFills} = model();
+  const read = {...final3.fills, next_cursor: null};
+  const fill = {...read.data[0], trading_pair: 'BNB-USDC', event_at_ms: read.generated_at_ms - 1_000};
+  const buy = {...fill, order_id: 'order-a', trade_id: 'trade-z', side: 'BUY'};
+  const sell = {...fill, order_id: 'order-b', trade_id: 'trade-a', side: 'SELL'};
+  const correction = {...sell, trade_id: 'trade-b', side: 'BUY'};
+  assert.deepEqual(newestFirstFills([buy, sell]), [sell, buy]);
+  assert.deepEqual(newestFirstFills([buy, sell, correction]), [correction, sell, buy]);
+  assert.equal(lastFillPerPair({...read, data: [buy, sell]}, PAIRS, now).rows[0].side, 'SELL');
+  assert.equal(lastFillPerPair({...read, data: [buy, sell, correction]}, PAIRS, now).rows[0].side, 'BUY');
 });
 
 test('known owner codes show plain words with the code in small print; an unknown code is shown as published', () => {

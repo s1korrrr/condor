@@ -1,5 +1,6 @@
 import type { PaperRead } from "./contracts";
 import { ownerCodeWords } from "./owner-codes.ts";
+import { PAIRS } from "./paper-candles.ts";
 import { phoneRecordTime } from "./phone-records.ts";
 import { paperCompleteRead, paperOpenExecutorCount, paperReadState, paperRetainedRecords, paperSectionError, paperTime } from "./policy.ts";
 import { PAPER_SNAPSHOT_FRESH_MS, paperTimestampIssue } from "./snapshot-presentation.ts";
@@ -73,12 +74,13 @@ export function sellOrdersPartial(read: PaperRead | undefined, pair: string, now
 }
 
 /**
- * Fills newest first by their qualified time; a fill with no qualified time (missing, invalid or ahead of its snapshot)
- * keeps owner order after the dated ones, as on the phone list. The input is not changed.
+ * Fills newest first by qualified time, then by the owner's order and trade IDs descending. Undated fills stay in owner order.
  */
 export function newestFirstFills(rows: Row[] | null, timeOf: (row: Row) => number | null = row => typeof row.event_at_ms === "number" && Number.isFinite(row.event_at_ms) ? row.event_at_ms : null): Row[] | null {
   if (!rows) return rows;
-  const dated = rows.filter(row => timeOf(row) !== null).sort((first, second) => timeOf(second)! - timeOf(first)!);
+  const descendingId = (first: unknown, second: unknown) => typeof first === "string" && typeof second === "string" && first !== second ? (first < second ? 1 : -1) : 0;
+  const dated = rows.filter(row => timeOf(row) !== null).sort((first, second) => timeOf(second)! - timeOf(first)!
+    || descendingId(first.order_id, second.order_id) || descendingId(first.trade_id, second.trade_id));
   return [...dated, ...rows.filter(row => timeOf(row) === null)];
 }
 
@@ -97,65 +99,66 @@ export function lastFillPerPair(read: PaperRead | undefined, pairs: readonly str
   return { complete: paperCompleteRead(read, now), rows };
 }
 
-export interface EntryPause {
-  /** Coins whose controller reports the pause. */
-  coins: string[];
-  total: number | null;
-  /** Earliest pause start the owner published (ms), or null. */
-  since: number | null;
+interface EntryPause {
+  state: "paused";
+  paused: number;
+  unknown: number;
+  updated: [earliest: number, latest: number] | null;
   reasons: string[];
-  /** Paused controllers whose start time / reason the owner did not publish. */
-  noStart: number;
+  noUpdate: number;
   noReason: number;
-  /** Why the facts above could not be read, when the pause itself is only known from the risk section. */
   unread: string | null;
 }
+
+type EntryPauseState = EntryPause | { state: "not-paused" } | { state: "unknown"; unknown: number | null };
 
 function ownerTime(value: unknown, now: number): number | null {
   const number = typeof value === "number" ? value : typeof value === "string" && /^\d+(\.\d+)?$/.test(value.trim()) ? Number(value) : typeof value === "string" ? Date.parse(value) : NaN;
   if (!Number.isFinite(number) || number <= 0) return null;
   // The owner publishes epoch seconds or milliseconds; a count below 1e11 can only be seconds.
   const ms = typeof value === "string" && !/^\d+(\.\d+)?$/.test(value.trim()) ? number : number < 1e11 ? Math.round(number * 1000) : number;
-  return ms <= now + 60_000 ? ms : null;
+  return paperTimestampIssue(ms, now) === null ? ms : null;
 }
 
 /**
- * The V5 entry pause from the owner's decisions read (controllers[].custom_info.operator: entry_paused, updated_at, reason)
- * and, as a second witness, the risk section's operator pause flag. Null when neither reports a pause.
+ * Current decisions report individual pair states. Current risk can witness a pause but cannot prove its scope or a clear.
  */
-export function entryPause(decisions: PaperRead | undefined, now: number, riskPaused = false): EntryPause | null {
-  const usable = !!decisions && decisions.section === "decisions" && paperCompleteRead(decisions, now) && !!decisions.data && typeof decisions.data === "object" && !Array.isArray(decisions.data)
-    && Array.isArray((decisions.data as { controllers?: unknown }).controllers);
-  const controllers = usable ? (decisions!.data as { controllers: Row[] }).controllers.filter(row => row && typeof row === "object") : [];
-  const operatorOf = (row: Row): Row => {
+export function entryPause(decisions: PaperRead | undefined, now: number, riskPaused = false, retained = false): EntryPauseState {
+  const controllers = (decisions?.data as { controllers?: Row[] } | null)?.controllers;
+  const usable = !retained && decisions?.section === "decisions" && paperCompleteRead(decisions, now) && Array.isArray(controllers);
+  const reports = new Map<string, Row | null>();
+  for (const row of usable ? controllers : []) {
+    const pair = Array.isArray(row.pair) ? row.pair[0] : row.pair;
+    if (typeof pair !== "string" || !PAIRS.includes(pair)) continue;
     const info = row.custom_info && typeof row.custom_info === "object" && !Array.isArray(row.custom_info) ? row.custom_info as Row : {};
-    return info.operator && typeof info.operator === "object" && !Array.isArray(info.operator) ? info.operator as Row : {};
-  };
-  const paused = controllers.filter(row => operatorOf(row).entry_paused === true);
-  if (!paused.length) {
-    if (!riskPaused) return null;
-    const why = !decisions ? "decisions read not available" : !usable ? `decisions read ${paperReadState(decisions, now) === "stale" ? "stale" : "incomplete"}` : "no controller in the decisions read reports it";
-    return { coins: [], total: usable ? controllers.length : null, since: null, reasons: [], noStart: 1, noReason: 1, unread: why };
+    const operator = info.operator && typeof info.operator === "object" && !Array.isArray(info.operator) ? info.operator as Row : null;
+    reports.set(pair, reports.has(pair) ? null : operator);
   }
-  const times = paused.map(row => ownerTime(operatorOf(row).updated_at, now)).filter((time): time is number => time !== null);
-  const reasons = [...new Set(paused.flatMap(row => { const reason = operatorOf(row).reason; return typeof reason === "string" && reason.trim() ? [reason.trim().slice(0, 200)] : []; }))];
-  const coins = paused.map(row => { const pair = Array.isArray(row.pair) ? row.pair[0] : row.pair; return coinOf(pair) ?? (typeof row.id === "string" ? row.id : "?"); });
+  const paused = [...reports.values()].flatMap(report => report?.entry_paused === true ? [report] : []);
+  const unknown = PAIRS.length - paused.length - [...reports.values()].filter(report => report?.entry_paused === false).length;
+  if (!paused.length) {
+    if (!riskPaused) return unknown ? { state: "unknown", unknown: usable ? unknown : null } : { state: "not-paused" };
+    const unread = !decisions ? "decisions read not available" : retained ? "decisions read retained" : !usable ? `decisions read ${paperReadState(decisions, now) === "stale" ? "stale" : "incomplete"}` : "no controller in the decisions read reports it";
+    return { state: "paused", paused: 0, unknown, updated: null, reasons: [], noUpdate: 0, noReason: 0, unread };
+  }
+  const times = paused.map(report => ownerTime(report.updated_at, now)).filter((time): time is number => time !== null);
+  const reasons = paused.flatMap(({ reason }) => typeof reason === "string" && reason.trim() ? [reason.trim().slice(0, 200)] : []);
   return {
-    coins, total: controllers.length, since: times.length ? Math.min(...times) : null, reasons,
-    noStart: paused.length - times.length,
-    noReason: paused.filter(row => { const reason = operatorOf(row).reason; return typeof reason !== "string" || !reason.trim(); }).length,
+    state: "paused", paused: paused.length, unknown,
+    updated: times.length ? [Math.min(...times), Math.max(...times)] : null,
+    reasons: [...new Set(reasons)], noUpdate: paused.length - times.length, noReason: paused.length - reasons.length,
     unread: null,
   };
 }
 
-/** The banner sentence: what is paused, since when and why, naming each part the owner did not publish. */
+/** The banner sentence: what is paused, when it was updated and why. */
 export function entryPauseText(pause: EntryPause, now: number): { lead: string; reasons: string[]; missing: string | null } {
-  const scope = pause.coins.length && pause.total ? ` (${pause.coins.length} of ${pause.total} pairs)` : "";
-  const since = pause.since !== null ? paperTime(pause.since, now) : null;
-  const lead = since && since !== "Not published" ? `Entries paused${scope} since ${since}` : `Entries paused${scope}`;
+  const scope = pause.paused ? ` (${pause.paused} of ${PAIRS.length}${pause.unknown ? ` paused · ${pause.unknown} unknown` : " pairs"})` : "";
+  const update = pause.updated ? ` · updated ${paperTime(pause.updated[0], now)}${pause.updated[0] === pause.updated[1] ? "" : ` – ${paperTime(pause.updated[1], now)}`}` : "";
+  const lead = `Entries paused${scope}${update}`;
   const parts: string[] = [];
-  if (pause.since === null || pause.noStart) parts.push(pause.since === null ? "start time not published (owner field custom_info.operator.updated_at)" : `start time not published for ${plural(pause.noStart, "pair", "pairs")}`);
+  if (!pause.updated || pause.noUpdate) parts.push(!pause.updated ? "update time not published (owner field custom_info.operator.updated_at)" : `update time not published for ${plural(pause.noUpdate, "pair", "pairs")}`);
   if (!pause.reasons.length || pause.noReason) parts.push(!pause.reasons.length ? "reason not published (owner field custom_info.operator.reason)" : `reason not published for ${plural(pause.noReason, "pair", "pairs")}`);
-  const missing = parts.length || pause.unread ? `${parts.join(" · ")}${pause.unread ? `${parts.length ? " · " : ""}${pause.unread}` : ""}` : null;
-  return { lead, reasons: pause.reasons, missing };
+  if (pause.unread) parts.push(pause.unread);
+  return { lead, reasons: pause.reasons, missing: parts.join(" · ") || null };
 }

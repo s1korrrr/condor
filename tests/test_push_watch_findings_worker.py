@@ -228,6 +228,27 @@ def test_a_record_that_stays_unfinished_is_degraded_after_one_watch_period(watch
     assert watch_pushes(rig) == []
 
 
+@pytest.mark.parametrize("prefix", ["", '{"kind": "watch",'])
+def test_an_unterminated_tail_with_nul_is_counted_immediately(watch_rig, prefix):
+    rig = watch_rig
+    rig.watch.incident(("NOT_RUNNING", "v1"))
+    rig.watch.append(prefix + "\0" * 64)
+
+    rig.cycle()
+    beat = rig.worker.heartbeat_payload(rig.clock())
+    assert beat["watch_findings"] == {"state": "corrupt", "bad_records": 1}
+    assert "watch_findings_corrupt" in beat["degraded_reasons"]
+    assert [title for title, _ in watch_pushes(rig)] == ["V1 · container is not running"] * 2
+
+    rig.watch.append("\n")
+    rig.watch.incident(("NOT_HEALTHY", "v2"))
+    rig.cycle(1)
+    assert rig.worker.heartbeat_payload(rig.clock())["watch_findings"] == {"state": "corrupt", "bad_records": 1}
+    assert [title for title, _ in watch_pushes(rig)] == (
+        ["V1 · container is not running"] * 2 + ["V2 · container is not healthy"] * 2
+    )
+
+
 def test_a_record_still_being_written_is_not_called_torn_while_it_grows(watch_rig):
     rig = watch_rig
     text = torn(rig)

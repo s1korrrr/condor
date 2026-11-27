@@ -10,14 +10,12 @@ Failure is visible, never silent (the worker turns each into a degraded heartbea
 * ``error`` is set when nothing could be read: the folder is missing (the mount is absent), the path
   is not a regular file, or a read failed. The worker then keeps its checkpoint and tries again.
 * ``bad_lines`` counts lines that are not a JSON object. They are skipped and counted; the readable
-  lines still alert.
-* ``tail_sha`` fingerprints a last line without its newline. A write in progress finishes within moments,
-  so the reader does not judge it; the worker does, by how long the same fragment has stayed unchanged
-  (a fragment that stays for longer than one watch period is a torn record and counts as corrupt).
+  lines still alert. A NUL byte makes even an unfinished line invalid.
+* ``tail_sha`` fingerprints a NUL-free last line without its newline. The worker counts it as corrupt
+  if the same fragment stays unchanged past its grace period.
 
 A file that does not exist inside a mounted folder is a watch that has never raised an incident: an
-empty, healthy read. A last line without its newline is not read yet: it is retried every cycle, and
-completes (or is reported as stalled) later.
+empty, healthy read. A NUL-free unfinished line is retried every cycle until it completes or stalls.
 """
 
 from __future__ import annotations
@@ -38,7 +36,7 @@ class WatchRead:
     records: list[dict[str, Any]] = field(default_factory=list)
     bad_lines: int = 0
     error: str | None = None  # a short reason code; never a path, never file content
-    tail_sha: str | None = None  # sha256 of an unfinished last line (no newline); None when the file ends in a newline
+    tail_sha: str | None = None  # sha256 of a NUL-free unfinished line, if present
 
 
 def read_watch_records(path: Path | str) -> WatchRead:
@@ -69,11 +67,12 @@ def read_watch_records(path: Path | str) -> WatchRead:
         os.close(descriptor)
     lines = b"".join(chunks).split(b"\n")
     tail = lines.pop()  # after the last newline: empty, or a line still being written (or torn for good)
-    tail_sha = hashlib.sha256(tail).hexdigest() if tail.strip() else None
+    tail_has_nul = b"\x00" in tail  # no suffix can turn a raw NUL into valid JSON
+    tail_sha = hashlib.sha256(tail).hexdigest() if not tail_has_nul and tail.strip() else None
     if tail_only and lines:
         lines.pop(0)  # the first line is cut in the middle
     records: list[dict[str, Any]] = []
-    bad = 0
+    bad = int(tail_has_nul)
     for raw in lines:
         if not raw.strip():
             continue

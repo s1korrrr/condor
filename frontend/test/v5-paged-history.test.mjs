@@ -42,7 +42,9 @@ test('Bots adaptive tables and exact details show partial fills and executor row
     assert.match(html, /Partial retained window/);
     assert.match(html, /not lifetime history/);
     assert.match(html, /q-dt/);
-    assert.ok(html.includes(String(read.data[0][kind === 'fills' ? 'trade_id' : 'executor_id'])));
+    // Fills list newest first (W-T2); executors keep owner order.
+    const first = kind === 'fills' ? [...read.data].sort((left, right) => right.event_at_ms - left.event_at_ms)[0] : read.data[0];
+    assert.ok(html.includes(String(first[kind === 'fills' ? 'trade_id' : 'executor_id'])));
     assert.doesNotMatch(html, /Incomplete or stale owner read/);
   }
 });

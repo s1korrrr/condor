@@ -51,7 +51,9 @@ test('money tiles format values while retaining exact source and arithmetic resu
 
 test('rounded-zero record amounts keep the exact owner value in the title', () => {
   const fills = structuredClone(fixture.fills);
-  fills.data[0].quantity = '0.00000001';
+  // Fills list newest first, so change the newest one: it is in the visible rows.
+  const newest = fills.data.reduce((latest, row) => row.event_at_ms > latest.event_at_ms ? row : latest);
+  newest.quantity = '0.00000001';
   fills.next_cursor = null;
   const reads = Object.values(fixture).map(read => read.section === 'fills' ? fills : read);
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads,accountingRead:fixture.accounting,money,now,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));

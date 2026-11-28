@@ -313,7 +313,8 @@ for (const kind of ['positions', 'fills', 'executors']) test(`phone ${kind} sort
   const document = render(executors);
   const phone = [...document.querySelectorAll('.v5-phone-rows > div')];
   assert.deepEqual(phone.map(row => row.querySelector('summary strong').textContent), ['COIN1-USDC', 'COIN2-USDC', 'COIN3-USDC']);
-  assert.deepEqual([...document.querySelectorAll('.v5-desktop-table tbody tr')].map(row => row.children[1].textContent), ['COIN1-USDC', 'COIN3-USDC', 'COIN2-USDC']);
+  // Owner order on the desktop table, except fills, which list newest first there too (W-T2).
+  assert.deepEqual([...document.querySelectorAll('.v5-desktop-table tbody tr')].map(row => row.children[1].textContent), kind === 'fills' ? ['COIN1-USDC', 'COIN2-USDC', 'COIN3-USDC'] : ['COIN1-USDC', 'COIN3-USDC', 'COIN2-USDC']);
   for (const desktop of document.querySelectorAll('.v5-desktop-table tbody tr')) {
     const mobile = phone.find(row => row.textContent.includes(desktop.children[1].textContent));
     assert.equal(mobile.querySelector('details').open, false);

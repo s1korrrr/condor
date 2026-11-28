@@ -17,6 +17,7 @@ import re
 import stat
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +100,14 @@ _ADVISOR_TIME_KEYS = ("requested_at_ms", "received_at_ms", "expires_at_ms", "inp
 
 def _valid_advisor_time(value: Any) -> bool:
     return type(value) is int and 0 < value <= MAX_TIMESTAMP * 1000
+
+
+def _utc_minute(ms: Any) -> str | None:
+    """Format a journal timestamp as "20 Nov 2026 06:12 UTC", or None for a non-time."""
+    if not _valid_advisor_time(ms):
+        return None
+    at = datetime.fromtimestamp(ms / 1000, timezone.utc)
+    return f"{at.day} {at:%b %Y %H:%M} UTC"
 
 
 def _safe_history_advice(advice: Any) -> dict[str, Any]:
@@ -1074,8 +1083,11 @@ def create_app(
                 store.finish_session(session["id"], "BLOCKED", summary)
                 return session_response(session["id"])
             owner = paper.status
+            ready = {True: "ready", False: "not ready"}.get(
+                owner["ready"], "readiness not published"
+            )
             summary = (
-                f"Inspected paper status {paper.bot_name}; ready={owner['ready']}; "
+                f"Inspected paper status {paper.bot_name}; {ready}; "
                 f"controllers={len(owner['controllers'])}; mode=PAPER (simulated wallet)"
             )
             store.add_tick(
@@ -1121,7 +1133,10 @@ def create_app(
             )
             store.finish_session(session["id"], "BLOCKED", summary)
         else:
-            summary = f"Inspected source snapshot {snapshot_id}; availability={availability if availability is not None else 'unavailable'}"
+            available = _utc_minute(availability)
+            summary = f"Inspected source snapshot {snapshot_id}; " + (
+                f"available {available}" if available else "availability not reported"
+            )
             store.add_tick(
                 session["id"], status="COMPLETED", summary=summary, evidence_refs=refs
             )

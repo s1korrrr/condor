@@ -18,5 +18,6 @@ export function ownerTitleText(value: unknown): string | undefined;
 export function count(value: unknown): string;
 export function utc(ms: unknown, nowMs?: number): string | null;
 export function utcMin(ms: unknown, nowMs?: number): string | null;
+export function utcMinWithYear(ms: unknown): string | null;
 export function age(seconds: unknown): string;
 export function when(ms: unknown, nowMs?: number): string | null;

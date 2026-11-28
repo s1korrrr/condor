@@ -36,3 +36,43 @@ test('strip renders one cell per entry, newest first, with one tab stop and a te
   assert.match(html,/aria-label="API\. Newest on the left/);
   assert.match(html,/data-empty/);
 });
+
+test('one live region updates in place on first focus and after Escape then ArrowRight',async()=>{
+  const cells=[{key:'0',color:'red',label:'newest'},{key:'1',color:'green',label:'older'}];
+  const idle=renderToStaticMarkup(React.createElement(HeatStrip,{cells,ariaLabel:'API',renderTooltip:()=>null}));
+  assert.equal((idle.match(/role="status"/g)||[]).length,0,'an idle strip must not render a status region');
+  assert.doesNotMatch(idle,/aria-describedby/);
+  const {Window}=await import('happy-dom');
+  const browser=new Window({url:'https://fixture.invalid/'});
+  for(const name of ['window','document','navigator','HTMLElement','Element','Node','MutationObserver']) Object.defineProperty(globalThis,name,{value:name==='window'?browser:browser[name],configurable:true});
+  globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+  const {createRoot}=await import('react-dom/client');
+  const container=document.createElement('div');document.body.append(container);
+  const root=createRoot(container);
+  try{
+    await React.act(async()=>{root.render(React.createElement(HeatStrip,{cells,ariaLabel:'API',renderTooltip:()=>null}));});
+    const regions=()=>[...container.querySelectorAll('[aria-live], [role=status], [role=alert], [role=log]')];
+    const [region]=regions();
+    assert.equal(regions().length,1,'the live region exists before the first update');
+    assert.equal(region.getAttribute('aria-live'),'polite');
+    assert.equal(region.getAttribute('aria-atomic'),'true');
+    assert.equal(region.getAttribute('role'),null);
+    assert.equal(region.textContent,'');
+    const strip=container.querySelector('[role=group]');
+    const press=key=>React.act(async()=>{strip.dispatchEvent(new browser.KeyboardEvent('keydown',{key,bubbles:true}));});
+    const expectAnnouncement=text=>{
+      assert.equal(regions().length,1);
+      assert.equal(regions()[0],region);
+      assert.equal(region.textContent,text);
+    };
+    await React.act(async()=>{strip.focus();});
+    expectAnnouncement('newest');
+    assert.equal(strip.getAttribute('aria-describedby'),region.id);
+    await press('Escape');
+    expectAnnouncement('');
+    assert.equal(strip.hasAttribute('aria-describedby'),false);
+    await press('ArrowRight');
+    expectAnnouncement('older');
+    assert.equal(strip.getAttribute('aria-describedby'),region.id);
+  }finally{await React.act(async()=>root.unmount());container.remove();await browser.happyDOM.close();}
+});

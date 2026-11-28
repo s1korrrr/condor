@@ -931,7 +931,7 @@ def test_missing_section_is_degraded_not_a_fabricated_empty_wallet(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "status,expected", [(404, 200), (501, 200), (503, 503), (401, 401)]
+    "status,expected", [(404, 200), (501, 200), (503, 503), (401, 502)]
 )
 def test_optional_accounting_is_collecting_only_when_not_published(
     tmp_path, status, expected
@@ -954,6 +954,8 @@ def test_optional_accounting_is_collecting_only_when_not_published(
             assert response.json()["state"] == "collecting"
             assert response.json()["data"] is None
             assert response.json()["snapshot_id"] is None
+        if expected == 502:
+            assert response.json()["detail"] == {"code": "upstream_auth_rejected"}
 
 
 @pytest.mark.parametrize(

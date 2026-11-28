@@ -26,6 +26,7 @@ from condor.v5.app import create_app
 from condor.v5.config import ConfigurationError, Settings
 from condor.v5.dashboard import dashboard_profile, read_compatibility_path
 from condor.v5.paper import MAX_STATUS_BYTES, STALE_AFTER_SECONDS, read_paper_status
+from condor.v5.upstream import UpstreamError
 
 NOW = 1_800_000_000.0
 BOT = "meridian_v5_paper"
@@ -715,6 +716,23 @@ def client_for(tmp_path, upstream, *, payload=None, configured=True, clock_s=NOW
         == 200
     )
     return client
+
+
+@pytest.mark.parametrize("status_code", [401, 403, 407])
+def test_owner_auth_refusal_does_not_expire_the_dashboard_session(tmp_path, status_code):
+    class RefusingOwner:
+        async def observation(self, _path):
+            raise UpstreamError("upstream_unavailable", http_status=status_code)
+
+    with client_for(tmp_path, RefusingOwner()) as client:
+        assert client.get("/api/v5/auth").json() == {"authenticated": True}
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/{SERVER}/account-balances"},
+        )
+        assert response.status_code == 502
+        assert response.json() == {"detail": {"code": "upstream_auth_rejected"}}
+        assert client.get("/api/v5/auth").json() == {"authenticated": True}
 
 
 def reviewer(client):

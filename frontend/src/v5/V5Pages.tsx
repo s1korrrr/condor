@@ -449,7 +449,13 @@ export function SessionDetailPage() {
   const { id = "" } = useParams();
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["v5-session", id], queryFn: () => v5Api.session(id), enabled: !!id, refetchInterval: (q) => q.state.data?.status.toUpperCase() === "RUNNING" ? 5000 : false });
-  const stop = useMutation({ mutationFn: () => v5Api.stopSession(id), onSuccess: (session) => cacheSession(client, session) });
+  const stop = useMutation({
+    mutationFn: () => v5Api.stopSession(id),
+    onSuccess: async (session) => {
+      await client.cancelQueries({ queryKey: ["v5-session", session.id], exact: true });
+      cacheSession(client, session);
+    },
+  });
   if (query.isPending) return <Loading label="Loading session record" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
   const session = query.data;

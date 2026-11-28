@@ -17,6 +17,7 @@ from .timing import record_owner
 
 MAX_RESPONSE_BYTES = 256_000
 MAX_REQUEST_BYTES = 2_048
+UPSTREAM_AUTH_REJECTION_STATUSES = frozenset({401, 403, 407})
 # The observation API bounds each paper read by its own deadline
 # (hummingbot-api v5_advisory READ_WAIT_SECONDS = 6.0) and then answers with a
 # typed PAPER_READ_CAPACITY refusal. The client deadline must exceed it so the
@@ -94,6 +95,10 @@ class V5Upstream:
                         allow_redirects=False,
                         **extra,
                     ) as response:
+                        if response.status in UPSTREAM_AUTH_REJECTION_STATUSES:
+                            raise UpstreamError(
+                                "upstream_auth_rejected", http_status=response.status
+                            )
                         # read(n) may return one fragment; read through EOF
                         # under the request timeout, stopping at the bound.
                         body = bytearray()

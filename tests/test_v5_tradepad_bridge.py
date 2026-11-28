@@ -207,7 +207,7 @@ class FakeSession:
 
 def client(tmp_path, url):
     settings = replace(make_settings(tmp_path), tradepad_url=url, tradepad_campaign_id="w1772323200-1790812800")
-    app = create_app(settings=settings, upstream=NoNetworkUpstream(), static_dir=tmp_path / "dist")
+    app = create_app(settings=settings, upstream=NoNetworkUpstream(), static_dir=tmp_path / "dist", reuse_bridge_connections=False)
     test_client = TestClient(app)
     assert test_client.post("/api/v5/auth/login", json={"token": TOKEN}, headers={"Origin": ORIGIN}).status_code == 200
     return test_client

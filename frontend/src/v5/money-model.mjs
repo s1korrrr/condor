@@ -1,0 +1,111 @@
+/**
+ * Pure projections for the Money page from the dashboard's own money samples (GET /api/v5/money). A gap row or a
+ * missing interval stays a gap: series carry explicit nulls, daily rows say how many samples and gaps they hold,
+ * and each side of a comparison keeps its own labelled times.
+ */
+
+import { decimalPercentRatio, ownerTitleText, rationalPercent } from './format.mjs';
+import { exactSignedSum } from './bots-position-model.mjs';
+import { utcExact } from './shown.mjs';
+
+export const SAMPLE_MS = 300_000;
+export const MONEY_SAMPLE_MAX_AGE_MS = SAMPLE_MS + 60_000;
+
+export function moneySampleTimeState(atMs, now) {
+  if (!utcExact(atMs) || atMs <= 0) return 'unknown';
+  if (atMs > now) return 'future';
+  return now - atMs <= MONEY_SAMPLE_MAX_AGE_MS ? 'current' : 'stale';
+}
+
+export function hasZeroExternalFlows(value) {
+  return typeof value === 'string' && value.length <= 128 && /^-?0+(\.0{1,30})?$/.test(value);
+}
+
+export function moneySinceStart(row) {
+  const unavailable = reason => ({ value: null, reason });
+  if (!row) return unavailable('no sample with values');
+  if (row.external_flows == null) return unavailable('owner external cash flows not published');
+  if (!hasZeroExternalFlows(row.external_flows)) return unavailable('owner external cash flows are not exactly zero');
+  const { equity, initial_funding: funding } = row;
+  const oppositeFunding = typeof funding === 'string' ? funding.startsWith('-') ? funding.slice(1) : `-${funding}` : null;
+  const value = exactSignedSum(equity, oppositeFunding);
+  if (value == null) return unavailable('owner equity or initial funding not published');
+  return { value, title: `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(value.replace(/^-/, '−'))}` };
+}
+
+const number = value => (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null);
+
+/** Rows for one bot in time order. */
+export function botRows(rows, bot) {
+  return (Array.isArray(rows) ? rows : []).filter(row => row && row.bot === bot && Number.isInteger(row.at_ms)).sort((a, b) => a.at_ms - b.at_ms);
+}
+
+/**
+ * One field over time from raw five-minute rows. A gap row, a row without the field, or one missed slot (more than
+ * 1.5 slots between rows) becomes an explicit null, so a chart never joins across missing time.
+ */
+export function series(rows, bot, field) {
+  const out = [];
+  let previous = null;
+  for (const row of botRows(rows, bot)) {
+    if (previous !== null && row.at_ms - previous > 1.5 * SAMPLE_MS) out.push({ time: previous + SAMPLE_MS, value: null });
+    const value = row.gap ? null : number(row[field]);
+    out.push({ time: row.at_ms, value, ...(value !== null && typeof row[field] === 'string' ? { exact: row[field] } : {}) });
+    previous = row.at_ms;
+  }
+  return out;
+}
+
+/** The newest row with values, and the newest row of any kind (to say if the latest sample was a gap). */
+export function latest(rows, bot) {
+  const ordered = botRows(rows, bot);
+  const newest = ordered[ordered.length - 1] ?? null;
+  const withValues = [...ordered].reverse().find(row => !row.gap) ?? null;
+  return { newest, withValues };
+}
+
+/** Share of a UTC day's 288 five-minute slots that hold values (not gaps, not missing). */
+export function dayCoverage(entry) {
+  return entry && Number.isInteger(entry.valid) ? Math.min(1, entry.valid / 288) : null;
+}
+
+/**
+ * Equal-weight return of holding the whole basket between the first and last minute at which EVERY coin has a close
+ * ([seconds, close][] per coin). Those exact minutes are returned with the figure; a coin without closes withholds it.
+ * Nothing is substituted: a minute where one coin lacks a close is not a shared boundary.
+ */
+export function holdReturn(closesByCoin) {
+  const coins = Object.keys(closesByCoin);
+  const byCoin = coins.map(coin => new Map((closesByCoin[coin] ?? []).filter(point => Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]) && point[1] > 0).map(point => [point[0], point[1]])));
+  const missing = coins.filter((_coin, index) => byCoin[index].size === 0);
+  if (!coins.length || missing.length) return { pct: null, startS: null, endS: null, missing };
+  const shared = [...byCoin[0].keys()].filter(time => byCoin.every(closes => closes.has(time))).sort((a, b) => a - b);
+  if (shared.length < 2) return { pct: null, startS: null, endS: null, missing: [] };
+  const startS = shared[0], endS = shared[shared.length - 1];
+  const ratios = byCoin.map(closes => decimalPercentRatio(closes.get(endS), closes.get(startS)));
+  if (ratios.some(ratio => !ratio)) return { pct: null, startS, endS, missing: [] };
+  let numerator = 0n, denominator = 1n;
+  for (const ratio of ratios) {
+    numerator = numerator * ratio.denominator + ratio.numerator * denominator;
+    denominator *= ratio.denominator;
+  }
+  denominator *= BigInt(ratios.length);
+  let left = numerator < 0n ? -numerator : numerator, right = denominator;
+  while (right !== 0n) [left, right] = [right, left % right];
+  numerator /= left;
+  denominator /= left;
+  const result = rationalPercent(numerator, denominator);
+  const inputs = coins.map((coin, index) => `${coin} ${byCoin[index].get(startS)} → ${byCoin[index].get(endS)}`).join(', ');
+  const titleInputs = coins.map((coin, index) => `${coin} ${ownerTitleText(byCoin[index].get(startS))} → ${ownerTitleText(byCoin[index].get(endS))}`).join(', ');
+  return { pct: result.value, exact: `${inputs} · exact average ${result.exact}`, title: `${titleInputs} · exact average ${ownerTitleText(result.exact)}`, startS, endS, missing: [] };
+}
+
+/** V5 equity change between its own first and last sample with a value in the given rows, with those exact times. */
+export function equityChange(rows, bot) {
+  const ordered = botRows(rows, bot).filter(row => !row.gap && number(row.equity) !== null);
+  const first = ordered[0], last = ordered[ordered.length - 1];
+  if (!first || first === last) return { pct: null, startMs: null, endMs: null };
+  const ratio = decimalPercentRatio(last.equity, first.equity);
+  const result = ratio && rationalPercent(ratio.numerator, ratio.denominator);
+  return { pct: result?.value ?? null, exact: result ? `(${last.equity} − ${first.equity}) × 100 / ${first.equity} = ${result.exact}` : undefined, title: result ? `(${ownerTitleText(last.equity)} − ${ownerTitleText(first.equity)}) × 100 / ${ownerTitleText(first.equity)} = ${ownerTitleText(result.exact)}` : undefined, startMs: first.at_ms, endMs: last.at_ms };
+}

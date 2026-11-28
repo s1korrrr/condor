@@ -61,6 +61,8 @@ export interface V5Session {
   id: string;
   agent_id: string | null;
   loop_id: string | null;
+  /** The action that started the row: "inspect", "report" or "loop". */
+  kind?: string;
   status: string;
   started_at_ms: number;
   finished_at_ms: number | null;
@@ -97,7 +99,8 @@ export interface MarketEvidence {
 export interface AdvisorTaskProfile {
   task_id: string | null;
   model: string | null;
-  enabled: boolean;
+  enabled?: boolean;
+  enablement_error?: "task_enablement_not_published" | "task_enablement_invalid";
   reason: string;
   credential_status?: "READY" | "API_KEY_REQUIRED";
 }
@@ -123,8 +126,18 @@ export interface V5TaskReport {
       requested_at_ms?: number;
       received_at_ms?: number;
       expires_at_ms?: number;
+      input_cutoff_ms?: number;
+      input_available_at_ms?: number;
       actual_usd?: string | null;
-      advice?: { assessment?: string; summary?: string; reason_codes?: string[]; evidence_refs?: string[] };
+      advice?: {
+        assessment?: string;
+        summary?: string;
+        reason_codes?: string[];
+        reason_codes_total?: number;
+        evidence_refs?: string[];
+        evidence_refs_total?: number;
+        truncated_fields?: ('assessment' | 'summary')[];
+      };
     };
   };
 }
@@ -141,6 +154,11 @@ export interface V5Scheduler {
   last_status?: string;
   last_attempt_ms?: number;
   task_id?: string;
+  /**
+   * The owner's next run per role, only if it publishes one. The three roles share one slot, so a single shared next
+   * run is not a role's next run. Today the owner publishes none; the dashboard then says so.
+   */
+  next_run_by_task?: Record<string, number>;
 }
 
 export interface V5FeedRefresh {
@@ -169,7 +187,7 @@ export interface V5Workspace {
   context: MarketEvidence | null;
   source_refresh?: V5FeedRefresh;
   advisor: {
-    enabled: boolean;
+    enabled?: boolean;
     model: string | null;
     calls_today: number | null;
     spent_usd: number | string | null;
@@ -199,6 +217,7 @@ export interface V5AgentDetail extends V5Agent {
 export interface V5Settings {
   identity: V5Workspace["identity"];
   budget: V5Workspace["advisor"];
+  advisor_enabled_error?: "not a boolean" | null;
   task_profiles?: AdvisorTaskProfile[];
   budget_policy?: V5BudgetPolicy;
   scheduler?: V5Scheduler;

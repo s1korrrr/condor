@@ -183,10 +183,19 @@ class WorkspaceState:
         if reserve_bytes < 0 or reserve_bytes > MAX_RESERVATION_BYTES:
             raise StateCapacityError("requested journal reservation exceeds limit")
         with self._connection() as db:
+            db.execute("BEGIN IMMEDIATE")
             sessions_count = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+            overflow = sessions_count + 1 + expected_sessions - MAX_ROWS
+            if overflow > 0:
+                deleted = db.execute(
+                    "DELETE FROM sessions WHERE id IN ("
+                    "SELECT id FROM sessions WHERE status != 'RUNNING' "
+                    "ORDER BY started_at_ms, rowid LIMIT ?)",
+                    (overflow,),
+                ).rowcount
+                if deleted < overflow:
+                    raise StateCapacityError("V5 journal session limit reached")
             ticks_count = db.execute("SELECT COUNT(*) FROM ticks").fetchone()[0]
-            if sessions_count + 1 + expected_sessions > MAX_ROWS:
-                raise StateCapacityError("V5 journal session limit reached")
             if ticks_count + expected_ticks > MAX_TICKS:
                 raise StateCapacityError("V5 journal tick limit reached")
             self._ensure_capacity(db, reserve_bytes + 2_048)
@@ -226,7 +235,7 @@ class WorkspaceState:
                 (status, self.clock(), summary[:500], session_id),
             )
             db.execute("DELETE FROM reservations WHERE session_id=?", (session_id,))
-        return self.session(session_id)
+            return self._session_detail(db, session_id)
 
     def add_tick(
         self,
@@ -316,16 +325,18 @@ class WorkspaceState:
 
     def session(self, session_id: str) -> dict[str, Any] | None:
         with self._connection() as db:
-            row = db.execute(
-                "SELECT * FROM sessions WHERE id=?", (session_id,)
-            ).fetchone()
-            if row is None:
-                return None
-            value = self._session(row)
-            ticks = db.execute(
-                "SELECT * FROM ticks WHERE session_id=? ORDER BY at_ms,id",
-                (session_id,),
-            ).fetchall()
+            return self._session_detail(db, session_id)
+
+    def _session_detail(
+        self, db: sqlite3.Connection, session_id: str
+    ) -> dict[str, Any] | None:
+        row = db.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+        if row is None:
+            return None
+        value = self._session(row)
+        ticks = db.execute(
+            "SELECT * FROM ticks WHERE session_id=? ORDER BY at_ms,id", (session_id,)
+        ).fetchall()
         value["ticks"] = [self._tick(tick) for tick in ticks]
         value["journal"] = "\n".join(
             f"{tick['at_ms']}: {tick['summary']}" for tick in value["ticks"]
@@ -349,7 +360,9 @@ class WorkspaceState:
 
     def storage_status(self) -> dict[str, Any]:
         with self._connection() as db:
-            sessions = db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+            sessions, running = db.execute(
+                "SELECT COUNT(*), COUNT(CASE WHEN status='RUNNING' THEN 1 END) FROM sessions"
+            ).fetchone()
             ticks = db.execute("SELECT COUNT(*) FROM ticks").fetchone()[0]
             reserved = db.execute(
                 "SELECT COALESCE(SUM(bytes),0) FROM reservations"
@@ -357,7 +370,7 @@ class WorkspaceState:
         return {
             "status": (
                 "LIMIT_REACHED"
-                if sessions >= MAX_ROWS
+                if running >= MAX_ROWS
                 or self._database_bytes() + reserved >= MAX_DATABASE_BYTES
                 or ticks >= MAX_TICKS
                 else "AVAILABLE"

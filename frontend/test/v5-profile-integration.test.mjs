@@ -22,14 +22,15 @@ test("V5 entry reuses the actual dashboard pages under an isolated cookie profil
   for (const route of ["/capital", "/bots", "/operations", "/research", "/backtests"]) assert.match(app, new RegExp(`path=\\"${route.replaceAll("/", "\\/")}\\"`));
   for (const component of ["@/pages/Bots", "@/pages/Research", "@workspace-monitoring"]) assert.ok(app.includes(component));
   const market = await readFile(new URL("../src/v5/V5MarketHome.tsx", import.meta.url), "utf8");
-  assert.match(market, /@\/features\/market-picture\/MarketPicture/);
-  assert.match(market, /location\.pathname === "\/"/);
-  assert.ok(market.indexOf("V5 multi-venue context") < market.indexOf("Condor Market Picture"));
+  // Market is one page built from the V5 owner reads; the unbound legacy Market Picture frame is not imported.
+  assert.match(market, /from "\.\/V5Market"/);
+  assert.doesNotMatch(market, /market-picture/);
+  // The feed refresh time moved with the market evidence onto the one Market page.
+  assert.match(await readFile(new URL("../src/v5/V5Market.tsx", import.meta.url), "utf8"), /last_success_at_ms/);
   const pages = await readFile(new URL("../src/v5/V5Pages.tsx", import.meta.url), "utf8");
   assert.match(pages, /latest_by_task/);
   assert.match(pages, /result\.actual_usd/);
   assert.match(pages, /result\.expires_at_ms/);
-  assert.match(pages, /last_success_at_ms/);
   assert.match(pages, /remaining_pilot_usd/);
   assert.match(pages, /authorized_ceiling_usd/);
   assert.match(pages, /Provider billing balance/);

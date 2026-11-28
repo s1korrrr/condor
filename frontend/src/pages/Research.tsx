@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
+import { ReadNotice } from "@/components/ReadNotice";
 import { useServer } from "@/hooks/useServer";
 import { authFetch } from "@/lib/auth-token";
 import {
@@ -10,7 +11,7 @@ import {
   catalogCount,
   researchReadState,
 } from "@/features/research/model";
-import { readResearch } from "@/features/research/read";
+import { readResearch, ResearchHttpError } from "@/features/research/read";
 import {
   LAB_VIEWS,
   labTimestamp,
@@ -20,9 +21,11 @@ import {
 } from "@/features/research/lab-state";
 import {
   loadConsistentLabNetwork,
+  boundedLabNetwork,
   type LabNetwork,
 } from "@/features/research/lab-network-data";
 import { ResearchNetwork } from "@/features/research/ResearchNetwork";
+import { readV5Research, researchFreshnessDecision, researchOwnerFreshness } from "@/features/research/v5-read";
 import type { Camera } from "@/features/research/lab-network-engine";
 import {
   LabCharts,
@@ -41,6 +44,7 @@ import "@/features/research/workspace.css";
 import "@/features/research/lab.css";
 
 const read = readResearch(authFetch);
+const readV5 = readV5Research(authFetch);
 export function Research({ v5Paper = false }: { v5Paper?: boolean } = {}) {
   const { server } = useServer();
   const [params, setParams] = useSearchParams();
@@ -54,8 +58,8 @@ export function Research({ v5Paper = false }: { v5Paper?: boolean } = {}) {
   }, [server, serverChanged, params, setParams]);
   return (
     <div className="quant-workspace research-lab">
-      {v5Paper ? <><header className="quant-heading"><div><h1>Research</h1><p>Paper operating test · economic support remains V5_NOT_SUPPORTED.</p></div></header><section className="quant-notice" role="status"><h2>Not connected to this paper workspace</h2><p>The Research OS read export is not connected. Existing owner records and decisions remain authoritative; this page does not infer strategy support from paper uptime.</p><p>Next step: bind the existing V5 Research OS record IDs, hashes and decisions through a read-only export. No backtest or model call is started by viewing this page.</p></section></> : server && !serverChanged ? (
-        <ResearchLab key={server} server={server} />
+      {server && !serverChanged ? (
+        <ResearchLab key={server} server={server} v5Paper={v5Paper} />
       ) : (
         <>
           <header className="quant-heading">
@@ -79,9 +83,12 @@ export function Research({ v5Paper = false }: { v5Paper?: boolean } = {}) {
     </div>
   );
 }
-function ResearchLab({ server }: { server: string }) {
+function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) {
+  const ownerRead = v5Paper ? readV5 : read;
   const [params, setParams] = useSearchParams(),
     state = readLabState(params);
+  const views = v5Paper ? LAB_VIEWS.filter(view => view.id === "overview" || view.id === "graph") : LAB_VIEWS;
+  const viewConnected = views.some(view => view.id === state.view);
   const pendingParams = useRef(params);
   useEffect(() => {
     pendingParams.current = params;
@@ -102,9 +109,9 @@ function ResearchLab({ server }: { server: string }) {
   }, [state.q]);
   const overview = useQuery({
     queryKey: ["research-overview", server],
-    queryFn: ({ signal }) => read("overview", server, {}, signal),
+    queryFn: ({ signal }) => ownerRead("overview", server, {}, signal),
     refetchInterval: 30000,
-    retry: 1,
+    retry: v5Paper ? false : 1,
   });
   const overviewState = researchReadState(
     overview.data,
@@ -115,34 +122,28 @@ function ResearchLab({ server }: { server: string }) {
   const available = overviewState === "available",
     data = available ? object(overview.data?.data) : {},
     freshness = object(data.freshness);
-  const freshnessState = text(freshness.state, "unknown").toLowerCase();
   const verificationCheckedAt = text(freshness.verification_checked_at, "");
-  const reportedVerificationAgeSeconds = typeof freshness.verification_age_seconds === "number" &&
-    Number.isFinite(freshness.verification_age_seconds) && freshness.verification_age_seconds >= 0
-    ? freshness.verification_age_seconds : null;
-  const verificationAgeSeconds = reportedVerificationAgeSeconds !== null &&
-    Number.isFinite(overview.dataUpdatedAt) && overview.dataUpdatedAt > 0
-    ? reportedVerificationAgeSeconds + Math.max(0, now - overview.dataUpdatedAt) / 1000
-    : null;
+  const verificationAgeSeconds = verificationCheckedAt && Number.isFinite(Date.parse(verificationCheckedAt)) && now >= Date.parse(verificationCheckedAt)
+    ? (now - Date.parse(verificationCheckedAt)) / 1000 : null;
   const maxVerificationAgeSeconds = typeof freshness.max_verification_age_seconds === "number" &&
     Number.isFinite(freshness.max_verification_age_seconds) && freshness.max_verification_age_seconds > 0
     ? freshness.max_verification_age_seconds : null;
   const verifiedEventScan = freshness.freshness_basis === "verified_event_scan" &&
     !!verificationCheckedAt && Number.isFinite(Date.parse(verificationCheckedAt)) &&
     verificationAgeSeconds !== null && maxVerificationAgeSeconds !== null &&
-    verificationAgeSeconds <= maxVerificationAgeSeconds;
-  const displayedFreshnessState = freshness.state === "CURRENT" && !verifiedEventScan
-    ? "unavailable" : freshnessState;
+    verificationAgeSeconds < maxVerificationAgeSeconds && researchFreshnessDecision(data, now) === "within owner freshness deadline";
+  const displayedFreshnessState = freshness.state === "CURRENT" && verifiedEventScan
+    ? "current" : freshness.state === "PENDING" ? "pending" : "unavailable";
   const revision = text(overview.data?.data.revision, "");
   const networkVisible = state.view === "graph";
   const networkQuery = useQuery({
     queryKey: ["research-network", server, revision],
     enabled: available && networkVisible && !!revision,
     queryFn: ({ signal }) =>
-      loadConsistentLabNetwork(read, server, revision, signal),
+      loadConsistentLabNetwork(ownerRead, server, revision, signal),
     staleTime: Infinity,
     gcTime: 5 * 60 * 1000,
-    retry: 1,
+    retry: v5Paper ? false : 1,
   });
   useEffect(() => {
     const result = networkQuery.data;
@@ -200,9 +201,12 @@ function ResearchLab({ server }: { server: string }) {
   };
   const filter = (values: Record<string, string>) =>
     change(values, { resetPage: true, clearSelection: true }, true);
-  const graph = network ? (
+  const visibleNetwork = useMemo(() => network ? boundedLabNetwork(network) : null, [network]);
+  const graph = network && visibleNetwork ? (
+    <>
+    {(network.nodes.length > visibleNetwork.nodes.length || network.edges.length > visibleNetwork.edges.length) && <p>Showing first {visibleNetwork.nodes.length} of {network.nodes.length} nodes and {visibleNetwork.edges.length} of {network.edges.length} connections within that subset.</p>}
     <ResearchNetwork
-      data={network}
+      data={visibleNetwork}
       selected={state.selected}
       query={state.network_q}
       kind={state.network_kind}
@@ -224,6 +228,7 @@ function ResearchLab({ server }: { server: string }) {
       cameraStore={cameraStore}
       cameraKey={`${revision}:${state.view}:${state.network_topology}`}
     />
+    </>
   ) : (
     <LabReadNotice
       state={
@@ -231,8 +236,8 @@ function ResearchLab({ server }: { server: string }) {
       }
       error={overview.error ?? networkQuery.error}
       onRetry={() => {
-        void overview.refetch();
-        void networkQuery.refetch();
+        if (available && revision) void networkQuery.refetch();
+        else void overview.refetch();
       }}
     />
   );
@@ -244,6 +249,7 @@ function ResearchLab({ server }: { server: string }) {
         <div>
           <h1>Research</h1>
           <p>Ideas, experiments and evidence from Research OS.</p>
+          {v5Paper && <p>V5 connects to Overview and Graph only. The other Research OS views have no V5 connection.</p>}
         </div>
         <button onClick={refresh} disabled={overview.isFetching}>
           <RefreshCw
@@ -261,9 +267,10 @@ function ResearchLab({ server }: { server: string }) {
         >
           {available
             ? `Index ${displayedFreshnessState}${freshness.state === "CURRENT" && verifiedEventScan ? " · verified as of scan" : ""}`
-            : `Research connection ${overviewState}`}
+            : `Research connection ${overviewState === "error" && overview.error instanceof ResearchHttpError && overview.error.status === 503 ? "unavailable" : overviewState}`}
         </span>
         {available && <span>Last index sync · {labTimestamp(freshness.last_sync)}</span>}
+        {available && v5Paper && <span>{researchOwnerFreshness(data, now)}</span>}
         {available && verifiedEventScan ? (
           <span title="Native events may have changed after this scan; changes are detected within the stated verification age bound.">
             Event scan · {labTimestamp(verificationCheckedAt)} · {Math.floor(verificationAgeSeconds)}s old / ≤{maxVerificationAgeSeconds}s detection bound
@@ -277,7 +284,7 @@ function ResearchLab({ server }: { server: string }) {
         </span>}
       </div>
       <nav className="lab-nav" aria-label="Research Lab views">
-        {LAB_VIEWS.map((view) => (
+        {views.map((view) => (
           <button
             key={view.id}
             aria-current={state.view === view.id ? "page" : undefined}
@@ -288,32 +295,34 @@ function ResearchLab({ server }: { server: string }) {
         ))}
       </nav>
       <div
-        className={`lab-workspace-body ${state.selected && state.view !== "archive" ? "lab-with-inspector" : ""}`}
+        className={`lab-workspace-body ${!v5Paper && state.selected && state.view !== "archive" ? "lab-with-inspector" : ""}`}
       >
         <main className="lab-main" aria-label={`${viewLabel} research view`}>
           {/* Only index-bound panels (revision-bound conclusions, catalog coverage, network)
               wait for a current overview. Panels with their own reads keep their own state. */}
-          {state.view !== "archive" && !available && (
+          {viewConnected && state.view !== "archive" && !available && (
             <section className="quant-panel" aria-label="Research index overview">
               <header className="quant-panel-heading">
                 <div>
                   <h2>Index overview</h2>
-                  <p className="quant-muted">Conclusions, catalog coverage and the network are bound to the current index revision and wait for it. Other panels load and report their own state.</p>
+                  <p className="quant-muted">The overview and graph need a current Research OS index.</p>
                 </div>
               </header>
               <LabReadNotice state={overviewState} error={overview.error} onRetry={() => void overview.refetch()} />
             </section>
           )}
-          {state.view === "archive" ? (
+          {!viewConnected ? (
+            <ReadNotice kind="unavailable" title="Not connected" reason={`${viewLabel} has no V5 connection. Choose Overview or Graph.`} />
+          ) : state.view === "archive" ? (
             <ResearchArchive key={server} server={server} />
           ) : state.view === "overview" ? (
             <>
-              {available && <div className="lab-overview-columns">
+              {available && !v5Paper && <div className="lab-overview-columns">
                 <ResearchConclusions server={server} now={now} revision={revision} kind="assessment" onSelect={select} />
                 <ResearchConclusions server={server} now={now} revision={revision} kind="run" onSelect={select} />
               </div>}
-              <div className="lab-overview-columns"><LabQueue server={server} now={now} preview onSelect={select} />{available && <LabLimitations data={data} />}</div>
-              {available && <details className="quant-panel"><summary>Catalog coverage</summary><LabCounts data={data} onView={navigate} /></details>}
+              {(!v5Paper || available) && <div className="lab-overview-columns">{!v5Paper && <LabQueue server={server} now={now} preview onSelect={select} />}{available && <LabLimitations data={data} />}</div>}
+              {available && <details className="quant-panel"><summary>Catalog coverage</summary><LabCounts data={data} onView={v5Paper ? undefined : navigate} /></details>}
             </>
           ) : networkVisible ? (!available ? null : (
             <>
@@ -335,7 +344,7 @@ function ResearchLab({ server }: { server: string }) {
                 {graph}
               </section>
               {state.view === "graph" && network && (
-                <LabCharts data={network} expanded onFilter={(key, value) => change({ view: "ideas", q: "", family: "", lane: "", [key]: value }, { resetPage: true, clearSelection: true })} />
+                <LabCharts data={network} expanded={!v5Paper} onFilter={(key, value) => change({ view: "ideas", q: "", family: "", lane: "", [key]: value }, { resetPage: true, clearSelection: true })} />
               )}
             </>
           )) : (
@@ -354,7 +363,7 @@ function ResearchLab({ server }: { server: string }) {
             />
           )}
         </main>
-        {state.selected && state.view !== "archive" && (
+        {!v5Paper && state.selected && state.view !== "archive" && (
           <ResearchInspector
             key={`${server}:${state.selected}`}
             server={server}

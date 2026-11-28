@@ -26,8 +26,8 @@ const workspace = {schema_version:'v5-workspace.v1',identity,context:null,adviso
 const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/capital','Capital'],
   ['/operations','Operations'], ['/v5/readiness','Paper readiness'],
-  ['/backtests','Tradepad'], ['/','Market'], ['/market/evidence','Market Picture'],
-  ['/market/candles','Candle store'], ['/agents','Agents'],
+  ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'],
+  ['/agents','Agents'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
   ['/learning','Learning'], ['/research-factory','Research factory'],
   ['/decision-lineage','Decision lineage'], ['/sessions','Sessions'],
@@ -58,7 +58,7 @@ test('review probe: capital first commit after a zero-subscriber gap', async () 
     let body;
     if (url.pathname === '/api/v5/dashboard/read') {
       const native = url.searchParams.get('path');
-      const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.split('?')[0].split('/').at(-1);
+      const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.includes('operations/workspace') ? 'operations' : native.split('?')[0].split('/').at(-1);
       body = sections[section];
     } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
     else if (url.pathname === '/api/v5/dashboard/profile') body = profile;
@@ -79,18 +79,21 @@ test('review probe: capital first commit after a zero-subscriber gap', async () 
     await React.act(async () => {mount.render(React.createElement(V5App));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
     await React.act(async () => {await client.refetchQueries({type:'active'});}); await React.act(async () => {await new Promise(resolve => setTimeout(resolve,50));});
-    console.log('ON CAPITAL:', container.textContent.match(/Last complete owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
-    const agents = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/agents'); if (!agents) throw new Error('no agents link');
+    console.log('ON CAPITAL:', container.textContent.match(/Last coherent owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
+    const agents = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/research'); if (!agents) throw new Error('no research link');
     await React.act(async () => {agents.dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
     console.log('ON AGENTS, capital mounted:', container.textContent.includes('Initial simulated funding'));
     now += 90_000;
     globalThis.__commits = [];
+    // Back to Capital through the five-item menu: Overview, then its Capital sub-page.
+    const overviewLink = [...container.querySelectorAll('nav[aria-label="Main navigation"] a')].find(a => a.getAttribute('href') === '/');
+    await React.act(async () => {overviewLink.dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));});
     const settingsLink = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/capital');
     await React.act(async () => {settingsLink.dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
     console.log('COMMITS AFTER RETURN:', JSON.stringify(globalThis.__commits.map(c => ({...c, wallMinusGenerated:c.wall - sections.status.generated_at_ms}))));
-    console.log('FINAL:', container.textContent.match(/Last complete owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
+    console.log('FINAL:', container.textContent.match(/Last coherent owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
     assert.ok(!globalThis.__commits.some(c => c.current || (c.label && !/stale/.test(c.label))),'a 90 s old wallet snapshot must never commit as current');
   } finally {
     await React.act(async () => mount.unmount());

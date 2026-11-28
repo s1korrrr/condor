@@ -7,34 +7,50 @@ TickEngine, MCP tools, Hummingbot controls, or any general Condor router.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import ipaddress
+import json
 import logging
+import os
 import re
+import stat
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .agents import AgentCatalog, AgentDefinition
-from .candles import CandleOwner, OwnerUnavailable, validate_query
+from .candles import MAX_TIMESTAMP, CandleOwner, OwnerUnavailable, validate_query
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
+from .helm import read_helm_status
+from .http_pool import SharedSession
+from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
 from .learning import FixtureLearningAPI, learning_router
+from .learning_projection import PROJECTION_PATHS, ResearchOwnerLearningSource
 from .paper import PaperObservation, read_paper_status
+from .read_bridge import read_research, read_tradepad, research_route, tradepad_route
 from .state import StateCapacityError, WorkspaceState
-from .upstream import UpstreamError, V5Upstream
+from . import timing
+from .upstream import UPSTREAM_AUTH_REJECTION_STATUSES, UpstreamError, V5Upstream
 
 logger = logging.getLogger(__name__)
 COOKIE_NAME = "rsi_v5_session"
 SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+MARKET_PAGE_COINS = frozenset({"BTC", "ETH", "BNB", "SOL", "XRP"})
 MAX_JSON_BODY_BYTES = 16_384
+LOGIN_FAILURE_WINDOW_SEC = 60
+LOGIN_FAILURE_LIMIT = 8
+MAX_LOGIN_FAILURE_KEYS = 1024
 MAX_TICKS_PER_LOOP = 96
 MIN_LOOP_FREQUENCY_SEC = 900
 ADVISOR_TASK_IDS = ("market_context", "source_quality")
@@ -82,6 +98,53 @@ def _safe_policy_metadata(
 
 
 _WATERMARK_REASON = re.compile(r"[A-Z_]{1,32}(?::[a-z_,]{1,96})?")
+_ADVISOR_TIME_KEYS = ("requested_at_ms", "received_at_ms", "expires_at_ms", "input_cutoff_ms", "input_available_at_ms")
+
+
+def _valid_advisor_time(value: Any) -> bool:
+    return type(value) is int and 0 < value <= MAX_TIMESTAMP * 1000
+
+
+def _utc_minute(ms: Any) -> str | None:
+    """Format a journal timestamp as "20 Nov 2026 06:12 UTC", or None for a non-time."""
+    if not _valid_advisor_time(ms):
+        return None
+    at = datetime.fromtimestamp(ms / 1000, timezone.utc)
+    return f"{at.day} {at:%b %Y %H:%M} UTC"
+
+
+def _safe_history_advice(advice: Any) -> dict[str, Any]:
+    if not isinstance(advice, dict):
+        raise ValueError("invalid projected history advice")
+    projected: dict[str, Any] = {}
+    for key in ("assessment", "summary"):
+        if key in advice:
+            value = advice[key]
+            if not isinstance(value, str) or len(value) > 1_000:
+                raise ValueError("invalid projected history text")
+            projected[key] = value
+    for key, limit, length in (("reason_codes", 8, 64), ("evidence_refs", 32, 128)):
+        total_key = f"{key}_total"
+        if key in advice or total_key in advice:
+            values, total = advice.get(key), advice.get(total_key)
+            if (
+                not isinstance(values, list) or len(values) > limit
+                or any(not isinstance(value, str) or len(value) > length for value in values)
+                or type(total) is not int or not len(values) <= total <= 1_000_000
+            ):
+                raise ValueError("invalid projected history identifiers")
+            projected[key], projected[total_key] = values, total
+    if "truncated_fields" in advice:
+        fields = advice["truncated_fields"]
+        if (
+            not isinstance(fields, list) or not 1 <= len(fields) <= 2
+            or any(not isinstance(field, str) or field not in ("assessment", "summary") for field in fields)
+            or fields != sorted(set(fields))
+            or any(field not in projected or len(projected[field]) != 1_000 for field in fields)
+        ):
+            raise ValueError("invalid projected history excerpts")
+        projected["truncated_fields"] = fields
+    return projected
 
 
 def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
@@ -127,11 +190,13 @@ def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
         # Application-written by the advisor; never model text.
         safe_report["rejection"] = rejection[:300]
     coverage_status = report.get("coverage_status")
-    if coverage_status in {"COMPLETE_OBSERVED_COHORT", "PARTIAL_OR_UNKNOWN"}:
+    if isinstance(coverage_status, str) and coverage_status in {
+        "COMPLETE_OBSERVED_COHORT", "PARTIAL_OR_UNKNOWN"
+    }:
         safe_report["coverage_status"] = coverage_status
-    for key in ("requested_at_ms", "received_at_ms", "expires_at_ms"):
+    for key in _ADVISOR_TIME_KEYS:
         value = report.get(key)
-        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        if _valid_advisor_time(value):
             safe_report[key] = value
     actual_usd = report.get("actual_usd")
     if actual_usd is None or (
@@ -150,7 +215,9 @@ def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
         for key, limit, length in (("reason_codes", 8, 64), ("evidence_refs", 32, 128)):
             values = advice.get(key)
             if isinstance(values, list):
-                safe_advice[key] = [str(item)[:length] for item in values[:limit]]
+                safe_advice[key] = [
+                    item[:length] for item in values[:limit] if isinstance(item, str)
+                ]
         safe_report["advice"] = safe_advice
     request_id = record.get("request_id")
     safe_record: dict[str, Any] = {"result": safe_report}
@@ -204,7 +271,10 @@ class RequestBodyLimit:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}:
+        if (
+            scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}
+            or scope["path"] in PROJECTION_PATHS
+        ):
             return await self.app(scope, receive, send)
         data = bytearray()
         while True:
@@ -256,6 +326,8 @@ def create_app(
     static_dir: Path | None = None,
     clock=lambda: time.time_ns() // 1_000_000,
     learning_source: FixtureLearningAPI | None = None,
+    projection_source: ResearchOwnerLearningSource | None = None,
+    reuse_bridge_connections: bool = True,
 ) -> FastAPI:
     config = settings or Settings.from_env()
     store = state or WorkspaceState(config.runtime_root, clock=clock)
@@ -265,20 +337,83 @@ def create_app(
         KNOWN_TASK_IDS if config.paper_status_file is not None else ADVISOR_TASK_IDS
     )
     api = upstream or V5Upstream(config)
+    # The upstreams can share an origin. Give each its own connection limit.
+    bridge_sessions = {
+        owner: SharedSession(owner=owner) for owner in ("Tradepad", "Research")
+    } if reuse_bridge_connections else {}
     candle_owner = (
         CandleOwner(str(config.candle_store_socket))
         if config.candle_store_socket
         else None
     )
-    active_loop_task: asyncio.Task | None = None
+    money = MoneyLedger(config.runtime_root)
+    money_task: asyncio.Task | None = None
+    # The recorder's own last failure, shown by the money route; a failure never stops the loop.
+    money_errors: dict[str, Any] = {"count": 0, "last": None, "at_ms": None}
+    active_loop_task: asyncio.Task[dict[str, Any] | None] | None = None
     active_loop_stop: asyncio.Event | None = None
     login_failures: dict[str, list[float]] = {}
+    dashboard_token_error_logged = False
+
+    async def money_section(path: str) -> dict | None:
+        """The same validated paper read the pages use; None when the owner read is refused or fails."""
+        paper = await current_paper()
+        if paper is None:
+            return None
+        try:
+            result = read_compatibility_path(path, paper, resolve_paper_reads=True)
+            if not (isinstance(result, dict) and "source_route" in result):
+                return result if isinstance(result, dict) else None
+            payload = await api.observation(result["source_route"])
+            read = read_compatibility_path(
+                path, paper, paper_read=payload, paper_read_now_ms=clock()
+            )
+            return read if isinstance(read, dict) else None
+        except (HTTPException, UpstreamError):
+            return None
+
+    async def money_sample() -> None:
+        now = clock()
+        rows = []
+        if config.paper_status_file is not None:
+            prefix = "/api/v1/servers/rsibot-v5/"
+            wallet = await money_section(prefix + "account-balances")
+            accounting = await money_section(prefix + "fleet/accounting")
+            rows.append(v5_row(wallet, accounting, now))
+        if config.helm_status_file is not None:
+            # Judge Helm's file against the time it is read, not the slot time taken before the paper reads (those
+            # can take seconds, and Helm rewrites its status every second, which read as clock skew).
+            helm = await run_in_threadpool(read_helm_status, config.helm_status_file, now=clock() / 1000)
+            rows.append(helm_row(helm, now))
+        if rows:
+            await run_in_threadpool(money.append, rows)
+
+    async def money_loop() -> None:
+        while True:
+            try:
+                await money_sample()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                # Counted and shown on the page (the missing sample is itself the gap). Writing a gap row could fail
+                # the same way (for example a full disk), so the failure is kept in memory, not retried here.
+                money_errors.update(count=money_errors["count"] + 1, last=type(exc).__name__, at_ms=clock())
+            await asyncio.sleep(seconds_to_next_slot(clock()))
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        nonlocal money_task
+        if config.money_sampler:
+            money_task = asyncio.create_task(money_loop())
         try:
             yield
         finally:
+            if money_task is not None:
+                money_task.cancel()
+                try:
+                    await money_task
+                except asyncio.CancelledError:
+                    pass
             if active_loop_task is not None and not active_loop_task.done():
                 active_loop_task.cancel()
                 try:
@@ -286,8 +421,16 @@ def create_app(
                 except asyncio.CancelledError:
                     pass
             close = getattr(store, "close", None)
-            if callable(close):
-                close()
+            try:
+                if callable(close):
+                    close()
+            finally:
+                try:
+                    await asyncio.gather(*(session.close() for session in bridge_sessions.values()))
+                finally:
+                    api_close = getattr(api, "close", None)  # V5Upstream owns a shared session; test doubles have none
+                    if api_close is not None:
+                        await api_close()
 
     app = FastAPI(
         title="RSI V5 Workspace",
@@ -303,11 +446,25 @@ def create_app(
 
     @app.middleware("http")
     async def safe_headers(request: Request, call_next):
-        response = await call_next(request)
+        # scope["path"], not request.url: building the URL decodes the raw query string, which a hostile non-UTF-8
+        # query must not be able to fail before the route rejects it.
+        timed, token = timing.begin() if request.scope["path"].startswith("/api/v5/") else (None, None)
+        try:
+            response = await call_next(request)
+        except Exception:
+            if timed is None:
+                raise
+            logger.exception("Unhandled V5 request error")
+            response = PlainTextResponse("Internal Server Error", status_code=500)
+        finally:
+            if token is not None:
+                timing.end(token)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-V5-Authority"] = "reports-only"
+        if timed is not None:
+            response.headers["Server-Timing"] = timed.header()
         # Every response: HTML entry routes include /agents, /sessions/... and
         # /settings, and JSON never needs a weaker policy.
         response.headers["Content-Security-Policy"] = (
@@ -317,9 +474,17 @@ def create_app(
         return response
 
     def dashboard_token() -> str:
+        nonlocal dashboard_token_error_logged
         token = read_secret_file(config.dashboard_token_file)
-        if not 32 <= len(token) <= 256:
-            raise HTTPException(503, detail={"code": "dashboard_auth_unavailable"})
+        if not token:
+            if not dashboard_token_error_logged:
+                logger.error(
+                    "V5 dashboard token file is unreadable or invalid; "
+                    "check the V5_DASHBOARD_TOKEN_FILE mount and permissions"
+                )
+                dashboard_token_error_logged = True
+            raise HTTPException(503, detail={"code": "server_token_unavailable"})
+        dashboard_token_error_logged = False
         return token
 
     def caller_key(request: Request) -> str:
@@ -343,14 +508,24 @@ def create_app(
         expected = dashboard_token()
         supplied = request.cookies.get(COOKIE_NAME, "")
         if not supplied or not hmac.compare_digest(supplied, expected):
+            if projection is not None and request.url.path in PROJECTION_PATHS:
+                projection.invalidate()
             raise HTTPException(401, detail={"code": "authentication_required"})
 
+    # Production projection source only when fully configured (V5_LEARNING_*); otherwise the routes answer a
+    # typed UNAVAILABLE. A fixture source is only ever injected explicitly (tests) and never replaces a failed read.
+    projection = projection_source or (
+        ResearchOwnerLearningSource(config.learning_projection, clock=clock)
+        if config.learning_projection is not None
+        else None
+    )
     app.include_router(
         learning_router(
             source=learning_source or FixtureLearningAPI(),
             require_auth=require_auth,
             check_origin=check_origin,
             now=clock,
+            projection=projection,
         )
     )
 
@@ -365,19 +540,33 @@ def create_app(
 
     @app.get("/api/v5/auth")
     async def auth_status(request: Request):
-        token = read_secret_file(config.dashboard_token_file)
-        if not 32 <= len(token) <= 256:
-            return {"authenticated": False}
+        token = dashboard_token()
         supplied = request.cookies.get(COOKIE_NAME, "")
-        return {
-            "authenticated": bool(supplied and hmac.compare_digest(supplied, token))
-        }
+        authenticated = bool(supplied and hmac.compare_digest(supplied, token))
+        if authenticated and projection is not None:
+            scope = {
+                "authenticated": True,
+                "learning_scope_id": projection.config.scope_id,
+                "learning_scope_membership": projection.config.membership.summary(),
+            }
+            if projection.config.stage_b:
+                return {
+                    **scope,
+                    "learning_scope_sha256": projection.config.scope_sha256,
+                    "learning_projection_revision": projection.config.projection_revision,
+                }
+            return scope
+        return {"authenticated": authenticated}
 
     def paper_observation() -> PaperObservation | None:
         """One bounded read of the configured paper status; None when not configured."""
         if config.paper_status_file is None:
             return None
-        return read_paper_status(config.paper_status_file, now=clock() / 1000)
+        started = time.perf_counter()
+        try:
+            return read_paper_status(config.paper_status_file, now=clock() / 1000)
+        finally:
+            timing.record_parse(time.perf_counter() - started)
 
     async def current_paper() -> PaperObservation | None:
         if config.paper_status_file is None:
@@ -397,9 +586,36 @@ def create_app(
     async def dashboard_compatibility_profile():
         paper = await current_paper()
         profile = dashboard_profile() if paper is None else dashboard_profile(paper)
+        if config.research_url:
+            profile["readiness"].update(research_owner="CONFIGURED", research_owner_reason="Configured; owner reachability is not yet checked.")
+        if config.tradepad_url and config.tradepad_campaign_id:
+            profile["readiness"].update(tradepad_owner="CONFIGURED", tradepad_owner_reason="Configured; owner reachability is not yet checked.")
+        if config.tradepad_campaign_id:
+            profile["tradepad_campaign_id"] = config.tradepad_campaign_id
         if candle_owner is not None:
             profile["candle_store"] = {"configured": True}
         return profile
+
+    @app.get("/api/v5/money", dependencies=[Depends(require_auth)])
+    async def money_read(range: str = Query(default="7d", pattern="^(24h|7d)$")):
+        """Recorded money samples (read-only): raw rows for the range, and the V5 daily table from the whole record."""
+        now = clock()
+        span = {"24h": 86_400_000, "7d": 7 * 86_400_000}[range]
+        record = await run_in_threadpool(money.read, 0)
+        started = record[0]["at_ms"] if record else None
+        return JSONResponse(
+            {"sampler": config.money_sampler, "started_at_ms": started, "now_ms": now, "range": range,
+             "rows": [row for row in record if row["at_ms"] >= now - span], "daily": money_daily(record), "recorder_errors": dict(money_errors)},
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get("/api/v5/helm", dependencies=[Depends(require_auth)])
+    async def helm_status():
+        """Read-only Helm paper runtime status; never a control path."""
+        if config.helm_status_file is None:
+            return JSONResponse({"state": "UNBOUND", "reason": "V5_HELM_STATUS_FILE is not configured", "bot": None, "status": None}, headers={"Cache-Control": "no-store"})
+        result = await run_in_threadpool(read_helm_status, config.helm_status_file, now=clock() / 1000)
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v5/candle-store/{view}", dependencies=[Depends(require_auth)])
     async def candle_store_read(view: str, request: Request):
@@ -411,6 +627,7 @@ def create_app(
             raise HTTPException(404) from None
         except ValueError:
             raise HTTPException(422, detail={"code": "invalid_candle_query"}) from None
+        started = time.perf_counter()
         try:
             data = await (
                 candle_owner.read_summary()
@@ -427,11 +644,21 @@ def create_app(
                 status_code=503,
                 headers={"Cache-Control": "no-store"},
             )
+        finally:
+            timing.record_owner(time.perf_counter() - started)
 
     @app.get("/api/v5/dashboard/read", dependencies=[Depends(require_auth)])
     async def dashboard_compatibility_read(
         path: str = Query(min_length=1, max_length=2048),
     ):
+        tradepad = tradepad_route(path, config.tradepad_campaign_id)
+        if tradepad is not None:
+            raw = await read_tradepad(config.tradepad_url, *tradepad, bridge_sessions.get("Tradepad"))
+            return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
+        research = research_route(path)
+        if research is not None:
+            raw = await read_research(config.research_url, *research, bridge_sessions.get("Research"))
+            return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
         paper = await current_paper()
         result = (
             read_compatibility_path(path)
@@ -453,19 +680,26 @@ def create_app(
                     raise HTTPException(
                         503, detail={"code": "HOST_OPERATIONS_INVALID"}
                     ) from None
+                read_at_ms = clock()
                 payload = dict(
                     payload,
                     bot_id=paper.bot_name,
-                    read_at_ms=clock(),
+                    read_at_ms=read_at_ms,
                     observed_at_ms=payload.get("observed_at_ms"),
                     source_at_ms=payload.get("generated_at_ms"),
                     capabilities=[],
                     source={"owner": "host_monitor_export"},
                 )
-                return read_compatibility_path(path, paper, paper_read=payload)
+                return read_compatibility_path(
+                    path, paper, paper_read=payload, paper_read_now_ms=read_at_ms
+                )
             try:
                 payload = await api.observation(result["source_route"])
             except UpstreamError as exc:
+                if exc.http_status in UPSTREAM_AUTH_REJECTION_STATUSES:
+                    raise HTTPException(
+                        502, detail={"code": "upstream_auth_rejected"}
+                    ) from None
                 if result.get("section") == "accounting" and exc.http_status in {
                     404,
                     501,
@@ -480,25 +714,34 @@ def create_app(
                     exc.http_status,
                     detail={"code": exc.code, **exc.upstream_detail},
                 ) from exc
-            return read_compatibility_path(path, paper, paper_read=payload)
+            return read_compatibility_path(
+                path, paper, paper_read=payload, paper_read_now_ms=clock()
+            )
         return result
 
     @app.post("/api/v5/auth/login")
     async def login(payload: LoginBody, request: Request, response: Response):
         check_origin(request)
-        now = time.monotonic()
-        key = caller_key(request)
-        attempts = [time for time in login_failures.get(key, []) if now - time < 60]
-        if len(attempts) >= 8:
-            raise HTTPException(429, detail={"code": "login_rate_limited"})
-        expected = read_secret_file(config.dashboard_token_file)
-        if not 32 <= len(expected) <= 256 or not hmac.compare_digest(
-            payload.token, expected
-        ):
+        expected = dashboard_token()
+        if not hmac.compare_digest(payload.token.encode(), expected.encode("ascii")):
+            now = time.monotonic()
+            key = caller_key(request)
+            if key not in login_failures and len(login_failures) >= MAX_LOGIN_FAILURE_KEYS:
+                for caller, recorded in list(login_failures.items()):
+                    if now - recorded[-1] >= LOGIN_FAILURE_WINDOW_SEC:
+                        del login_failures[caller]
+                if len(login_failures) >= MAX_LOGIN_FAILURE_KEYS:
+                    raise HTTPException(429, detail={"code": "login_rate_limited"})
+            attempts = [
+                stamp
+                for stamp in login_failures.get(key, [])
+                if now - stamp < LOGIN_FAILURE_WINDOW_SEC
+            ]
+            if len(attempts) >= LOGIN_FAILURE_LIMIT:
+                raise HTTPException(429, detail={"code": "login_rate_limited"})
             attempts.append(now)
             login_failures[key] = attempts
             raise HTTPException(401, detail={"code": "invalid_dashboard_token"})
-        login_failures.pop(key, None)
         response.set_cookie(
             COOKIE_NAME,
             expected,
@@ -531,6 +774,69 @@ def create_app(
     async def get_json(path: str) -> dict[str, Any]:
         return await api.observation(path)
 
+    @app.get("/api/v5/advisor/history", dependencies=[Depends(require_auth)])
+    async def advisor_history(request: Request):
+        params = request.query_params.multi_items()
+        if len(params) != 2 or set(key for key, _ in params) != {"task_id", "limit"}:
+            raise HTTPException(400, detail={"code": "INVALID_HISTORY_QUERY"})
+        values = dict(params)
+        task_id, limit = values["task_id"], values["limit"]
+        if (
+            task_id not in KNOWN_TASK_IDS
+            or re.fullmatch(r"[1-5]", limit) is None
+            or request.scope["query_string"] not in {
+                f"task_id={task_id}&limit={limit}".encode(),
+                f"limit={limit}&task_id={task_id}".encode(),
+            }
+        ):
+            raise HTTPException(400, detail={"code": "INVALID_HISTORY_QUERY"})
+        try:
+            payload = await api.observation(
+                f"/v1/advice/history/projected?task_id={task_id}&limit={limit}"
+            )
+        except UpstreamError as exc:
+            code = "ADVISOR_PROJECTED_HISTORY_UNAVAILABLE" if exc.http_status in {404, 405} else "ADVISOR_HISTORY_UNAVAILABLE"
+            raise HTTPException(503, detail={"code": code}) from None
+        records = payload.get("records") if isinstance(payload, dict) else None
+        if (
+            not isinstance(records, list)
+            or len(records) > int(limit)
+            or payload.get("effect") != "NONE"
+        ):
+            raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
+        projected = []
+        for record in records:
+            if (
+                not isinstance(record, dict)
+                or record.get("task_id") != task_id
+                or not isinstance(record.get("request_id"), str)
+                or not 0 < len(record["request_id"]) <= 128
+                or not isinstance(record.get("status"), str)
+                or record.get("effect") != "NONE"
+                or not any(key in record for key in _ADVISOR_TIME_KEYS[:2])
+                or any(key in record and not _valid_advisor_time(record[key]) for key in _ADVISOR_TIME_KEYS)
+            ):
+                raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
+            try:
+                advice = _safe_history_advice(record.get("advice", {}))
+            except ValueError:
+                raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"}) from None
+            if record["status"] == "RESULT_NOT_PUBLISHED":
+                projected.append({
+                    "task_id": task_id, "status": "RESULT_NOT_PUBLISHED",
+                    "effect": "NONE", "record": None,
+                })
+                continue
+            item = _safe_task_latest(task_id, {"status": "HISTORY", "record": {
+                "request_id": record["request_id"], "input": {"task_id": record["task_id"]}, "result": record,
+            }})
+            if item["record"] is None:
+                raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
+            if "advice" in record:
+                item["record"]["result"]["advice"] = advice
+            projected.append(item)
+        return {"effect": "NONE", "records": projected}
+
     def task_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         rows = payload.get("tasks", [])
         allowed = set(task_ids)
@@ -546,7 +852,14 @@ def create_app(
             profile = {"task_id": row["task_id"]}
             if isinstance(row.get("model"), str):
                 profile["model"] = row["model"][:128]
-            profile["enabled"] = row.get("enabled") is True
+            if isinstance(row.get("enabled"), bool):
+                profile["enabled"] = row["enabled"]
+            else:
+                profile["enablement_error"] = (
+                    "task_enablement_invalid"
+                    if "enabled" in row
+                    else "task_enablement_not_published"
+                )
             if isinstance(row.get("reason"), str):
                 profile["reason"] = row["reason"][:200]
             if credential_status in {"READY", "API_KEY_REQUIRED"}:
@@ -558,7 +871,13 @@ def create_app(
         profile = next((item for item in rows if item.get("task_id") == task_id), None)
         if profile is None:
             return False, "task_profile_unavailable"
-        if profile.get("enabled") is not True:
+        if profile.get("enabled") is not True and profile.get("enabled") is not False:
+            return False, (
+                "task_enablement_invalid"
+                if profile.get("enablement_error") == "task_enablement_invalid"
+                else "task_enablement_not_published"
+            )
+        if profile.get("enabled") is False:
             reason = profile.get("reason")
             return False, (
                 str(reason)[:200]
@@ -590,7 +909,7 @@ def create_app(
         value = agent.summary()
         if agent.task_id:
             ready, reason = task_ready(agent.task_id, rows)
-            blockers = [] if ready else [reason or "task_disabled"]
+            blockers = [] if ready else [reason or "task_enablement_not_published"]
             if agent.id in agents.paper_roles:
                 owner = paper_blocker(paper)
                 blockers = ([owner] if owner else []) + blockers
@@ -616,8 +935,6 @@ def create_app(
             "source_refresh": "/v1/source/status",
             "identity": "/v1/identity",
             "advisor": "/v1/advice/status",
-            "history": "/v1/advice/history",
-            "latest": "/v1/advice/latest",
         }
         names = list(paths)
         results = await asyncio.gather(
@@ -693,7 +1010,6 @@ def create_app(
         status.update(budget)
         source_error = ";".join(errors) if errors else None
         paper = await current_paper()
-        history = source.get("history", {}).get("records", [])
         sessions = store.sessions()
         return {
             "schema_version": "v5-workspace.v1",
@@ -716,11 +1032,9 @@ def create_app(
             "advisor": {
                 **status,
                 "task_profiles": rows,
-                "latest": source.get("latest"),
                 "latest_by_task": source.get("latest_by_task", {}),
                 "budget_policy": source.get("budget_policy", {}),
                 "scheduler": source.get("scheduler", {}),
-                "history_count": len(history) if isinstance(history, list) else 0,
             },
             "agents": [
                 apply_task_status(agent, rows, paper)
@@ -790,8 +1104,11 @@ def create_app(
                 store.finish_session(session["id"], "BLOCKED", summary)
                 return session_response(session["id"])
             owner = paper.status
+            ready = {True: "ready", False: "not ready"}.get(
+                owner["ready"], "readiness not published"
+            )
             summary = (
-                f"Inspected paper status {paper.bot_name}; ready={owner['ready']}; "
+                f"Inspected paper status {paper.bot_name}; {ready}; "
                 f"controllers={len(owner['controllers'])}; mode=PAPER (simulated wallet)"
             )
             store.add_tick(
@@ -837,7 +1154,10 @@ def create_app(
             )
             store.finish_session(session["id"], "BLOCKED", summary)
         else:
-            summary = f"Inspected source snapshot {snapshot_id}; availability={availability if availability is not None else 'unavailable'}"
+            available = _utc_minute(availability)
+            summary = f"Inspected source snapshot {snapshot_id}; " + (
+                f"available {available}" if available else "availability not reported"
+            )
             store.add_tick(
                 session["id"], status="COMPLETED", summary=summary, evidence_refs=refs
             )
@@ -877,7 +1197,7 @@ def create_app(
                 raise UpstreamError("source_unavailable")
             enabled, reason = task_ready(agent.task_id, rows)
             if not enabled:
-                detail = reason or "task_disabled"
+                detail = reason or "task_enablement_not_published"
                 store.add_tick(
                     session_id,
                     status="BLOCKED",
@@ -974,9 +1294,9 @@ def create_app(
         frequency_sec: int,
         max_ticks: int,
         stop: asyncio.Event,
-    ):
+    ) -> dict[str, Any] | None:
         try:
-            for index in range(max_ticks):
+            for _ in range(max_ticks):
                 try:
                     await asyncio.wait_for(stop.wait(), timeout=frequency_sec)
                     break
@@ -1004,24 +1324,15 @@ def create_app(
                     error=latest.get("error"),
                 )
                 current = store.session(session_id)
-                if current and current.get("status") != "RUNNING":
-                    break
-                if index + 1 >= max_ticks:
-                    store.finish_session(
-                        session_id,
-                        "COMPLETED",
-                        f"Bounded loop completed {max_ticks} report ticks",
-                    )
-                    break
+                if current is None or current["status"] != "RUNNING":
+                    return current
             else:
-                store.finish_session(
+                return store.finish_session(
                     session_id,
                     "COMPLETED",
                     f"Bounded loop completed {max_ticks} report ticks",
                 )
-            current = store.session(session_id)
-            if current and current.get("status") == "RUNNING":
-                store.finish_session(session_id, "STOPPED", "Report loop stopped")
+            return store.finish_session(session_id, "STOPPED", "Report loop stopped")
         except asyncio.CancelledError:
             store.finish_session(
                 session_id,
@@ -1036,7 +1347,7 @@ def create_app(
                 if isinstance(exc, StateCapacityError)
                 else "Report loop stopped after an internal error"
             )
-            store.finish_session(session_id, "FAILED", summary)
+            return store.finish_session(session_id, "FAILED", summary)
 
     @app.post("/api/v5/agents/{agent_id}/loops/start")
     async def start_loop(agent_id: str, payload: ReportLoopBody, request: Request):
@@ -1059,7 +1370,9 @@ def create_app(
             raise HTTPException(409, detail={"code": "source_unavailable"})
         enabled, reason = task_ready(agent.task_id, rows)
         if not enabled:
-            raise HTTPException(409, detail={"code": reason or "task_disabled"})
+            raise HTTPException(
+                409, detail={"code": reason or "task_enablement_not_published"}
+            )
         if active_loop_task is not None and not active_loop_task.done():
             raise HTTPException(409, detail={"code": "active_loop_exists"})
         if store.active_loop() is not None:
@@ -1107,17 +1420,21 @@ def create_app(
             return session
         if active_loop_stop:
             active_loop_stop.set()
-        if active_loop_task is not None:
+        task = active_loop_task
+        if task is not None:
             # Let an in-flight upstream call reach its bounded timeout and be
-            # journaled before the loop exits; do not cancel a possible charge.
-            await active_loop_task
-            active_loop_task = None
-            active_loop_stop = None
-        if store.session(session_id).get("status") == "RUNNING":
-            store.finish_session(
+            # journaled. The task carries the terminal receipt through pruning.
+            terminal = await task
+            if active_loop_task is task:
+                active_loop_task = None
+                active_loop_stop = None
+        else:
+            terminal = store.finish_session(
                 session_id, "STOPPED", "Report loop stopped by operator"
             )
-        return session_response(session_id)
+        if terminal is None:
+            raise HTTPException(404, detail={"code": "session_not_found"})
+        return terminal
 
     @app.get("/api/v5/sessions", dependencies=[Depends(require_auth)])
     async def list_sessions():
@@ -1168,7 +1485,13 @@ def create_app(
                     "effect",
                 )
                 if key in advisor
+                and (key != "enabled" or isinstance(advisor[key], bool))
             },
+            "advisor_enabled_error": (
+                "not a boolean"
+                if "enabled" in advisor and not isinstance(advisor["enabled"], bool)
+                else None
+            ),
             "task_profiles": rows,
             "budget_policy": source.get("budget_policy", {}),
             "scheduler": source.get("scheduler", {}),
@@ -1202,6 +1525,32 @@ def create_app(
     assets_path = static_root / "assets"
     if assets_path.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_path), name="v5-assets")
+    root_media_types = {
+        ".png": "image/png",
+        ".svg": "image/svg+xml",
+        ".jpeg": "image/jpeg",
+        ".ico": "image/vnd.microsoft.icon",
+    }
+    root_static_hashes = {}
+    manifest_path = static_root.parent / "v5-reviewed-build.json"
+    if manifest_path.is_file() and not manifest_path.is_symlink():
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            files = manifest["files"]
+            if not isinstance(files, dict):
+                raise ValueError("manifest files must be an object")
+            root_static_hashes = {
+                name: digest
+                for name, digest in files.items()
+                if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name)
+                and Path(name).suffix in root_media_types
+                and isinstance(digest, str)
+                and re.fullmatch(r"[0-9a-f]{64}", digest)
+            }
+        except (OSError, ValueError, KeyError, TypeError):
+            logging.getLogger(__name__).warning("V5 root statics withheld: invalid reviewed manifest")
+    else:
+        logging.getLogger(__name__).warning("V5 root statics withheld: missing reviewed manifest")
 
     @app.get("/", response_class=HTMLResponse)
     async def root_page():
@@ -1219,9 +1568,18 @@ def create_app(
         return FileResponse(image, media_type="image/jpeg")
 
     for ui_path in (
+        "/market",
         "/capital",
         "/bots",
+        "/helm",
+        "/money",
         "/operations",
+        "/system",
+        "/system/checks",
+        "/system/data-feeds",
+        "/system/engine-inputs",
+        "/system/readiness",
+        "/system/settings",
         "/research",
         "/learning",
         "/research-factory",
@@ -1233,6 +1591,7 @@ def create_app(
         "/market/stocks",
         "/v5/readiness",
         "/agents",
+        "/agents/decisions",
         "/sessions",
     ):
         app.add_api_route(
@@ -1254,5 +1613,65 @@ def create_app(
         if not SESSION_ID_RE.fullmatch(session_id):
             raise HTTPException(404)
         return await root_page()
+
+    @app.get("/market/{coin}", response_class=HTMLResponse)
+    async def market_coin_page(coin: str):
+        # A linkable coin detail (/market/BTC); only the coins the Market page shows.
+        if coin not in MARKET_PAGE_COINS:
+            raise HTTPException(404)
+        return await root_page()
+
+    def root_static(request: Request):
+        asset_name = request.url.path.removeprefix("/")
+        name = "favicon.svg" if asset_name == "favicon.ico" and asset_name not in root_static_hashes else asset_name
+        digest = root_static_hashes.get(name)
+        image = static_root / name
+        if digest is None:
+            raise HTTPException(404)
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+        limit = 8 * 1024 * 1024
+        try:
+            descriptor = os.open(image, flags)
+            try:
+                metadata = os.fstat(descriptor)
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > limit:
+                    raise HTTPException(404)
+                with os.fdopen(descriptor, "rb", closefd=False) as source:
+                    content = source.read(limit + 1)
+            finally:
+                os.close(descriptor)
+        except OSError:
+            raise HTTPException(404) from None
+        if len(content) > limit or not hmac.compare_digest(hashlib.sha256(content).hexdigest(), digest):
+            raise HTTPException(404)
+        return Response(
+            b"" if request.method == "HEAD" else content,
+            media_type=root_media_types[image.suffix],
+            headers={"content-length": str(len(content))},
+        )
+
+    root_static_names = set(root_static_hashes) - {"condor_old.jpeg"}
+    if "favicon.svg" in root_static_hashes:
+        root_static_names.add("favicon.ico")
+    for asset_name in sorted(root_static_names):
+        app.add_api_route(
+            f"/{asset_name}", root_static, methods=["GET", "HEAD"], include_in_schema=False
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def not_found_page(request: Request, exc: StarletteHTTPException):
+        # A browser asking for an unknown page gets the app (status 404), which shows "Page not found" with a way back,
+        # instead of raw JSON. API, asset and non-GET requests keep the JSON error unchanged.
+        page = (
+            exc.status_code == 404
+            and request.method == "GET"
+            and not request.url.path.startswith(("/api/", "/assets/"))
+            and "text/html" in request.headers.get("accept", "")
+            and html_path.is_file()
+            and not html_path.is_symlink()
+        )
+        if page:
+            return FileResponse(html_path, media_type="text/html", status_code=404)
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
 
     return app

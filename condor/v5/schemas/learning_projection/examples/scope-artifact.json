@@ -1,0 +1,27 @@
+{
+  "schema": "research_knowledge.v5_projection_scope.v1",
+  "scope_id": "fixture-v5-lfl",
+  "program_id": "fixture-program",
+  "family_lane_pairs": [
+    {
+      "family_id": "fixture-family",
+      "lane": "SPOT"
+    }
+  ],
+  "membership_policy": "RECORDED_V1",
+  "enabled_datasets": [
+    "jobs",
+    "lessons",
+    "manifest",
+    "records"
+  ],
+  "source_receipts": [
+    {
+      "root": "SOURCE",
+      "relative_path": "fixtures/selection.json",
+      "pointer": "",
+      "sha256": "fbf0c6b015227ccb2cea93670523b6182cdc022405d7b0eaa327b5d01300e161",
+      "bytes": 17
+    }
+  ]
+}

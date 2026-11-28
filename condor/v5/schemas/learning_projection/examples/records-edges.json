@@ -1,0 +1,103 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "records",
+  "scope": {
+    "scope_id": "fixture-v5-lfl",
+    "program_id": "fixture-program",
+    "family_lane_pairs": [
+      {
+        "family_id": "fixture-family",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "d364ab0182f590617ea29f482a9279bf0cd4cfd06850a8f11b7bef821c159fd8"
+  },
+  "projection_revision": "bb6391c6d97e1043c087b88116706a0919a9a0985c5dac9d3751eba872bb759a",
+  "snapshot_id": "7853c8fe2e59de742216785718f21552523efdef59d742457f31e13325facea1",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "BOUND",
+  "reason_codes": [],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "COMPLETE",
+    "total_items": 1,
+    "returned_items": 1,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "edge:fixture-1",
+      "native_kind": "edge",
+      "native_revision": "b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b",
+      "row_scope": {
+        "membership_basis": "ASSERTED_PARENT",
+        "family_id": "fixture-family",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": {
+          "venue": "fixture-venue",
+          "capital_model": "SPOT",
+          "window": {
+            "start": 1772323200000,
+            "end_exclusive": 1790812800000
+          },
+          "regimes": [],
+          "scope_state": "RECORDED"
+        }
+      },
+      "recorded_at_ms": 1794916740000,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/fixture.json",
+          "pointer": "/nodes/0",
+          "sha256": "b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b",
+          "bytes": 20
+        }
+      ],
+      "row_status": "COMPLETE",
+      "issues": [],
+      "record_type": "edge",
+      "edge_id": "edge:fixture-1",
+      "from_ref": {
+        "owner": "research_os",
+        "kind": "run",
+        "record_id": "run:fixture-1",
+        "revision": null,
+        "source_index": 0,
+        "resolution": "RESOLVED"
+      },
+      "to_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:fixture-1",
+        "revision": null,
+        "source_index": 0,
+        "resolution": "RESOLVED"
+      },
+      "relation": "attempt_of",
+      "basis": "EXPLICIT",
+      "row_sha256": "46cb692725fb2a5eaa501dbb356047cdbd23b34315dce215d338765f46ae3dec"
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "3827f01fc49947b0d83def731cf979cf69dc5ebc245a6b953711c2743253dc69"
+}

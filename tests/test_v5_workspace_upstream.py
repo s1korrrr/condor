@@ -99,6 +99,21 @@ def make_settings(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [401, 403, 407])
+async def test_observation_auth_refusal_does_not_require_a_json_body(tmp_path, status_code):
+    class RefusingSession(Session):
+        def request(self, method, url, **kwargs):
+            return Response(status_code, b"<html>Credentials rejected</html>")
+
+    upstream = V5Upstream(make_settings(tmp_path), session_factory=RefusingSession)
+    with pytest.raises(UpstreamError) as error:
+        await upstream.observation("/v1/context")
+    assert error.value.http_status == status_code
+    assert error.value.code == "upstream_auth_rejected"
+    assert error.value.body == {}
+
+
+@pytest.mark.asyncio
 async def test_task_profiles_use_read_token_and_assessments_use_distinct_request_token(
     tmp_path,
 ):

@@ -1,0 +1,209 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "assessments",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "PARTIAL",
+  "reason_codes": [
+    "NOT_PUBLISHED"
+  ],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "PARTIAL",
+    "total_items": 3,
+    "returned_items": 3,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "assessment:fixture-combined",
+      "native_kind": "assessment",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "ASSERTED_PARENT",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "fixtures/stage-b/assessment-cases.json",
+          "pointer": "",
+          "sha256": "893d1aef72616ce2d89ffc809cfbe981e1f629797320d212ff4e990de009fa45",
+          "bytes": 261
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "NOT_PUBLISHED",
+          "record_id": "assessment:fixture-combined",
+          "detail": "No admitted owner comparison is published for this recorded assessment; preserve all qualifiers."
+        }
+      ],
+      "assessment_id": "fixture-combined",
+      "idea_revision_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903:revision:cd2887da2b4e98e7d786512627bcc975",
+      "evaluation_id": "fixture-evaluation-combined",
+      "run_ref": {
+        "owner": "research_os",
+        "kind": "run",
+        "record_id": "run:fixture-completed-combined",
+        "revision": null,
+        "source_index": 0,
+        "resolution": "RESOLVED"
+      },
+      "verdict": "INCONCLUSIVE",
+      "validity": "VALID",
+      "attribution": "COMBINED",
+      "supersedes": null,
+      "admission": "RECORDED_ONLY",
+      "comparison": null,
+      "row_sha256": "d0150bc31658a79874c46dbe8499d2d8dac9cc8ea18320e88a91e043ae915742"
+    },
+    {
+      "record_id": "assessment:fixture-invalid",
+      "native_kind": "assessment",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "ASSERTED_PARENT",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "fixtures/stage-b/assessment-cases.json",
+          "pointer": "",
+          "sha256": "893d1aef72616ce2d89ffc809cfbe981e1f629797320d212ff4e990de009fa45",
+          "bytes": 261
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "NOT_PUBLISHED",
+          "record_id": "assessment:fixture-invalid",
+          "detail": "No admitted owner comparison is published for this recorded assessment; preserve all qualifiers."
+        }
+      ],
+      "assessment_id": "fixture-invalid",
+      "idea_revision_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903:revision:cd2887da2b4e98e7d786512627bcc975",
+      "evaluation_id": "fixture-evaluation-invalid",
+      "run_ref": {
+        "owner": "research_os",
+        "kind": "run",
+        "record_id": "run:fixture-completed-invalid",
+        "revision": null,
+        "source_index": 0,
+        "resolution": "RESOLVED"
+      },
+      "verdict": "SUPPORTED",
+      "validity": "INVALID",
+      "attribution": "ISOLATED",
+      "supersedes": null,
+      "admission": "RECORDED_ONLY",
+      "comparison": null,
+      "row_sha256": "4b9097c8948f0c7b54df2d10518ee1558feac689909bb84eb8413791264ea56a"
+    },
+    {
+      "record_id": "assessment:fixture-unavailable",
+      "native_kind": "assessment",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "ASSERTED_PARENT",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "fixtures/stage-b/assessment-cases.json",
+          "pointer": "",
+          "sha256": "893d1aef72616ce2d89ffc809cfbe981e1f629797320d212ff4e990de009fa45",
+          "bytes": 261
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "NOT_PUBLISHED",
+          "record_id": "assessment:fixture-unavailable",
+          "detail": "No admitted owner comparison is published for this recorded assessment; preserve all qualifiers."
+        }
+      ],
+      "assessment_id": "fixture-unavailable",
+      "idea_revision_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903:revision:cd2887da2b4e98e7d786512627bcc975",
+      "evaluation_id": "fixture-evaluation-unavailable",
+      "run_ref": {
+        "owner": "research_os",
+        "kind": "run",
+        "record_id": "run:fixture-completed-unavailable",
+        "revision": null,
+        "source_index": 0,
+        "resolution": "RESOLVED"
+      },
+      "verdict": "SUPPORTED",
+      "validity": "UNAVAILABLE",
+      "attribution": "UNAVAILABLE",
+      "supersedes": null,
+      "admission": "RECORDED_ONLY",
+      "comparison": null,
+      "row_sha256": "f594e47b57ed9d46765ba9ac37b3d5cd0526f46be966e705d6856052e559426e"
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "b3fe4ab772db6f3b010ce86051d2d50b0753d4e4c0fc484261f8eb2183f6d826"
+}

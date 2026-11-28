@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {frontendModules} from './helpers/frontend-module.mjs';
+import {frontendModules, paperVisualStubs} from './helpers/frontend-module.mjs';
 
 for (const signal of ['emergency','paused','entry_hold','native_hold']) test(`first-load partial risk publishes received ${signal} before totals`, () => {
   const risk = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/native-replay/risk.json',import.meta.url)));
@@ -16,7 +16,7 @@ for (const signal of ['emergency','paused','entry_hold','native_hold']) test(`fi
     if (signal === 'native_hold') risk.data.native_entry_holds.push({controller_id:id,reason:'v5_risk_incomplete',explanation:'Received native refusal',protected_exits:'preserved'});
   }
   const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
-  const {load} = frontendModules(stubs);
+  const {load} = frontendModules({...stubs, ...paperVisualStubs});
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],complete:false,now:risk.generated_at_ms,reportAt:null,heartbeat:'Fresh',bot:risk.bot_id}));
   assert.match(html,/New acquisitions held/);

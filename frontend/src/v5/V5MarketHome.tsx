@@ -1,27 +1,25 @@
-import { lazy, Suspense } from "react";
-import { NavLink, useLocation } from "react-router-dom";
-import { MarketPage } from "./V5Pages";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { ReadNotice } from "@/components/ReadNotice";
+import { MARKET_COINS } from "./market-model.mjs";
+import { V5NotFound } from "./V5NotFound";
 import { useQuery } from "@tanstack/react-query";
 import { v5Api } from "./api";
-import { V5CandleStore } from "./V5CandleStore";
+import { V5Market } from "./V5Market";
 import { V5Stocks } from "./V5Stocks";
 
-const ExistingMarketPicture = lazy(() => import("@/features/market-picture/MarketPicture").then(m => ({ default: m.MarketPicture })));
-
+/**
+ * Market is one page. The former "V5 multi-venue context", "Condor Market Picture" and "Candle store" views are
+ * folded into it (old links land here). OKX stocks stay a separate view: different instruments, not the five coins.
+ */
 export function V5MarketHome() {
   const location = useLocation();
-  const evidenceTab = location.pathname === "/";
-  const candleTab = location.pathname === "/market/candles";
-  const stockTab = location.pathname === "/market/stocks";
+  const { coin } = useParams();
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
   const candleConfigured = profile.data?.candle_store?.configured === true;
-  return <section>
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-[var(--color-border)] pb-4">
-      <div><h1 className="text-2xl font-semibold tracking-tight">Market</h1><p className="mt-1 text-sm text-[var(--color-text-muted)]">Market monitoring for the V5 stack on Razer.</p></div>
-      <nav aria-label="Market views" className="flex max-w-full flex-wrap gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1"><NavLink end to="/" className={({isActive}) => `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-[var(--color-bg)] text-[var(--color-text)] shadow-sm" : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"}`}>V5 multi-venue context</NavLink><NavLink to="/market/evidence" className={({isActive}) => `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-[var(--color-bg)] text-[var(--color-text)] shadow-sm" : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"}`}>Condor Market Picture</NavLink>{candleConfigured && <NavLink to="/market/candles" className={({isActive}) => `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-[var(--color-bg)] text-[var(--color-text)] shadow-sm" : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"}`}>Candle store</NavLink>}<NavLink to="/market/stocks" className={({isActive}) => `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-[var(--color-bg)] text-[var(--color-text)] shadow-sm" : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"}`}>Stocks</NavLink></nav>
-    </div>
-    {stockTab ? <V5Stocks configured={candleConfigured} profilePending={profile.isPending} profileError={profile.error} /> : candleTab ? (candleConfigured ? <V5CandleStore /> : <p>Candle store is not configured for this deployment.</p>) : evidenceTab ? <MarketPageInline /> : <><div className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-muted)]">The legacy Condor Market Picture frame has no V5 native frame binding. It is kept separate from the V5 multi-venue evidence feed.</div>{profile.data?.readiness.paper_owner ? <section className="v5-panel"><h2>Market Picture not connected</h2><p>The legacy Market Picture owner is not connected to this paper workspace.</p><p>Owner: Market Picture. Connect its validated read export to show recorded market context. No data or market conclusion is inferred.</p><NavLink to="/">View the separate V5 multi-venue context</NavLink></section> : <Suspense fallback={<p role="status">Loading Condor Market Picture…</p>}><ExistingMarketPicture /></Suspense>}</>}
-  </section>;
+  if (coin && !MARKET_COINS.includes(coin)) return <V5NotFound />;
+  if (location.pathname === "/market/stocks") return <V5Stocks configured={candleConfigured} profilePending={profile.isPending} profileError={profile.error} />;
+  if (profile.isPending) return <ReadNotice kind="loading" title="Loading market…" />;
+  if (profile.isError) return <ReadNotice kind="error" title="Market settings could not be loaded" reason={profile.error.message} onRetry={() => void profile.refetch()} />;
+  if (!candleConfigured) return <section className="v5-panel"><h1>Market</h1><ReadNotice kind="unavailable" title="Not connected" reason="This dashboard has no candle store connection, so prices and market changes are unavailable." onRetry={() => void profile.refetch()} /><p>See <Link to="/system/data-feeds">System data feeds</Link> for connection details.</p></section>;
+  return <V5Market />;
 }
-
-function MarketPageInline() { return <MarketPage />; }

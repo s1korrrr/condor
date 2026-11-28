@@ -1,0 +1,87 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { X } from "lucide-react";
+import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
+import { RecordedCandleChart, type RecordedMinute } from "@/components/charts/RecordedCandleChart";
+import type { CrossStats, CrossView } from "./candle-store-model";
+import { readCandleStore } from "./candle-store-api";
+import { coinStats, marketDetailTitles, REFERENCE, type CandleRead } from "./market-model.mjs";
+import { ownerTitleText, fixed, pct, signed, utcMin } from './format.mjs';
+
+const RANGES = ["1h", "6h", "24h", "7d"] as const;
+type Range = (typeof RANGES)[number];
+type Candles = { buckets: RecordedMinute[]; volume_unit: string; pair: string; venue: string; segment: string; start: number; end: number; now: number; totals?: Record<string, number> };
+type CrossRead = { segment: "spot" | "perpetual"; rows: VenueRow[]; error: string | null };
+type VenueRow = CrossStats & { segment: "spot" | "perpetual" };
+
+const compact = (value: number) => value >= 1e9 ? `${fixed(value / 1e9, 2)} B` : value >= 1e6 ? `${fixed(value / 1e6, 1)} M` : value >= 1e3 ? `${fixed(value / 1e3, 1)} k` : fixed(value, 0);
+const venueName = (venue: string) => venue.replace("_io", ".io");
+const exactCell = (value: number | null, text: string) => <span title={ownerTitleText(value == null ? undefined : String(value))}>{text}</span>;
+
+const columns: TableColumn<VenueRow>[] = [
+  { id: "venue", header: "Venue", value: row => venueName(row.venue), rowHeader: true, size: 95 },
+  { id: "segment", header: "Market", value: row => row.segment, size: 85 },
+  { id: "pair", header: "Pair", value: row => row.pair, size: 95 },
+  { id: "mean", header: "Mean gap (bp)", value: row => row.mean_bps, kind: "number", cell: row => exactCell(row.mean_bps, signed(row.mean_bps, 2)), size: 85, title: () => "Average signed distance from the median of venues; positive means this venue trades above the others" },
+  { id: "abs", header: "Mean |gap| (bp)", value: row => row.mean_abs_bps, kind: "number", cell: row => exactCell(row.mean_abs_bps, fixed(row.mean_abs_bps, 2)), size: 90 },
+  { id: "p95", header: "p95 |gap| (bp)", value: row => row.p95_abs_bps, kind: "number", cell: row => exactCell(row.p95_abs_bps, fixed(row.p95_abs_bps, 2)), size: 85 },
+  { id: "max", header: "Max |gap| (bp)", value: row => row.max_abs_bps, kind: "number", cell: row => exactCell(row.max_abs_bps, fixed(row.max_abs_bps, 2)), size: 85, title: row => row.max_at == null ? undefined : `At ${utcMin(row.max_at * 1000) ?? "an unknown time"}` },
+  { id: "minutes", header: "Minutes compared", value: row => row.n, kind: "number", size: 90 },
+  { id: "quote", header: "Quote", value: row => row.quote, size: 65 },
+];
+
+/** The same owner candle response the Market page reads for a tile (both legs of one fetch). */
+export type DetailRead = { spot: Candles; perpetual: Candles | null; perpetualError: string | null };
+
+/**
+ * Drill-down for one coin: candles with a range picker, window statistics and per-venue price-gap statistics.
+ * For 24h it uses the very read behind the coin's tile (`tileRead`), so tile and detail show the same minutes.
+ */
+export function V5MarketDetail({ coin, color, onClose, tileRead }: { coin: string; color: string; onClose: () => void; tileRead?: DetailRead | null }) {
+  const [range, setRange] = useState<Range>("24h");
+  const pair = `${coin}-${REFERENCE.quote}`;
+  const shared = range === "24h" && tileRead ? tileRead : null;
+  const fetched = useQuery({ queryKey: ["v5-market", "detail", coin, range], enabled: !shared, retry: false, refetchInterval: 60_000, queryFn: async (): Promise<DetailRead> => {
+    const spot = await readCandleStore<Candles>("candles", { lane: REFERENCE.spot, pair, range });
+    let perpetual: Candles | null = null, perpetualError: string | null = null;
+    try { perpetual = await readCandleStore<Candles>("candles", { lane: REFERENCE.perpetual, pair, range }); } catch (cause) { perpetualError = cause instanceof Error ? cause.message : "owner read unavailable"; }
+    return { spot, perpetual, perpetualError };
+  } });
+  const candles = shared ? { isPending: false as const, isError: false as const, error: null, data: shared } : fetched;
+  const venues = useQuery({ queryKey: ["v5-market", "venues", coin, range], retry: false, refetchInterval: 60_000, queryFn: async () => {
+    const reads: CrossRead[] = [];
+    for (const segment of ["spot", "perpetual"] as const) {
+      try { reads.push({ segment, rows: (await readCandleStore<CrossView>("cross", { asset: coin, segment, range })).table.map(row => ({ ...row, segment })), error: null }); }
+      catch (cause) { reads.push({ segment, rows: [], error: cause instanceof Error ? cause.message : "owner read unavailable" }); }
+    }
+    return reads;
+  } });
+  const stats = candles.data ? coinStats(candles.data.spot as unknown as CandleRead, candles.data.perpetual as unknown as CandleRead) : null;
+  const titles = candles.data ? marketDetailTitles(candles.data.spot as unknown as CandleRead, candles.data.perpetual as unknown as CandleRead, stats) : {};
+  const partial = stats ? stats.heldMinutes < stats.windowMinutes : false;
+  const tiles: [string, string, string?, string?][] = stats ? [
+    [`Return, ${range}`, pct(stats.returnWindowPct), stats.returnWindowPct == null ? "no close at the window's first minute" : undefined, titles.returnWindowPct],
+    ["Return, last hour", pct(stats.return1hPct), stats.return1hPct == null ? (range === "1h" ? "needs a range longer than 1h" : "no close exactly one hour earlier") : undefined, titles.return1hPct],
+    ["High–low range", `${fixed(stats.rangePct)}%`, partial ? `over ${stats.heldMinutes} held minutes only` : undefined, titles.rangePct],
+    ["Largest drop from a peak", pct(stats.maxDrawdownPct), partial ? `over ${stats.heldMinutes} held minutes only` : undefined, titles.maxDrawdownPct],
+    ["Traded value", stats.volumeQuote == null ? "—" : `${compact(stats.volumeQuote)} ${REFERENCE.quote}`, stats.volumeQuote == null ? `volume missing for ${stats.volumeMissingMinutes} minute(s)` : `${venueName(REFERENCE.venue)} spot only`, titles.volumeQuote],
+    ["Perpetual premium, mean", stats.premium ? `${signed(stats.premium.mean, 1)} bp` : "—", candles.data!.perpetualError ? "perpetual read failed" : stats.premium ? `${stats.premium.minutes} minutes with both legs · min ${signed(stats.premium.min, 1)} · max ${signed(stats.premium.max, 1)} bp` : "no minute with both legs", titles.premium],
+    ["Minutes held", `${stats.heldMinutes} / ${stats.windowMinutes}`, "final 1-minute candles in the window"],
+  ] : [];
+  return <section className="v5m-card v5m-detail" aria-label={`${coin} detail`}>
+    <header className="v5m-detail-head">
+      <h3><i style={{ background: color }} />{coin} · {venueName(REFERENCE.venue)} {pair}</h3>
+      <div role="group" aria-label="Range" className="v5m-seg">{RANGES.map(item => <button key={item} type="button" aria-pressed={range === item} onClick={() => setRange(item)}>{item}</button>)}</div>
+      <button type="button" className="v5m-icon" aria-label={`Close ${coin} detail`} onClick={onClose}><X size={16} /></button>
+    </header>
+    {candles.isPending ? <p role="status" className="v5m-hint">Reading {range} of {coin} candles…</p> : candles.isError ? <p role="alert" className="v5m-hint">Candles unavailable: {candles.error.message}. Nothing older is shown.</p> : <>
+      <div className="v5m-stats v5m-stats--wide">{tiles.map(([label, value, note, title]) => <div key={label} className="v5m-stat"><span>{label}</span><strong title={ownerTitleText(title)}>{value}</strong>{note && <small>{note}</small>}</div>)}</div>
+      <RecordedCandleChart buckets={candles.data.spot.buckets} label={`${venueName(REFERENCE.venue)} spot · ${pair} (price in ${REFERENCE.quote})`} volumeUnit={candles.data.spot.volume_unit} />
+    </>}
+    <h3 className="v5m-subhead">How far each venue's price sits from the others, {range}</h3>
+    <p className="v5m-hint">Owner-computed against the median of venues each minute · sort or filter any column · hover a header for its meaning</p>
+    {venues.data?.filter(read => read.error).map(read => <p key={read.segment} role="alert" className="v5m-hint">{read.segment === "spot" ? "Spot" : "Perpetual"} cross-venue read failed: {read.error}. Those venues are not shown.</p>)}
+    {venues.isPending ? <p role="status" className="v5m-hint">Reading venue prices…</p> : !venues.data?.some(read => read.rows.length) ? <p className="v5m-hint">No cross-venue statistics for {coin} in this range.</p> :
+      <DataTable rows={venues.data.flatMap(read => read.rows)} columns={columns} rowId={row => `${row.segment}:${row.lane}`} label={`${coin} venue price gaps`} initialSort={{ id: "abs", desc: true }} pageSize={14} dense exportName={`v5-${coin.toLowerCase()}-venue-gaps-${range}`} />}
+  </section>;
+}

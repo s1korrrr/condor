@@ -6,6 +6,7 @@
  */
 import { assetColor } from '@/features/quant-ops/format';
 import { CHART, type ChartSeries } from '@/features/quant-ops/kit/series';
+import { fixed, ownerDisplay, ownerTitleText, rationalPercent } from './format.mjs';
 
 export type CrossPoint = [number, number];
 export type CrossLine = { lane: string; venue: string; pair: string; close: CrossPoint[]; deviation_bps: CrossPoint[] };
@@ -97,14 +98,17 @@ export function heatCell(counts: HeatCellCounts, hour: number): { state: HeatSta
 }
 
 /** Settled coverage over the row's in-window hours; null when no settled minute exists (never 100% by default). */
-export function heatRowCoverage(row: HeatRow): number | null {
-  let settled = 0, covered = 0;
-  row.cells.forEach(cell => {
-    if (!cell) return;
-    covered += cell[0] + cell[1];
-    settled += cell[0] + cell[1] + cell[2] + cell[3];
-  });
-  return settled ? covered / settled : null;
+export function heatRowCoverage(row: HeatRow): { text: string; exact: string; title: string } | null {
+  let settled = 0n, covered = 0n;
+  for (const cell of row.cells) {
+    if (!cell) continue;
+    if (cell.slice(0, 4).some(value => !Number.isSafeInteger(value) || value < 0)) return null;
+    const [final, noTrade, unrecoverable, missing] = cell.map(BigInt);
+    covered += final + noTrade;
+    settled += final + noTrade + unrecoverable + missing;
+  }
+  const result = rationalPercent(covered * 100n, settled);
+  return result ? { text: `${fixed(result.value)}%`, exact: `${covered} / ${settled} settled minutes; exact percentage ${result.exact}`, title: `${covered} / ${settled} settled minutes; exact percentage ${ownerTitleText(result.exact)}` } : null;
 }
 
 /** Newest hour first, the kit HeatStrip convention. Indexes map back to owner order for tooltips. */
@@ -125,7 +129,7 @@ export function crossDeviationSeries(view: CrossView): ChartSeries[] {
     const values = new Map(line.deviation_bps.map(([t, v]) => [t, v]));
     return {
       id: line.lane, label: `${line.venue} ${line.pair}`, color: assetColor(line.venue), unit: 'bps',
-      format: (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)} bps`,
+      format: (value: number) => ownerDisplay(value, 'bps').text,
       points: axis.map(t => ({ time: t * 1000, value: values.get(t) ?? null })),
     };
   });
@@ -151,7 +155,7 @@ export function storeTiles(view: StoreView): StoreTile[] {
     { id: 'uptime', label: 'Collector uptime', value: durationText(status.uptime_s), note: `Started ${utcText(status.started_at)}` },
     { id: 'memory', label: 'Collector memory', value: status.process.rss_mib == null ? 'Unavailable' : `${status.process.rss_mib.toFixed(0)} MiB`, note: `Peak ${status.process.max_rss_mib == null ? 'unavailable' : `${status.process.max_rss_mib.toFixed(0)} MiB`}` },
     { id: 'lag', label: 'Event-loop lag p99', value: lag.p99 == null ? 'Unavailable' : `${(lag.p99 * 1000).toFixed(0)} ms`, note: `p50 ${lag.p50 == null ? 'unavailable' : `${(lag.p50 * 1000).toFixed(1)} ms`} · max ${lag.max == null ? 'unavailable' : `${lag.max.toFixed(2)} s`}` },
-    { id: 'retention', label: 'Retention', value: retention.window_days == null ? 'Unavailable' : `${retention.window_days.toFixed(1)} d`, note: `Kept on disk ${retention.keep_days == null ? 'unavailable' : `${retention.keep_days.toFixed(1)} d`} including margin` },
+    { id: 'retention', label: 'Retention', value: retention.window_days == null ? 'Unavailable' : `${fixed(retention.window_days, 1)} d`, note: `Kept on disk ${retention.keep_days == null ? 'unavailable' : `${fixed(retention.keep_days, 1)} d`} including margin` },
     { id: 'disk', label: 'Disk use', value: bytesText(view.bytes_total), note: `${view.lanes.length} lanes · ${view.lanes.reduce((sum, lane) => sum + lane.days_held, 0)} journal days` },
     { id: 'versions', label: 'Format versions', value: versions.mismatches.length ? `${versions.mismatches.length} mismatch${versions.mismatches.length === 1 ? '' : 'es'}` : 'As expected', note: Object.values(versions.found).map(value => value ?? 'not published').join(' · '), tone: versions.mismatches.length ? 'warning' : undefined },
     { id: 'faults', label: 'Fault injections', value: String(status.fault_injections), note: status.fault_injections ? 'Test faults were injected into this collector' : 'None recorded', tone: status.fault_injections ? 'warning' : undefined },

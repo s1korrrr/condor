@@ -1,0 +1,106 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "records",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "BOUND",
+  "reason_codes": [],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "COMPLETE",
+    "total_items": 1,
+    "returned_items": 1,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "024f61da0f17c1f3bfbbb088450d2277d9cc70615f3efd623274528a92e9df03",
+      "native_kind": "edge",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "ASSERTED_PARENT",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/paper-scorecard-okx-trend-dca-admission-20260910-r5-trial-1.json",
+          "pointer": "/edges/0",
+          "sha256": "bcf7dea61afdf082b4180b1a6af9e3a4f603ed412d41deef73015c8222125fbf",
+          "bytes": 3573
+        }
+      ],
+      "row_status": "COMPLETE",
+      "issues": [],
+      "row_sha256": "9b92578587701d356f0b880d501e89cc897e1f636c2be7b614dd35be1c1d4d3d",
+      "record_type": "edge",
+      "edge_id": "024f61da0f17c1f3bfbbb088450d2277d9cc70615f3efd623274528a92e9df03",
+      "relation": "produced",
+      "basis": "EXPLICIT",
+      "from_ref": {
+        "owner": "research_os",
+        "kind": "run",
+        "record_id": "run:paper-okx-trend-dca-admission-20260910-r5-trial-1",
+        "revision": null,
+        "source_index": 0,
+        "resolution": "RESOLVED"
+      },
+      "to_ref": {
+        "owner": "research_os",
+        "kind": "evidence",
+        "record_id": "evidence:paper-scorecard-okx-trend-dca-admission-20260910-r5-trial-1",
+        "revision": null,
+        "source_index": 0,
+        "resolution": "RESOLVED"
+      }
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "c64d47df91d0f50dfed733154f57af53de05f97b4a7a41a17812a5c08c78d811"
+}

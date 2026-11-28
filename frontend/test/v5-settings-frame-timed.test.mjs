@@ -24,10 +24,10 @@ const settings = {...baseline.settings,identity,budget:{enabled:false}};
 const profile = {...baseline.profile.body,readiness:{...baseline.profile.body.readiness,paper_owner:{bot_name:bot,state:'FRESH',generated_at:sections.status.generated_at_ms / 1000,reason:'fixture',mode:'PAPER'}}};
 const workspace = {schema_version:'v5-workspace.v1',identity,context:null,advisor:settings.budget,agents:Object.values(baseline.workspace_agents),sessions:[],source_error:null};
 const routes = [
-  ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/capital','Capital'],
-  ['/operations','Operations'], ['/v5/readiness','Paper readiness'],
-  ['/backtests','Tradepad'], ['/','Market'], ['/market/evidence','Market Picture'],
-  ['/market/candles','Candle store'], ['/market/stocks','OKX stocks'], ['/agents','Agents'],
+  ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/helm','Helm paper bot'], ['/money','Money'], ['/capital','Capital'],
+  ['/operations','Operations'], ['/v5/readiness','Paper readiness'], ['/system','Operations'], ['/system/checks','Operations'],
+  ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'], ['/market/BTC','Market'], ['/market/evidence','Market'], ['/market/candles','Market'],
+  ['/market/stocks','OKX stocks'], ['/agents','Agents'], ['/agents/decisions','Agent decisions'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
   ['/learning','Learning'], ['/research-factory','Research factory'],
   ['/decision-lineage','Decision lineage'], ['/sessions','Sessions'],
@@ -36,14 +36,14 @@ const routes = [
 
 test('real V5 routes settle with shared providers and an advancing paper clock', async context => {
   const routeSource = fs.readFileSync(new URL('../src/v5/V5App.tsx',import.meta.url),'utf8');
-  const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
+  const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/system/:tab','/system/checks').replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
   assert.deepEqual(routes.map(([pathname]) => pathname).sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
   const originalNow = Date.now;
   let now = sections.status.read_at_ms;
   Date.now = () => ++now;
   const overrides = {'lightweight-charts':await import('lightweight-charts'),'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
-  const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => filename.endsWith('/v5/V5Pages.tsx') ? source.replace('function PaperIdentity() {','function PaperIdentity() { globalThis.__reviewAdvance?.();') : source);
+  const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => filename.endsWith('/v5/V5Pages.tsx') ? source.replace('function PaperIdentity({ paused = false }: { paused?: boolean }) {','function PaperIdentity({ paused = false }: { paused?: boolean }) { globalThis.__reviewAdvance?.();') : source);
   overrides['@/lib/auth-token'] = load('v5/auth-token.ts');
   const workspaceRoot = process.env.V5_WORKSPACE_ROOT ?? path.resolve(import.meta.dirname,'../../..');
   overrides['@workspace-monitoring'] = load(path.join(workspaceRoot,'dashboard/condor-workspace/src/index.ts'));
@@ -53,6 +53,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const originalError = console.error;
   const requests = [];
   const unexpectedReads = [];
+  let failIdentityRead = false;
   globalThis.fetch = async (input, init = {}) => {
     assert.equal(init.method ?? 'GET','GET','render tests must not invoke actions');
     const url = new URL(String(input),'https://fixture.invalid');
@@ -62,6 +63,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const native = url.searchParams.get('path');
       const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.includes('operations/workspace') ? 'operations' : native.split('?')[0].split('/').at(-1);
       assert.ok(sections[section],`unmapped owner read: ${native}`);
+      if (section === 'status' && failIdentityRead) {
+        return new Response(JSON.stringify({detail:{code:'paper_read_schema_invalid'}}),{status:502});
+      }
       body = sections[section];
     } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
     else if (url.pathname === '/api/v5/dashboard/profile') body = profile;
@@ -70,11 +74,35 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     else if (url.pathname === '/api/v5/sessions') body = {sessions:[]};
     else if (url.pathname === '/api/v5/sessions/fixture-session') body = {...baseline['inspect:decision_reviewer'],id:'fixture-session',agent_id:'decision_reviewer',loop_id:null,started_at_ms:sections.status.read_at_ms,finished_at_ms:sections.status.read_at_ms,effect:'NONE',journal:'',ticks:baseline['inspect:decision_reviewer'].ticks.map((tick,index) => ({...tick,id:`tick-${index}`,at_ms:sections.status.read_at_ms,evidence_refs:[]}))};
     else if (url.pathname === '/api/v5/agents/decision_reviewer') body = baseline['agent:decision_reviewer'].body;
+    else if (url.pathname === '/api/v5/money') body = {sampler:true,daily:[{day:1793923200000,samples:2,gaps:1,valid:1,equity_start:'199318.98',equity_end:'199318.98',equity_change:'0',realized_change:'0',first_at_ms:1793929000000,last_at_ms:1793929000000}],recorder_errors:{count:0,last:null,at_ms:null},started_at_ms:1793929000000,now_ms:1793929900000,range:'7d',rows:[{bot:'v5',at_ms:1793929000000,unit:'USDC',equity:'199318.98',initial_funding:'200000',realized:'114.13',unrealized:'-795.15',fees:'23.11',coins:{BNB:{realized:'14.8',unrealized:null}}},{bot:'v5',at_ms:1793929600000,gap:'wallet: stale'},{bot:'helm',at_ms:1793929600000,gap:'HELM_STATUS_MISSING'}]};
+    else if (url.pathname === '/api/v5/helm') body = {state:'STALE',reason:'HELM_STATUS_STALE',bot:'helm_v5_paper',status:{generated_at:1793929882.6,age_s:600000,ready:false,failure:null,failure_reported:true,reasons:null,steps:5086,actions:0,phase:'P1',profile_id:null,entries_held:'operator_entry_pause',operator_entry_paused:true,kill_switch:null,adaptive_actions:'off',funding:'finite_wallet',image_tag:null,shutdown:{checkpoint:true,clean:null},mandate:{mandate_id:'helm-v5-paper-20261105',state:'active',valid_until_ms:1e18},risk:null,control_rejections:null,symbols:[{pair:'BNB-USDC',status:null,candidate_hold:'low_volatility',bag:null,last_decision:{at:-1e21,reason:null}}],withheld:2}};
     else if (url.pathname.startsWith('/api/v5/learning/')) body = {effect:'NONE',status:'DISABLED',roles:[],reason:'Stage1 disabled'};
     else {unexpectedReads.push(url.pathname + url.search); throw new Error(`unmapped read: ${url}`);}
     return new Response(JSON.stringify(body),{status:200,headers:{'Content-Type':'application/json'}});
   };
   try {
+    await context.test('Refresh settings without a bound paper bot skips owner reads', async () => {
+      route = '/settings';
+      client.setQueryData(['v5-auth'],{authenticated:true});
+      client.setQueryData(['v5-profile'],baseline.profile.body);
+      client.setQueryData(['v5-settings'],settings);
+      const container = document.createElement('div');
+      const mount = createRoot(container);
+      try {
+        await React.act(async () => {mount.render(React.createElement(V5App));});
+        assert.match(container.textContent,/Owner readiness is reported separately/);
+        const refresh = [...container.querySelectorAll('button')].find(button => button.textContent === 'Refresh settings');
+        assert.ok(refresh);
+        const start = requests.length;
+        await React.act(async () => {refresh.click();});
+        const refreshed = requests.slice(start);
+        assert.ok(refreshed.includes('/api/v5/settings'));
+        assert.deepEqual(refreshed.filter(request => request.startsWith('/api/v5/dashboard/read')),[]);
+      } finally {
+        await React.act(async () => mount.unmount());
+        client.clear();
+      }
+    });
     for (const [pathname,heading] of routes.filter(([pathname]) => pathname === '/settings' || pathname === '/market/stocks')) await context.test(pathname,async () => {
       route = pathname;
       const requestStart = requests.length;
@@ -112,6 +140,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         if (pathname === '/settings') {
           const health = client.getQueryData(['v5-paper-observation-health',bot]);
           assert.deepEqual(health,['status','wallet','positions','executors','risk'].map(section => sections[section]));
+          assert.ok(container.textContent.includes(sections.status.snapshot_id),'the retained identity snapshot must commit before freshness is checked');
           now = sections.status.generated_at_ms + 30000;
           Date.now = () => now;
           globalThis.__reviewAdvance = () => {now = sections.status.generated_at_ms + 30001;};
@@ -125,12 +154,32 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           assert.match(text,/paper owner reads: available/,'probe must start fresh at 30,000 ms');
           assert.doesNotMatch(text,/stale; not current/);
           assert.ok(!(text.includes('paper owner reads: available') && text.includes('stale; not current')),'Settings must not call owner reads available while identity marks the same snapshot stale');
+
+          const identityPanel = [...container.querySelectorAll('section.v5-panel')].find(section => section.querySelector('h2')?.textContent === 'Paper owner identity');
+          assert.ok(identityPanel);
+          failIdentityRead = true;
+          await React.act(async () => {await client.refetchQueries({queryKey:['v5-paper-observation-health',bot]});});
+          await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
+          assert.match(identityPanel.querySelector('[role="alert"]')?.textContent ?? '',/Identity owner read unavailable/);
+          failIdentityRead = false;
+
+          const retryStart = requests.length;
+          const refresh = [...container.querySelectorAll('button')].find(button => button.textContent === 'Refresh settings');
+          assert.ok(refresh);
+          await React.act(async () => {refresh.click();});
+          await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
+          const refreshed = requests.slice(retryStart);
+          assert.ok(refreshed.includes('/api/v5/settings'));
+          assert.equal(refreshed.filter(request => request.includes('native%2Fstatus')).length,1,'Refresh settings retries the shared identity read');
+          assert.equal(identityPanel.querySelector('[role="alert"]'),null);
+          assert.ok(identityPanel.textContent.includes(sections.status.snapshot_id));
         }
         await React.act(async () => {window.dispatchEvent(new browser.Event('focus'));});
         assert.deepEqual(failures,[],'clock publication must settle');
         assert.deepEqual(warnings,[],'clock publication must not trigger React warnings');
         assert.deepEqual(unexpectedReads,[],'every requested owner response must have a fixture');
       } finally {
+        failIdentityRead = false;
         await React.act(async () => mount.unmount());
         container.remove();
         client.clear();

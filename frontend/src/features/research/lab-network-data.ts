@@ -10,6 +10,11 @@ export interface LabNetwork {
   unresolved_edges: number;
   stats: Record<string, { key: string; count: number }[]>;
 }
+export function boundedLabNetwork(data: LabNetwork): LabNetwork {
+  const nodes = data.nodes.slice(0, 1000);
+  const edges = data.edges.filter(edge => edge[0] < nodes.length && edge[1] < nodes.length).slice(0, 5000);
+  return { ...data, nodes, edges, total_nodes: nodes.length, total_edges: edges.length + data.unresolved_edges };
+}
 export function parseLabNetwork(value: unknown): LabNetwork {
   const data = value as LabNetwork;
   const invalid = () => {

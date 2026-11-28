@@ -18,7 +18,7 @@ for (const failed of [true,false]) test(`Paper identity labels retained source I
   let html;
   try { html = renderToStaticMarkup(React.createElement(load('v5/V5Pages.tsx').PaperIdentity)); }
   finally { Date.now = realNow; }
-  assert.match(html,/Last complete owner snapshot/);
+  assert.match(html,/Last coherent owner snapshot/);
   assert.match(html,failed ? /5s old/ : /2h old/);
   assert.match(html,/not current/i);
   assert.ok(html.includes(status.snapshot_id));

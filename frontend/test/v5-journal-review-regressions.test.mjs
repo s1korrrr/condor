@@ -52,3 +52,37 @@ test('received new hold cannot disappear behind a prior complete healthy snapsho
     client.clear();
   }
 });
+
+test('cached health status cannot resurrect a cleared journal hold on route revisit', () => {
+  const cached = ['status','wallet','positions','executors','risk'].map(fixture);
+  const status = cached[0];
+  status.data.journal_budget = {state:'exceeded',journal_evidence_held:true};
+  const client = new QueryClient();
+  client.setQueryData(['v5-profile'], {});
+  const healthKey = ['v5-paper-observation-health', status.bot_id];
+  const botsKey = ['v5-paper-bots', status.bot_id];
+  client.setQueryData(healthKey, cached);
+  const {load} = frontendModules({
+    react:{...React, useRef:()=>({current:null}), useState:()=>[null,()=>{}], useSyncExternalStore:(_subscribe,getSnapshot)=>getSnapshot()},
+    '@tanstack/react-query':{...queryLibrary, useQueryClient:()=>client, useQuery:options => ({
+      ...client.getQueryCache().build(client, options).state, isFetching:false,
+    })},
+  });
+  const {PaperJournalNotice} = load('v5/OwnerJournalCondition.tsx');
+  const {usePaperObservation} = load('v5/usePaperObservation.ts');
+  const {usePaperSnapshot} = load('v5/usePaperSnapshot.ts');
+  const noticeStatus = () => PaperJournalNotice({bot:status.bot_id}).props.status;
+  try {
+    assert.equal(noticeStatus(), status);
+    const healed = cached.map(read => ({...read, snapshot_id:'next',
+      source:{...read.source, sequence:read.source.sequence + 1}}));
+    healed[0] = {...healed[0], state:'available', reason:null,
+      data:{...status.data, journal_budget:null, operations:{state:'available', completeness:'complete', reason:null, stale_reason:null}}};
+    client.setQueryData(botsKey, healed);
+    assert.deepEqual(usePaperSnapshot(botsKey, true, healed.length, async () => healed, false, {journalAcrossRoutes:true}).journalReads, []);
+    const health = usePaperObservation(status.bot_id);
+    assert.equal(health.status, status, 'the health query still has the old data');
+    assert.equal(health.journalStatus, undefined, 'the shared journal already cleared the hold');
+    assert.equal(noticeStatus(), undefined);
+  } finally {client.clear();}
+});

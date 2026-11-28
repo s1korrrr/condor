@@ -124,6 +124,18 @@ test('holds never equates quote currencies, infers missing breakeven, or hides s
   assert.equal(disagreement.reason, null);
 });
 
+test('the Binance coin cards and the Money benchmark name their venue and say it is not the bots market', () => {
+  const { load } = frontendModules({
+    '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: queryKey[0] === 'v5-money' ? { rows: [], daily: [], range: '7d', sampler: true } : queryKey[0] === 'v5-profile' ? { candle_store: { configured: true } } : undefined, isPending: false, refetch() {} }) },
+    '@/features/quant-ops/kit/charts': { BarsChart: () => null, TimeSeriesChart: () => null },
+    '@/features/quant-ops/kit/DataTable': { DataTable: () => null },
+  });
+  assert.equal(load('v5/market-model.mjs').REFERENCE.basis, "Binance spot, USDT pairs; not the bots' market");
+  assert.match(readFileSync(new URL('../src/v5/V5Market.tsx', import.meta.url), 'utf8'), /Coin cards: \{REFERENCE\.basis\}\./);
+  const html = renderToStaticMarkup(React.createElement(load('v5/V5Money.tsx').V5Money));
+  assert.match(html, /Equal weights in BTC, ETH, BNB, SOL, XRP over the candle store&#x27;s 7 days \(Binance spot, USDT pairs; not the bots&#x27; market\)/);
+});
+
 test('hourly strip uses UTC hour boundaries with the preceding close, not a neighbouring minute', () => {
   const read = dense(180);
   const hours = hourlyReturns(read);

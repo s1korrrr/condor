@@ -21,7 +21,7 @@ const tone = (value: unknown) => {
  */
 export function V5Overview() {
   // Same query keys as the Money and Helm pages, so these cards add no reads of their own.
-  const money = useQuery({ queryKey: ["v5-money", "7d"], queryFn: () => readMoney("7d"), retry: false, refetchInterval: 60_000 });
+  const money = useQuery({ queryKey: ["v5-money", "7d"], queryFn: ({ signal }) => readMoney("7d", signal), retry: false, refetchInterval: 60_000 });
   const helm = useQuery({ queryKey: ["v5-helm"], queryFn: readHelm, retry: false, refetchInterval: 15_000 });
   const rows = money.data?.rows ?? [];
   const v5 = latest(rows, "v5"), helmRow = latest(rows, "helm");

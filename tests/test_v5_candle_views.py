@@ -5,12 +5,15 @@ Golden payloads in ``fixtures/candle_store_views`` are real owner output: hummin
 ``Dashboard.store_v5``) over its deterministic test fixture store, evaluated at 2026-10-24T06:00:30Z.
 """
 
+import asyncio
 import copy
 import json
 from dataclasses import replace
 from pathlib import Path
 
+import httpx
 import pytest
+from aiohttp import web
 from fastapi.testclient import TestClient
 from test_v5_dashboard_bridge import ORIGIN, TOKEN, NoNetworkUpstream, make_settings
 
@@ -324,3 +327,124 @@ def test_routes_are_authenticated_and_validated(tmp_path):
         assert response.status_code == 503
         assert response.json()["reason"] == "owner_unreachable"
         assert client.get("/api/v5/candle-store/summary?full=1").status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("waiter_exit", ["cancel", "deadline"])
+async def test_cross_route_keeps_admitted_read_slot_after_waiter_exits(
+    tmp_path, monkeypatch, waiter_exit
+):
+    socket = tmp_path.parent / f"cross-{waiter_exit}.sock"
+    settings = replace(make_settings(tmp_path), candle_store_socket=socket)
+    app = create_app(settings=settings, upstream=NoNetworkUpstream())
+    payload = golden("cross_spot_24h")
+    entered = asyncio.Queue()
+    release = [asyncio.Event() for _ in range(5)]
+    started = active = peak = 0
+
+    async def owner_read(request):
+        nonlocal started, active, peak
+        index = started
+        started += 1
+        active += 1
+        peak = max(peak, active)
+        entered.put_nowait(index)
+        try:
+            await release[index].wait()
+            return web.json_response(payload)
+        finally:
+            active -= 1
+
+    owner = web.Application()
+    owner.router.add_get("/api/cross", owner_read)
+    runner = web.AppRunner(owner)
+    await runner.setup()
+    await web.UnixSite(runner, str(socket)).start()
+    loop = asyncio.get_running_loop()
+    original_time = loop.time
+    offset = 0
+    monkeypatch.setattr(loop, "time", lambda: original_time() + offset)
+
+    transport = httpx.ASGITransport(app=app)
+    requests = []
+
+    def read(client):
+        task = asyncio.create_task(
+            client.get(
+                "/api/v5/candle-store/cross",
+                params={"asset": "BTC", "segment": "spot", "range": "24h"},
+            )
+        )
+        requests.append(task)
+        return task
+
+    async def next_owner_read(index):
+        assert await asyncio.wait_for(entered.get(), timeout=1) == index
+
+    async def still_waiting(task):
+        await asyncio.wait({task}, timeout=0.05)
+        assert entered.empty(), f"owner started {started} reads, {active} still active"
+        assert not task.done()
+
+    async def available(task):
+        response = await asyncio.wait_for(task, timeout=1)
+        assert response.status_code == 200
+        assert response.json()["state"] == "AVAILABLE"
+
+    try:
+        async with (
+            httpx.AsyncClient(transport=transport, base_url=ORIGIN) as first,
+            httpx.AsyncClient(transport=transport, base_url=ORIGIN) as second,
+        ):
+            for client in (first, second):
+                login = await client.post(
+                    "/api/v5/auth/login", json={"token": TOKEN}, headers={"Origin": ORIGIN}
+                )
+                assert login.status_code == 200
+
+            first_read = read(first)
+            await next_owner_read(0)
+            second_read = read(second)
+            await next_owner_read(1)
+            queued = read(first)
+            await still_waiting(queued)
+            assert active == 2
+
+            offset = 8
+            release[0].set()
+            await available(first_read)
+            await next_owner_read(2)
+            release[1].set()
+            await available(second_read)
+            parallel = read(second)
+            await next_owner_read(3)
+
+            if waiter_exit == "cancel":
+                queued.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await queued
+            else:
+                offset = 12.1
+                response = await asyncio.wait_for(queued, timeout=1)
+                assert response.status_code == 503
+                assert response.json() == {
+                    "state": "UNAVAILABLE",
+                    "reason": "owner_unreachable",
+                    "data": None,
+                }
+            assert active == 2, "caller exit does not end the owner's read"
+
+            next_read = read(first)
+            await still_waiting(next_read)
+            release[2].set()
+            await next_owner_read(4)
+            release[3].set()
+            release[4].set()
+            await available(parallel)
+            await available(next_read)
+            assert peak == 2
+    finally:
+        for event in release:
+            event.set()
+        await asyncio.gather(*requests, return_exceptions=True)
+        await runner.cleanup()

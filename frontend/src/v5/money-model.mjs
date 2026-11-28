@@ -1,7 +1,7 @@
 /**
  * Pure projections for the Money page from the dashboard's own money samples (GET /api/v5/money). A gap row or a
  * missing interval stays a gap: series carry explicit nulls, daily rows say how many samples and gaps they hold,
- * and a comparison is shown only when both sides cover the same window.
+ * and each side of a comparison keeps its own labelled times.
  */
 
 import { decimalPercentRatio, ownerTitleText, rationalPercent } from './format.mjs';

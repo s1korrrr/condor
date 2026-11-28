@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from fastapi.testclient import TestClient
 
 from condor.v5 import app as app_module
@@ -893,12 +895,14 @@ def test_wire_body_limit_precedes_json_decode_for_chunked_and_length(tmp_path):
         )
 
 
-def test_source_inspection_uses_real_available_at_ms_field(tmp_path):
+@pytest.mark.parametrize("year", [1970, datetime.now(timezone.utc).year])
+def test_source_inspection_uses_real_available_at_ms_field(tmp_path, year):
+    available_at = datetime(year, 11, 20, 6, 12, tzinfo=timezone.utc)
     api = FakeUpstream()
     api.context = {
         "schema_version": "multi-venue-evidence.v1",
         "snapshot_id": "snapshot-1",
-        "available_at_ms": 123456,
+        "available_at_ms": int(available_at.timestamp() * 1000),
     }
     app = create_app(settings=settings(tmp_path), upstream=api)
     with TestClient(app) as client:
@@ -907,7 +911,26 @@ def test_source_inspection_uses_real_available_at_ms_field(tmp_path):
             "/api/v5/agents/market_analyst/inspect", headers={"Origin": ORIGIN}
         )
         assert response.status_code == 200
-        assert "availability=123456" in str(response.json())
+        summary = response.json()["summary"]
+        assert summary == f"Inspected source snapshot snapshot-1; available 20 Nov {year} 06:12 UTC"
+        assert response.json()["ticks"][0]["summary"] == summary
+
+
+@pytest.mark.parametrize("value", [None, "123456", True, 1e400, 10**30, -(10**30)])
+def test_source_inspection_never_echoes_an_unusable_availability(tmp_path, value):
+    api = FakeUpstream()
+    api.context = {"snapshot_id": "snapshot-1", "available_at_ms": value}
+    app = create_app(settings=settings(tmp_path), upstream=api)
+    with TestClient(app) as client:
+        login(client)
+        response = client.post(
+            "/api/v5/agents/market_analyst/inspect", headers={"Origin": ORIGIN}
+        )
+        assert response.status_code == 200
+        assert (
+            response.json()["summary"]
+            == "Inspected source snapshot snapshot-1; availability not reported"
+        )
 
 
 def test_loop_refuses_disabled_task_or_unavailable_source(tmp_path):

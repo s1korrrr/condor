@@ -48,6 +48,57 @@ def test_final3_authenticated_native_api_records_are_available(tmp_path, section
     assert response.json()["data"] == payload["data"]
 
 
+@pytest.mark.parametrize(
+    "delay_ms,future_ms,expected_status",
+    [
+        pytest.param(5400, 0, 200, id="slow-valid-read"),
+        pytest.param(5400, 5000, 200, id="inclusive-receive-boundary"),
+        pytest.param(5400, 5001, 502, id="beyond-receive-boundary"),
+        pytest.param(0, 5000, 200, id="inclusive-immediate-boundary"),
+    ],
+)
+def test_paper_read_skew_at_receipt(tmp_path, delay_ms, future_ms, expected_status):
+    from test_v5_paper_binding import client_for, status
+
+    payload = json.loads((FINAL3 / "native-replay" / "status.json").read_text())
+    start_ms = payload["read_at_ms"]
+    now_ms = start_ms
+    owner_returned = False
+    response_clock_samples = []
+
+    def clock_ms():
+        if owner_returned:
+            response_clock_samples.append(now_ms)
+        return now_ms
+
+    class Source:
+        async def observation(self, path):
+            nonlocal now_ms, owner_returned
+            assert path == "/v1/paper/status"
+            now_ms += delay_ms
+            owner_returned = True
+            return dict(payload, read_at_ms=now_ms + future_ms)
+
+    route = f"/api/v1/servers/rsibot-v5/bots/{payload['bot_id']}/native/status"
+    heartbeat_at = start_ms / 1000
+    with client_for(
+        tmp_path,
+        Source(),
+        payload=status(generated_at=heartbeat_at, timestamp=heartbeat_at, report_observed_at=heartbeat_at),
+        clock_ms=clock_ms,
+    ) as client:
+        response = client.get("/api/v5/dashboard/read", params={"path": route})
+
+    assert response.status_code == expected_status, response.text
+    if expected_status == 502:
+        assert response.json()["detail"]["code"] == "paper_read_schema_invalid"
+    else:
+        assert response.json()["read_at_ms"] == start_ms + delay_ms + future_ms
+        assert response.json()["state"] == payload["state"]
+        assert response.json()["snapshot_id"] == payload["snapshot_id"]
+    assert response_clock_samples == [start_ms + delay_ms]
+
+
 def test_final3_native_orders_and_accounting_are_validated_without_inventing_api_routes():
     from condor.v5.paper import _validate_section_data, _validate_read_tree
 
@@ -591,6 +642,7 @@ def test_authenticated_invalid_risk_preserves_hold_presence_without_trusting_exp
 
 
 NOW = 1_800_000_000.0
+NOW_MS = int(NOW * 1000)
 
 
 def test_frozen_c1_data_validator_agrees_with_jsonschema_oracle():
@@ -862,7 +914,9 @@ def envelope(section="status", **changes):
 @pytest.mark.parametrize("path,section", ROUTES.items())
 def test_browser_inventory_routes_bind_only_the_paper_owner(tmp_path, path, section):
     paper = observe(tmp_path)
-    result = read_compatibility_path(path, paper, paper_read=envelope(section))
+    result = read_compatibility_path(
+        path, paper, paper_read=envelope(section), paper_read_now_ms=NOW_MS
+    )
     assert result["state"] == "available"
     assert result["snapshot_id"] == "boot-a:7"
     assert result["data"] == envelope(section)["data"]
@@ -921,6 +975,7 @@ def test_accounting_rejects_untyped_totals_and_future_clocks(tmp_path, field, va
             "/api/v1/servers/rsibot-v5/fleet/accounting",
             observe(tmp_path),
             paper_read=packet,
+            paper_read_now_ms=NOW_MS,
         )
     assert caught.value.status_code == 502
 
@@ -938,6 +993,7 @@ def test_accounting_keeps_native_receipt_provenance_and_decimal_totals(tmp_path)
         "/api/v1/servers/rsibot-v5/fleet/accounting",
         observe(tmp_path),
         paper_read=packet,
+        paper_read_now_ms=NOW_MS,
     )
     assert result["data"]["program"] == total
 
@@ -957,7 +1013,8 @@ def test_accounting_keeps_native_receipt_provenance_and_decimal_totals(tmp_path)
 def test_corruption_is_an_error_not_a_normal_degraded_state(tmp_path, changes):
     with pytest.raises(HTTPException) as caught:
         read_compatibility_path(
-            next(iter(ROUTES)), observe(tmp_path), paper_read=envelope(**changes)
+            next(iter(ROUTES)), observe(tmp_path),
+            paper_read=envelope(**changes), paper_read_now_ms=NOW_MS,
         )
     assert caught.value.status_code == 502
 
@@ -976,7 +1033,9 @@ def test_corruption_is_an_error_not_a_normal_degraded_state(tmp_path, changes):
 )
 def test_scope_and_bounded_queries_stay_closed(tmp_path, path):
     with pytest.raises(HTTPException):
-        read_compatibility_path(path, observe(tmp_path), paper_read=envelope())
+        read_compatibility_path(
+            path, observe(tmp_path), paper_read=envelope(), paper_read_now_ms=NOW_MS
+        )
 
 
 def test_old_and_incomplete_observations_are_not_current(tmp_path):
@@ -984,7 +1043,8 @@ def test_old_and_incomplete_observations_are_not_current(tmp_path):
     path = next(iter(ROUTES))
     assert (
         read_compatibility_path(
-            path, paper, paper_read=envelope(generated_at_ms=int((NOW - 60) * 1000))
+            path, paper, paper_read=envelope(generated_at_ms=int((NOW - 60) * 1000)),
+            paper_read_now_ms=NOW_MS,
         )["state"]
         == "stale"
     )
@@ -992,6 +1052,7 @@ def test_old_and_incomplete_observations_are_not_current(tmp_path):
         path,
         paper,
         paper_read=envelope(state="degraded", reason="BNB book stale", data=None),
+        paper_read_now_ms=NOW_MS,
     )
     assert result["state"] == "degraded" and result["reason"] == "BNB book stale"
 
@@ -1078,7 +1139,9 @@ def test_c1_fee_currency_and_mark_timestamp_are_metadata_not_money(tmp_path):
     )
     value = envelope("wallet", data=data)
     path = "/api/v1/servers/rsibot-v5/fleet/summary"
-    result = read_compatibility_path(path, observe(tmp_path), paper_read=value)
+    result = read_compatibility_path(
+        path, observe(tmp_path), paper_read=value, paper_read_now_ms=NOW_MS
+    )
     assert result["data"]["assets"][0]["remaining_basis_quote"] == "60.06"
 
 
@@ -1088,6 +1151,7 @@ def test_mixed_snapshot_cannot_be_used_for_related_totals(tmp_path):
             "/api/v1/servers/rsibot-v5/fleet/summary?snapshot_id=boot-a:8",
             observe(tmp_path),
             paper_read=envelope("wallet"),
+            paper_read_now_ms=NOW_MS,
         )
     assert caught.value.status_code == 502
     assert caught.value.detail["code"] == "paper_read_snapshot_mismatch"
@@ -1099,6 +1163,7 @@ def test_partial_valuation_is_separate_from_current_process_heartbeat(tmp_path):
         "/api/v1/servers/rsibot-v5/fleet/summary",
         paper,
         paper_read=envelope("wallet", completeness="partial"),
+        paper_read_now_ms=NOW_MS,
     )
     assert result["state"] == "degraded"
     assert paper.state == "FRESH"
@@ -1119,6 +1184,7 @@ def test_unconnected_export_is_explicit_and_extra_metadata_is_not_projected(tmp_
             extra_metadata="not part of the contract",
             source={"owner": "hummingbot", "private_metadata": "not projected"},
         ),
+        paper_read_now_ms=NOW_MS,
     )
     assert result["state"] == "degraded" and result["data"] is None
     assert "extra_metadata" not in result

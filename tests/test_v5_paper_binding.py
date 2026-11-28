@@ -8,6 +8,7 @@ No network, no order path, no paid call.
 from __future__ import annotations
 
 import json
+import re
 import os
 from pathlib import Path
 
@@ -695,7 +696,7 @@ class ReviewUpstream(NoNetworkUpstream):
         }
 
 
-def client_for(tmp_path, upstream, *, payload=None, configured=True, clock_s=NOW):
+def client_for(tmp_path, upstream, *, payload=None, configured=True, clock_s=NOW, clock_ms=None):
     tmp_path.mkdir(parents=True, exist_ok=True)
     settings = make_settings(tmp_path)
     if configured:
@@ -705,7 +706,7 @@ def client_for(tmp_path, upstream, *, payload=None, configured=True, clock_s=NOW
         settings=settings,
         upstream=upstream,
         static_dir=tmp_path / "dist",
-        clock=lambda: int(clock_s * 1000),
+        clock=clock_ms if clock_ms is not None else lambda: int(clock_s * 1000),
     )
     client = TestClient(app)
     assert (
@@ -804,6 +805,12 @@ def test_bound_and_enabled_reviewer_requests_only_its_fixed_task(tmp_path):
     assert inspected["status"] == "COMPLETED" and inspected["ticks"][0][
         "evidence_refs"
     ] == [f"paper:{BOT}:{BOOT}"]
+    # The default status fixture publishes ready=True.
+    assert "ready=" not in inspected["summary"]
+    assert re.search(
+        rf"^Inspected paper status {BOT}; ready; controllers=\d+; ",
+        inspected["summary"],
+    )
 
 
 def test_app_profile_and_bots_read_the_configured_status(tmp_path):

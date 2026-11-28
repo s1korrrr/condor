@@ -18,10 +18,14 @@ async def _serve(handler, tmp_path, call):
     token.write_text("r" * 48)
     application = web.Application()
     application.router.add_get("/v1/context", handler)
-    async with TestServer(application) as server:
-        return await call(
-            V5Upstream(None), str(server.make_url("/")).rstrip("/"), token
-        )
+    upstream = V5Upstream(None)
+    try:
+        async with TestServer(application) as server:
+            return await call(
+                upstream, str(server.make_url("/")).rstrip("/"), token
+            )
+    finally:
+        await upstream.close()
 
 
 @pytest.mark.asyncio

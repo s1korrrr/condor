@@ -1,12 +1,37 @@
 /**
  * Pure projections for the Money page from the dashboard's own money samples (GET /api/v5/money). A gap row or a
  * missing interval stays a gap: series carry explicit nulls, daily rows say how many samples and gaps they hold,
- * and a comparison is shown only when both sides cover the same window.
+ * and each side of a comparison keeps its own labelled times.
  */
 
 import { decimalPercentRatio, ownerTitleText, rationalPercent } from './format.mjs';
+import { exactSignedSum } from './bots-position-model.mjs';
+import { utcExact } from './shown.mjs';
 
 export const SAMPLE_MS = 300_000;
+export const MONEY_SAMPLE_MAX_AGE_MS = SAMPLE_MS + 60_000;
+
+export function moneySampleTimeState(atMs, now) {
+  if (!utcExact(atMs) || atMs <= 0) return 'unknown';
+  if (atMs > now) return 'future';
+  return now - atMs <= MONEY_SAMPLE_MAX_AGE_MS ? 'current' : 'stale';
+}
+
+export function hasZeroExternalFlows(value) {
+  return typeof value === 'string' && value.length <= 128 && /^-?0+(\.0{1,30})?$/.test(value);
+}
+
+export function moneySinceStart(row) {
+  const unavailable = reason => ({ value: null, reason });
+  if (!row) return unavailable('no sample with values');
+  if (row.external_flows == null) return unavailable('owner external cash flows not published');
+  if (!hasZeroExternalFlows(row.external_flows)) return unavailable('owner external cash flows are not exactly zero');
+  const { equity, initial_funding: funding } = row;
+  const oppositeFunding = typeof funding === 'string' ? funding.startsWith('-') ? funding.slice(1) : `-${funding}` : null;
+  const value = exactSignedSum(equity, oppositeFunding);
+  if (value == null) return unavailable('owner equity or initial funding not published');
+  return { value, title: `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(value.replace(/^-/, '−'))}` };
+}
 
 const number = value => (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null);
 

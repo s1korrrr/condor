@@ -56,7 +56,7 @@ def test_network_stats_limit(tmp_path, monkeypatch):
 
 def client(tmp_path, url):
     settings = replace(make_settings(tmp_path), research_url=url)
-    app = create_app(settings=settings, upstream=NoNetworkUpstream(), static_dir=tmp_path / "dist")
+    app = create_app(settings=settings, upstream=NoNetworkUpstream(), static_dir=tmp_path / "dist", reuse_bridge_connections=False)
     result = TestClient(app)
     assert result.post("/api/v5/auth/login", json={"token": TOKEN}, headers={"Origin": ORIGIN}).status_code == 200
     return result

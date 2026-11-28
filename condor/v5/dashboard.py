@@ -75,6 +75,7 @@ def read_compatibility_path(
     paper: PaperObservation | None = None,
     *,
     paper_read: dict | None = None,
+    paper_read_now_ms: int | None = None,
     resolve_paper_reads: bool = False,
 ) -> object:
     """Project one exact, safe legacy GET path into fixed V5-owned data.
@@ -121,11 +122,13 @@ def read_compatibility_path(
         if route is not None:
             section, query = route
             if paper_read is not None:
+                if paper_read_now_ms is None:
+                    raise ValueError("paper read validation requires a receipt clock")
                 result = validate_paper_read(
                     paper_read,
                     section=section,
                     bot=paper.bot_name,
-                    now_ms=int(paper.observed_at * 1000),
+                    now_ms=paper_read_now_ms,
                 )
                 expected = dict(parse_qsl(query)).get("snapshot_id")
                 if expected is not None and result["snapshot_id"] != expected:

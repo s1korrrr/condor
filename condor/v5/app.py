@@ -17,11 +17,12 @@ import re
 import stat
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
@@ -32,12 +33,14 @@ from .candles import MAX_TIMESTAMP, CandleOwner, OwnerUnavailable, validate_quer
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
+from .http_pool import SharedSession
 from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
 from .learning import FixtureLearningAPI, learning_router
 from .learning_projection import PROJECTION_PATHS, ResearchOwnerLearningSource
 from .paper import PaperObservation, read_paper_status
 from .read_bridge import read_research, read_tradepad, research_route, tradepad_route
 from .state import StateCapacityError, WorkspaceState
+from . import timing
 from .upstream import UPSTREAM_AUTH_REJECTION_STATUSES, UpstreamError, V5Upstream
 
 logger = logging.getLogger(__name__)
@@ -100,6 +103,14 @@ _ADVISOR_TIME_KEYS = ("requested_at_ms", "received_at_ms", "expires_at_ms", "inp
 
 def _valid_advisor_time(value: Any) -> bool:
     return type(value) is int and 0 < value <= MAX_TIMESTAMP * 1000
+
+
+def _utc_minute(ms: Any) -> str | None:
+    """Format a journal timestamp as "20 Nov 2026 06:12 UTC", or None for a non-time."""
+    if not _valid_advisor_time(ms):
+        return None
+    at = datetime.fromtimestamp(ms / 1000, timezone.utc)
+    return f"{at.day} {at:%b %Y %H:%M} UTC"
 
 
 def _safe_history_advice(advice: Any) -> dict[str, Any]:
@@ -316,6 +327,7 @@ def create_app(
     clock=lambda: time.time_ns() // 1_000_000,
     learning_source: FixtureLearningAPI | None = None,
     projection_source: ResearchOwnerLearningSource | None = None,
+    reuse_bridge_connections: bool = True,
 ) -> FastAPI:
     config = settings or Settings.from_env()
     store = state or WorkspaceState(config.runtime_root, clock=clock)
@@ -325,6 +337,10 @@ def create_app(
         KNOWN_TASK_IDS if config.paper_status_file is not None else ADVISOR_TASK_IDS
     )
     api = upstream or V5Upstream(config)
+    # The upstreams can share an origin. Give each its own connection limit.
+    bridge_sessions = {
+        owner: SharedSession(owner=owner) for owner in ("Tradepad", "Research")
+    } if reuse_bridge_connections else {}
     candle_owner = (
         CandleOwner(str(config.candle_store_socket))
         if config.candle_store_socket
@@ -349,7 +365,9 @@ def create_app(
             if not (isinstance(result, dict) and "source_route" in result):
                 return result if isinstance(result, dict) else None
             payload = await api.observation(result["source_route"])
-            read = read_compatibility_path(path, paper, paper_read=payload)
+            read = read_compatibility_path(
+                path, paper, paper_read=payload, paper_read_now_ms=clock()
+            )
             return read if isinstance(read, dict) else None
         except (HTTPException, UpstreamError):
             return None
@@ -403,8 +421,16 @@ def create_app(
                 except asyncio.CancelledError:
                     pass
             close = getattr(store, "close", None)
-            if callable(close):
-                close()
+            try:
+                if callable(close):
+                    close()
+            finally:
+                try:
+                    await asyncio.gather(*(session.close() for session in bridge_sessions.values()))
+                finally:
+                    api_close = getattr(api, "close", None)  # V5Upstream owns a shared session; test doubles have none
+                    if api_close is not None:
+                        await api_close()
 
     app = FastAPI(
         title="RSI V5 Workspace",
@@ -420,11 +446,25 @@ def create_app(
 
     @app.middleware("http")
     async def safe_headers(request: Request, call_next):
-        response = await call_next(request)
+        # scope["path"], not request.url: building the URL decodes the raw query string, which a hostile non-UTF-8
+        # query must not be able to fail before the route rejects it.
+        timed, token = timing.begin() if request.scope["path"].startswith("/api/v5/") else (None, None)
+        try:
+            response = await call_next(request)
+        except Exception:
+            if timed is None:
+                raise
+            logger.exception("Unhandled V5 request error")
+            response = PlainTextResponse("Internal Server Error", status_code=500)
+        finally:
+            if token is not None:
+                timing.end(token)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-V5-Authority"] = "reports-only"
+        if timed is not None:
+            response.headers["Server-Timing"] = timed.header()
         # Every response: HTML entry routes include /agents, /sessions/... and
         # /settings, and JSON never needs a weaker policy.
         response.headers["Content-Security-Policy"] = (
@@ -522,7 +562,11 @@ def create_app(
         """One bounded read of the configured paper status; None when not configured."""
         if config.paper_status_file is None:
             return None
-        return read_paper_status(config.paper_status_file, now=clock() / 1000)
+        started = time.perf_counter()
+        try:
+            return read_paper_status(config.paper_status_file, now=clock() / 1000)
+        finally:
+            timing.record_parse(time.perf_counter() - started)
 
     async def current_paper() -> PaperObservation | None:
         if config.paper_status_file is None:
@@ -583,6 +627,7 @@ def create_app(
             raise HTTPException(404) from None
         except ValueError:
             raise HTTPException(422, detail={"code": "invalid_candle_query"}) from None
+        started = time.perf_counter()
         try:
             data = await (
                 candle_owner.read_summary()
@@ -599,6 +644,8 @@ def create_app(
                 status_code=503,
                 headers={"Cache-Control": "no-store"},
             )
+        finally:
+            timing.record_owner(time.perf_counter() - started)
 
     @app.get("/api/v5/dashboard/read", dependencies=[Depends(require_auth)])
     async def dashboard_compatibility_read(
@@ -606,11 +653,11 @@ def create_app(
     ):
         tradepad = tradepad_route(path, config.tradepad_campaign_id)
         if tradepad is not None:
-            raw = await read_tradepad(config.tradepad_url, *tradepad)
+            raw = await read_tradepad(config.tradepad_url, *tradepad, bridge_sessions.get("Tradepad"))
             return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
         research = research_route(path)
         if research is not None:
-            raw = await read_research(config.research_url, *research)
+            raw = await read_research(config.research_url, *research, bridge_sessions.get("Research"))
             return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
         paper = await current_paper()
         result = (
@@ -633,16 +680,19 @@ def create_app(
                     raise HTTPException(
                         503, detail={"code": "HOST_OPERATIONS_INVALID"}
                     ) from None
+                read_at_ms = clock()
                 payload = dict(
                     payload,
                     bot_id=paper.bot_name,
-                    read_at_ms=clock(),
+                    read_at_ms=read_at_ms,
                     observed_at_ms=payload.get("observed_at_ms"),
                     source_at_ms=payload.get("generated_at_ms"),
                     capabilities=[],
                     source={"owner": "host_monitor_export"},
                 )
-                return read_compatibility_path(path, paper, paper_read=payload)
+                return read_compatibility_path(
+                    path, paper, paper_read=payload, paper_read_now_ms=read_at_ms
+                )
             try:
                 payload = await api.observation(result["source_route"])
             except UpstreamError as exc:
@@ -664,7 +714,9 @@ def create_app(
                     exc.http_status,
                     detail={"code": exc.code, **exc.upstream_detail},
                 ) from exc
-            return read_compatibility_path(path, paper, paper_read=payload)
+            return read_compatibility_path(
+                path, paper, paper_read=payload, paper_read_now_ms=clock()
+            )
         return result
 
     @app.post("/api/v5/auth/login")
@@ -1052,8 +1104,11 @@ def create_app(
                 store.finish_session(session["id"], "BLOCKED", summary)
                 return session_response(session["id"])
             owner = paper.status
+            ready = {True: "ready", False: "not ready"}.get(
+                owner["ready"], "readiness not published"
+            )
             summary = (
-                f"Inspected paper status {paper.bot_name}; ready={owner['ready']}; "
+                f"Inspected paper status {paper.bot_name}; {ready}; "
                 f"controllers={len(owner['controllers'])}; mode=PAPER (simulated wallet)"
             )
             store.add_tick(
@@ -1099,7 +1154,10 @@ def create_app(
             )
             store.finish_session(session["id"], "BLOCKED", summary)
         else:
-            summary = f"Inspected source snapshot {snapshot_id}; availability={availability if availability is not None else 'unavailable'}"
+            available = _utc_minute(availability)
+            summary = f"Inspected source snapshot {snapshot_id}; " + (
+                f"available {available}" if available else "availability not reported"
+            )
             store.add_tick(
                 session["id"], status="COMPLETED", summary=summary, evidence_refs=refs
             )

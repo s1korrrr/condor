@@ -1,4 +1,4 @@
-import type { V5Workspace } from "./contracts";
+import type { V5TaskReport, V5Workspace } from "./contracts";
 
 export interface WorkspaceRead {
   data?: V5Workspace;
@@ -57,6 +57,23 @@ function publishedTimestamp(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 8_640_000_000_000_000;
 }
 
+/**
+ * Why this role's report was not read, or undefined when it was. A failed read shows nothing from an earlier one:
+ * the page says it did not read, never that the owner published no report.
+ */
+export function reportNotRead(read: WorkspaceRead, taskId: string): string | undefined {
+  if (read.isError) return `${read.error?.message || "the workspace read failed"} · Source: /api/v5/workspace`;
+  if (!read.data) return "the workspace read has not finished";
+  const failure = sourceFailure(read, `latest_${taskId}`);
+  return failure ? `${failure} · Source: /v1/advice/status` : undefined;
+}
+
+/** The owner's list leaves the decision review out when the dashboard has no paper status file to ask about. */
+export function reportNotRequested(read: WorkspaceRead, taskId: string): string | undefined {
+  const latest = read.data?.advisor?.latest_by_task;
+  return taskId === "decision_review" && isRecord(latest) && latest[taskId] === undefined ? "not requested: no paper status file" : undefined;
+}
+
 function elapsedTime(durationMs: number) {
   const seconds = Math.floor(durationMs / 1000);
   if (seconds < 60) return `${seconds}s`;
@@ -72,13 +89,46 @@ function reportAge(timestamp: number | null, nowMs: number) {
   return `${elapsedTime(nowMs - timestamp)} ago`;
 }
 
-function utcTime(timestamp: number) {
-  return new Date(timestamp).toISOString().replace("T", " ").replace("Z", " UTC");
+/** "12:20:01 UTC", with the date only when it is not today (UTC). */
+function clock(timestamp: number, nowMs: number) {
+  const iso = new Date(timestamp).toISOString();
+  const time = `${iso.slice(11, 19)} UTC`;
+  return Number.isFinite(nowMs) && iso.slice(0, 10) === new Date(nowMs).toISOString().slice(0, 10) ? time : `${iso.slice(0, 10)} ${time}`;
+}
+
+/**
+ * The advisor's one-line display text for a report, or null. It is the advisor's own words; no bot reads it.
+ */
+export function reportConclusion(report: V5TaskReport | undefined): string | null {
+  const advice = report?.record?.result?.advice;
+  const text = [advice?.assessment, advice?.summary].filter((part): part is string => typeof part === "string" && part.trim() !== "").map(part => part.trim());
+  if (!text.length) return null;
+  const line = text.join(" — ").replace(/\s+/g, " ");
+  return line.length > 200 ? `${line.slice(0, 199)}…` : line;
+}
+
+/**
+ * What the owner's validity cutoff means: the owner rejects a report requested at or before it. The owner moves the cutoff
+ * for several reasons (a source change, an observation gap, a source outage), so `reason` is its own code, not a guess.
+ * It is not the time a report stopped being current, and it says nothing about a report requested after it.
+ */
+export function watermarkNote(report: V5TaskReport | undefined, nowMs: number) {
+  const watermark = report?.validity_watermark;
+  if (!watermark || report?.status === "CURRENT_REPORT" || !publishedTimestamp(watermark.watermark_ms)) return null;
+  const requested = report?.record?.result?.requested_at_ms;
+  const at = clock(watermark.watermark_ms, nowMs);
+  const applies = publishedTimestamp(requested) ? requested <= watermark.watermark_ms : null;
+  return {
+    label: "Owner validity cutoff",
+    value: `${at} · ${watermark.reason} · reports requested at or before this time cannot be current`
+      + (applies === false ? ". This report was requested after it, so the cutoff is not why it is not current" : applies === null ? ". The request time of this report is not published" : ""),
+  };
 }
 
 export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now()) {
   const availability = advisorAvailability(read);
-  const advisor = read.data?.advisor;
+  // A failed read shows nothing from an earlier one: the line says the advisor was not read.
+  const advisor = read.isError ? undefined : read.data?.advisor;
   const scheduler = advisor?.scheduler;
   return scheduledRoles.map(role => {
     const agent = Array.isArray(read.data?.agents) ? read.data.agents.find(value => isRecord(value) && value.id === role.id) : undefined;
@@ -91,6 +141,8 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now()) {
     const expiry = publishedTimestamp(report?.expires_at_ms) ? report.expires_at_ms : null;
     const expired = expiry !== null && Number.isFinite(nowMs) && nowMs >= expiry;
     const failure = sourceFailure(read, `latest_${role.taskId}`) || sourceFailure(read, "task_profiles");
+    const nextRun = scheduler?.next_run_by_task?.[role.taskId];
+    const schedule = publishedTimestamp(nextRun) ? (nextRun > nowMs ? `next run ~${clock(nextRun, nowMs)}` : `next run was due ${clock(nextRun, nowMs)}`) : "schedule not published";
     let state = "State not published";
     let reason = "Owner scheduling state is not published.";
     if (availability.state !== "enabled") {
@@ -111,13 +163,16 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now()) {
     } else if (report?.status && failedReports.has(report.status)) {
       state = "Last run failed";
       reason = [report.status, report.reason, report.rejection].filter(Boolean).join(" · ");
+    } else if (latest?.status === "HISTORICAL_REPORT") {
+      state = "Historical · not current";
+      reason = "The owner published this report as HISTORICAL_REPORT: it is not the current report. Its published expiry is shown separately.";
     } else if (report?.status === "ACCEPTED" && expired) {
-      state = `Last report expired at ${utcTime(expiry)} (${reportAge(expiry, nowMs)})`;
-      reason = "The owner's published report expiry has passed.";
+      state = `Expired ${elapsedTime(nowMs - expiry)} ago · ${schedule}`;
+      reason = "The owner's published report expiry has passed. Expiry alone is not a run failure.";
     } else if (scheduler?.enabled === true) {
       reason = "Owner shared scheduler enabled: true.";
       if (profile?.enabled === true && report?.status === "ACCEPTED" && latest?.status === "CURRENT_REPORT" && received !== null && expiry !== null && Number.isFinite(nowMs) && nowMs >= received) {
-        state = "Last report accepted";
+        state = `Current until ${clock(expiry, nowMs)}`;
       }
       if (scheduler.task_id === role.taskId && scheduler.last_status) reason += ` Last scheduler status: ${scheduler.last_status}.`;
     }
@@ -131,7 +186,8 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now()) {
       expiryTime: expiry === null ? null : new Date(expiry).toISOString(),
       expiryRelative: expiry === null ? "expiry not published" : !Number.isFinite(nowMs) ? "relative time unavailable (clock mismatch)" : expired ? reportAge(expiry, nowMs) : `in ${elapsedTime(expiry - nowMs)}`,
       overdue: "overdue rule not published",
-      schedule: "schedule not published",
+      schedule,
+      conclusion: reportConclusion(latest),
     };
   });
 }

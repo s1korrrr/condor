@@ -4,7 +4,7 @@ import { RotateCw } from "lucide-react";
 import { ownerTitleText, age, count, usdc, utcMin } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { tri } from "./shown.mjs";
-import { helmCoinRow, helmHeadline } from "./helm-model.mjs";
+import { helmCoinRow, helmCoinsNote, helmHeadline } from "./helm-model.mjs";
 import "./market.css";
 
 type Amount = number | string | null;
@@ -19,7 +19,7 @@ export type HelmStatus = {
   steps: Amount; actions: Amount; phase: string | null; profile_id: string | null; entries_held: string | null; operator_entry_paused: boolean | null;
   kill_switch: boolean | null; adaptive_actions: string | null; funding: string | null; image_tag: string | null;
   shutdown: { checkpoint: boolean | null; clean: boolean | null } | null;
-  mandate: { mandate_id: string | null; revision: number | null; revocation_id: string | null; state: string | null; valid_until_ms: number | null } | null;
+  mandate: { mandate_id: string | null; revision: number | null; revocation_id: string | null; state: string | null; valid_until_ms: number | null; effective_until_ms?: number | null } | null;
   risk: { reason: string | null; latched: boolean | null; daily_loss_use: Amount; risk_reference_quote: Amount; unit: string | null } | null;
   control_rejections: { count: Amount; recent: ({ action: string | null; at_ms: number | null; reason: string | null } | null)[] } | null;
   recipe_version: string | null;
@@ -38,6 +38,11 @@ export async function readHelm(): Promise<HelmRead> {
 /** Owner codes as words; anything that is not text is shown as missing, never coerced. */
 const words = (value: unknown) => typeof value === "string" && value ? value.replaceAll("_", " ") : "—";
 const at = (ms: number | null | undefined) => utcMin(ms) ?? "unknown time";
+/** The runtime's effective end (earliest of mandate, authorization and eligibility) when it publishes one, else the mandate's own end, named as such. */
+const mandateEnd = (mandate: NonNullable<HelmStatus["mandate"]>) => {
+  const effectiveEnd = utcMin(mandate.effective_until_ms);
+  return effectiveEnd ? `until ${effectiveEnd}` : `mandate ends ${at(mandate.valid_until_ms)} (effective end unavailable)`;
+};
 
 /** Helm page: the Helm paper bot's own published runtime state, read-only. Nothing here sends a control command. */
 export function V5Helm() {
@@ -49,6 +54,7 @@ export function V5Helm() {
   const ageS = status ? status.age_s + Math.max(0, now - helm.dataUpdatedAt) / 1000 : null;
   const fresh = read?.state === "FRESH";
   const coins = status?.symbols.map(row => helmCoinRow(row, { fresh: fresh && ageS != null && ageS <= 30, nowS: status.generated_at + (ageS ?? status.age_s) })) ?? [];
+  const coinsNote = helmCoinsNote(coins, status?.withheld);
   const rejectionCount = status?.control_rejections?.count;
   const noRejections = rejectionCount === 0 || typeof rejectionCount === "string" && /^-?0+(?:\.0+)?$/.test(rejectionCount);
   const lastAt = at(status ? status.generated_at * 1000 : null);
@@ -73,7 +79,7 @@ export function V5Helm() {
         {status.withheld > 0 && <p className="v5m-hint" role="note">{count(status.withheld)} published value(s) did not match their expected form and are not shown.</p>}
         <div className="v5m-stats v5m-stats--wide">
           <Stat label="New entries" value={status.operator_entry_paused === true ? "Paused" : status.entries_held ? "Held" : status.operator_entry_paused === false ? "Not paused" : "Not published"} note={status.entries_held ? words(status.entries_held) : status.operator_entry_paused === false ? "no entry hold published" : "pause state not published"} warn={!!status.entries_held || status.operator_entry_paused !== false} />
-          <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? <><span>{status.mandate.mandate_id ?? "id not published"}</span> · revision {status.mandate.revision == null ? "not published" : count(status.mandate.revision)} · until {at(status.mandate.valid_until_ms)}</> : "not published"} title={status.mandate?.revocation_id ? `Revocation id ${status.mandate.revocation_id} (shared by the mandate and its authorization)` : undefined} />
+          <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? <><span>{status.mandate.mandate_id ?? "id not published"}</span> · revision {status.mandate.revision == null ? "not published" : count(status.mandate.revision)} · {mandateEnd(status.mandate)}</> : "not published"} title={status.mandate?.revocation_id ? `Revocation id ${status.mandate.revocation_id} (shared by the mandate and its authorization)` : undefined} />
           <Stat label="Risk latch" value={tri(status.risk?.latched, "Latched", "Clear")} note={words(status.risk?.reason)} warn={status.risk?.latched !== false} />
           <Stat label="Daily loss used" value={<OwnerValue value={status.risk?.daily_loss_use} kind="usdc" unit="" />} note={<>of the <span title={ownerTitleText(status.risk?.risk_reference_quote == null ? undefined : String(status.risk.risk_reference_quote))}>{usdc(status.risk?.risk_reference_quote, status.risk?.unit ?? "")}</span> risk reference</>} />
           <Stat label="Kill switch" value={tri(status.kill_switch, "On", "Off")} warn={status.kill_switch !== false} />
@@ -83,12 +89,13 @@ export function V5Helm() {
         </div>
         <section className="v5m-section"><header><h2>Coins</h2><span>Why each coin is or is not buying, and its bag</span></header>
           {coins.length ? <>
+            {coinsNote && <p className="v5m-hint" role="note">{coinsNote}</p>}
             <div className="v5m-card v5m-helm-table"><table className="v5m-heat v5m-helm-coins"><thead><tr><th>Pair</th><th>Buy rule</th><th>Where it is now</th><th className="is-number">Held</th><th className="is-number">Breakeven</th></tr></thead><tbody>{coins.map(row => <tr key={row.pair}>
               <td>{row.pair}</td><td>{row.rule}</td><td><CoinSignal row={row} /></td>
               <td className="is-number">{row.held}{row.bagNote && <small>{row.bagNote}</small>}</td><td className="is-number">{row.breakeven}</td>
             </tr>)}</tbody></table></div>
             <div className="v5m-helm-mobile">{coins.map(row => <article className="v5m-card v5m-helm-coin" key={row.pair}>
-              <h3>{row.pair}</h3><p>{row.rule}</p><CoinSignal row={row} />
+              <h3>{row.pair}</h3>{row.signalPublished && <p>{row.rule}</p>}<CoinSignal row={row} />
               <dl className="v5m-kv"><dt>Held</dt><dd>{row.held}</dd><dt>Breakeven</dt><dd>{row.breakeven}</dd></dl>
               {row.bagNote && <small>{row.bagNote}</small>}
             </article>)}</div>
@@ -104,6 +111,7 @@ export function V5Helm() {
 }
 
 function CoinSignal({ row }: { row: ReturnType<typeof helmCoinRow> }) {
+  if (!row.signalPublished) return <div className="v5m-helm-signal"><span className="v5m-muted">—</span><small>{row.owner}</small></div>;
   return <div className="v5m-helm-signal"><span className={row.rsi.startsWith("—") ? "v5m-muted" : undefined} title={ownerTitleText(row.rsiTitle)}>{row.rsi}</span><span className={row.atr.startsWith("—") ? "v5m-muted" : undefined}>{row.atr}</span><small>{row.decision}</small><small>{row.owner}</small><small>{row.sample}</small></div>;
 }
 

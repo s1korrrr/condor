@@ -6,31 +6,38 @@ import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable"
 import { CHART, type ChartSeries } from "@/features/quant-ops/kit/series";
 import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
-import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow } from "./money-model.mjs";
+import { dayCoverage, equityChange, holdReturn, latest, moneySinceStart, series, type DailyRow, type MoneyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { ownerTitleText, axis, count, decimalPercentChange, fixed, ownerDisplay, pct, pnl, rationalPercent, signed, usdc, utcMin, type OwnerValueKind } from './format.mjs';
-import { exactSignedSum } from "./bots-position-model.mjs";
 import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
 import { readMoney } from "./money-api";
+import { useHeldCoinsMark } from "./useHeldCoinsMark";
 export { readMoney } from "./money-api";
 import "./market.css";
 
 type CrossLine = { venue: string; lane: string; close: [number, number][] };
-type Hold = { closes: Record<string, [number, number][] | undefined> };
+type Hold = { closes: Record<string, [number, number][] | undefined>; failures: Record<string, string> };
 const RANGES = ["24h", "7d"] as const;
 
+const HOLD_READS_IN_FLIGHT = 2;
 
-/** The reference spot lane's closes for each coin over the candle store's 7 days, read one after another. */
+/** Read the basket two at a time; a remounted observer rejoins the same in-flight query. */
 async function readHold(): Promise<Hold> {
-  const closes: Record<string, [number, number][] | undefined> = {};
-  for (const coin of MARKET_COINS) {
-    try {
-      const view = await readCandleStore<{ series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" });
-      closes[coin] = view.series.find(line => line.lane === REFERENCE.spot)?.close;
-    } catch { closes[coin] = undefined; }
-  }
-  return { closes };
+  // A failed coin keeps its key with no closes, so the basket is never quietly reduced to fewer coins.
+  const closes: Hold["closes"] = Object.fromEntries(MARKET_COINS.map(coin => [coin, undefined])), failures: Hold["failures"] = {};
+  const queue = [...MARKET_COINS];
+  const worker = async () => {
+    for (let coin = queue.shift(); coin; coin = queue.shift()) {
+      try {
+        closes[coin] = (await readCandleStore<{ series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" })).series.find(line => line.lane === REFERENCE.spot)?.close;
+      } catch (error) {
+        failures[coin] = error instanceof Error ? error.message : String(error);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: HOLD_READS_IN_FLIGHT }, worker));
+  return { closes, failures };
 }
 
 const num = (value: string | null | undefined) => value != null && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -55,7 +62,7 @@ const dailyColumns: TableColumn<DailyRow>[] = [
 /** The Money view; on Overview it is embedded under the bot cards (`embedded` turns its title into a section heading). */
 export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const [range, setRange] = useState<(typeof RANGES)[number]>("7d");
-  const money = useQuery({ queryKey: ["v5-money", range], queryFn: () => readMoney(range), retry: false, refetchInterval: 60_000 });
+  const money = useQuery({ queryKey: ["v5-money", range], queryFn: ({ signal }) => readMoney(range, signal), retry: false, refetchInterval: 60_000 });
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
   // Prices come from the candle store only where this deployment has one; otherwise the comparison says so.
   const candleConfigured = profile.data?.candle_store?.configured === true;
@@ -64,10 +71,8 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const v5 = latest(rows, "v5"), helm = latest(rows, "helm");
   const now = v5.withValues;
   const equity = now?.equity, funding = now?.initial_funding;
-  const oppositeFunding = typeof funding === "string" ? funding.startsWith("-") ? funding.slice(1) : `-${funding}` : null;
-  const sinceStart = exactSignedSum(equity, oppositeFunding);
-  const sincePercent = decimalPercentChange(equity, funding);
-  const sinceExact = sinceStart == null ? undefined : `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(sinceStart.replace(/^-/, "−"))}`;
+  const sinceStart = moneySinceStart(now);
+  const sincePercent = sinceStart.value == null ? null : decimalPercentChange(equity, funding);
   const unit = now?.unit ?? "USDC";
   const equitySeries: ChartSeries[] = [{ id: "equity", label: "V5 wallet equity", color: CHART.blue, points: series(rows, "v5", "equity"), unit, format: (value, exact) => fixed(exact ?? value) }];
   const pnlSeries: ChartSeries[] = [
@@ -77,17 +82,25 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const coins = (now?.coins ?? {}) as Record<string, { realized: string | null; unrealized: string | null }>;
   const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), realizedExact: values.realized, unrealized: num(values.unrealized), unrealizedExact: values.unrealized }));
   const days = money.data?.daily ?? [];
-  const holdView = hold.data ? holdReturn(hold.data.closes) : null;
-  // V5 over its own first and last sample in the 7-day rows; it is "the same window" only if both ends match exactly.
+  const holdData = candleConfigured ? hold.data : undefined;
+  const holdView = holdData ? holdReturn(holdData.closes) : null;
+  // V5 over its own first and last sample in the 7-day rows. Its times are sample times; the price side is on 15-minute buckets.
   const v5View = money.data?.range === "7d" ? equityChange(rows, "v5") : null;
-  const sameWindow = holdView?.pct != null && v5View?.pct != null && holdView.startS! * 1000 === v5View.startMs && holdView.endS! * 1000 === v5View.endMs;
+  const holdFailures = Object.entries(holdData?.failures ?? {});
+  const holdEmpty = holdView?.missing.filter(coin => !holdData?.failures[coin]) ?? [];
+  const holdUnavailable = [holdFailures.length ? `could not read 7-day closes for ${holdFailures.map(([coin, reason]) => `${coin} (${reason})`).join(", ")}` : "", holdEmpty.length ? `no 7-day closes for ${holdEmpty.join(", ")}` : ""].filter(Boolean).join("; ") || "the five coins share no first and last minute";
+  // The owner publishes each 15-minute bucket under its opening time, with the bucket's last close.
+  const holdNote: ReactNode = !candleConfigured ? (profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced.")
+    : hold.isPending ? <span role="status">Reading 7 days of prices…</span>
+    : holdView?.pct == null ? `Holding comparison unavailable: ${holdUnavailable}. The basket is never reduced to fewer coins.`
+    : `from the last minute close available in the 15-minute bucket opening ${at(holdView.startS! * 1000)} to the last minute close available in the one opening ${at(holdView.endS! * 1000)}; the latest bucket may still be open.`;
 
   return <div className="v5m">
     <header className="v5m-head">
       <div>{embedded ? <h2>Money</h2> : <h1>Money</h1>}<p>Paper money for V5 and Helm at a glance. Recorded by this dashboard every 5 minutes{money.data?.started_at_ms ? ` since ${at(money.data.started_at_ms)}` : ""}; there is no record before that.</p></div>
       <div className="v5m-chips">
         <div role="group" aria-label="Range" className="v5m-seg">{RANGES.map(item => <button key={item} type="button" aria-pressed={range === item} onClick={() => setRange(item)}>{item}</button>)}</div>
-        <button className="v5m-refresh" onClick={() => { void money.refetch(); void hold.refetch(); }}><RotateCw size={14} />Refresh</button>
+        <button className="v5m-refresh" onClick={() => { void money.refetch(); if (candleConfigured) void hold.refetch({ cancelRefetch: false }); }}><RotateCw size={14} />Refresh</button>
       </div>
     </header>
     {money.isPending ? <p role="status" className="v5m-status">Reading money samples…</p> : money.isError ? <p role="alert" className="v5m-status">{money.error.message}. Nothing older is shown.</p> : <>
@@ -97,9 +110,9 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
 
       <section className="v5m-section"><header><h2>V5 paper bot</h2><span>{now ? `as of ${at(now.at_ms)} · ${now.unit ?? "USDC"}` : "no sample with values yet"}</span></header>
         <div className="v5m-stats v5m-stats--wide">
-          <Stat label="Wallet equity" value={fixed(now?.equity)} owner={{value:now?.equity, kind:"usdc", unit:""}} unit={unit} note={sinceStart == null ? "start funding not published" : <><OwnerValue value={sinceStart} kind="pnl" exact={sinceExact} /> vs the <span title={ownerTitleText(funding ?? undefined)}>{usdc(funding, unit)}</span> start {sincePercent && <span title={`(${ownerTitleText(equity)} − ${ownerTitleText(funding)}) × 100 / ${ownerTitleText(funding)} = ${ownerTitleText(sincePercent.exact)}`}>({pct(sincePercent.value)})</span>}</>} warn={ownerDisplay(sinceStart, "pnl").tone === "down"} />
+          <Stat label="Wallet equity" value={fixed(now?.equity)} owner={{value:now?.equity, kind:"usdc", unit:""}} unit={unit} note={sinceStart.value == null ? `Since start unavailable: ${sinceStart.reason}` : <><OwnerValue value={sinceStart.value} kind="pnl" exact={sinceStart.title} /> vs the <span title={ownerTitleText(funding ?? undefined)}>{usdc(funding, unit)}</span> start {sincePercent && <span title={`(${ownerTitleText(equity)} − ${ownerTitleText(funding)}) × 100 / ${ownerTitleText(funding)} = ${ownerTitleText(sincePercent.exact)}`}>({pct(sincePercent.value)})</span>}</>} warn={ownerDisplay(sinceStart.value, "pnl").tone === "down"} />
           <Stat label="Profit from closed trades" value={pnl(now?.realized).text} owner={{value:now?.realized, kind:"pnl"}} note="lifetime, owner accounting" />
-          <Stat label="Gain or loss on coins still held" value={pnl(now?.unrealized).text} owner={{value:now?.unrealized, kind:"pnl"}} note="marked at the owner's fresh book midpoint" warn={ownerDisplay(now?.unrealized, "pnl").tone === "down"} />
+          <HeldCoinsStat row={now} />
           <Stat label="Fees paid" value={fixed(now?.fees)} owner={{value:now?.fees, kind:"usdc", unit:""}} unit={unit} note="lifetime" />
         </div>
       </section>
@@ -115,10 +128,10 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
         <article className="v5m-card"><h3>By coin</h3><p className="v5m-hint">Lifetime closed-trade profit and held-coin gain or loss per coin, latest sample</p>
           <BarsChart rows={coinRows} bars={[{ id: "realized", label: "Closed-trade profit", color: CHART.positive }, { id: "unrealized", label: "Held-coin gain or loss", color: CHART.negative }]} height={200} ariaLabel="V5 P&L by coin" emptyText="No per-coin values in the latest sample." /></article>
         <article className="v5m-card"><h3>Against holding the five coins</h3><p className="v5m-hint">Equal weights in {MARKET_COINS.join(", ")} over the candle store's 7 days ({REFERENCE.venue} spot {REFERENCE.quote})</p>
-          {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : hold.isPending ? <p role="status" className="v5m-hint">Reading 7 days of prices…</p> : !holdView || holdView.pct == null ? <p className="v5m-hint">Holding comparison unavailable{holdView?.missing.length ? `: no 7-day closes for ${holdView.missing.join(", ")}` : ": the five coins share no first and last minute"}. The basket is never reduced to fewer coins.</p> : <div className="v5m-stats">
-            <Stat label="Holding the five coins" value={pct(holdView.pct)} title={holdView.title} note={`from ${at(holdView.startS! * 1000)} to ${at(holdView.endS! * 1000)}`} />
-            <Stat label="V5 wallet equity" value={pct(v5View?.pct)} title={v5View?.title} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${utcExact(v5View.startMs) ?? "unknown time"} to ${utcExact(v5View.endMs) ?? "unknown time"}${sameWindow ? " · same window" : " · its own record, not the same window"}`} />
-          </div>}
+          <div className="v5m-stats">
+            <Stat label="Holding the five coins" value={pct(holdView?.pct)} title={holdView?.title} note={holdNote} />
+            <Stat label="V5 wallet equity" value={pct(v5View?.pct)} title={v5View?.title} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${utcExact(v5View.startMs) ?? "unknown time"} to ${utcExact(v5View.endMs) ?? "unknown time"} · its own samples, not tied to the price buckets`} />
+          </div>
           <p className="v5m-hint">Only the candle store's 7 days can be priced, so the comparison never reaches the trial start (2026-10-29).</p></article>
       </div>
 
@@ -135,6 +148,12 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
       <p className="v5m-hint">Limits: values come from the owners' own reads; the record starts when this dashboard's recorder started (no backfill); a missing sample stays a gap; nothing here is a trading signal.</p>
     </>}
   </div>;
+}
+
+function HeldCoinsStat({ row }: { row: MoneyRow | null }) {
+  const { value, note } = useHeldCoinsMark(row);
+  const shown = pnl(value);
+  return <Stat label="Gain or loss on coins still held" value={shown.text} owner={{ value, kind: "pnl" }} note={note} warn={shown.tone === "down"} />;
 }
 
 function Stat({ label, value, unit, note, warn, owner, title }: { label: string; value: string; unit?: string; note?: ReactNode; warn?: boolean; owner?: { value: unknown; kind: OwnerValueKind; unit?: string }; title?: string }) {

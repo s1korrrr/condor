@@ -205,7 +205,8 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         "ready": shown.one(payload.get("ready"), _flag),
         "failure": shown.one(payload.get("failure"), _plain),
         "failure_reported": payload.get("failure") is not None,
-        "reasons": None if reasons is None else [value for value in (shown.one(reason, _code) for reason in reasons[:16]) if value is not None],
+        # Native reasons are "<owner>: <detail>" sentences (component_paper_runtime), so they are plain text, not codes.
+        "reasons": None if reasons is None else [value for value in (shown.one(reason, _plain) for reason in reasons[:16]) if value is not None],
         "steps": shown.one(payload.get("steps"), _amount),
         "actions": shown.one(payload.get("actions"), _amount),
         "phase": shown.one(helm.get("phase"), _code),
@@ -217,7 +218,7 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         "funding": shown.one(helm.get("funding"), _code),
         "image_tag": shown.one(image.get("tag"), _code),
         "shutdown": shown.pick(helm.get("shutdown"), {"checkpoint": _flag, "clean": _flag}),
-        "mandate": shown.pick(helm.get("mandate"), {"mandate_id": _code, "revision": _revision, "revocation_id": _code, "state": _code, "valid_until_ms": _epoch_ms}),
+        "mandate": shown.pick(helm.get("mandate"), {"mandate_id": _code, "revision": _revision, "revocation_id": _code, "state": _code, "valid_until_ms": _epoch_ms, "effective_until_ms": _epoch_ms}),
         "risk": shown.pick(helm.get("native_risk"), {"reason": _code, "latched": _flag, "daily_loss_use": _amount, "risk_reference_quote": _amount, "unit": _code}),
         "control_rejections": None if rejections is None else {
             "count": shown.one(rejections.get("count"), _amount),

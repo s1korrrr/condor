@@ -154,6 +154,11 @@ export interface V5Scheduler {
   last_status?: string;
   last_attempt_ms?: number;
   task_id?: string;
+  /**
+   * The owner's next run per role, only if it publishes one. The three roles share one slot, so a single shared next
+   * run is not a role's next run. Today the owner publishes none; the dashboard then says so.
+   */
+  next_run_by_task?: Record<string, number>;
 }
 
 export interface V5FeedRefresh {

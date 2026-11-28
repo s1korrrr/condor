@@ -220,14 +220,14 @@ test('Helm native phone cards retain every desktop coin field and withhold stale
     symbols: [{ pair: 'BNB-USDC', status: 'held', candidate_hold: 'operator_entry_pause', bag: { held_amount: '123.456789', breakeven_price: '432.10' },
       signal: { at: now / 1000 - 10, rsi: '40.5', oversold: '31', rsi_length: 21, atr_fraction: null, decision: { enter: false, reason: 'owner_journal_held' } } }] };
   let state = 'FRESH';
-  const { load } = frontendModules({ '@tanstack/react-query': { useQuery: () => ({ data: { state, reason: state === 'STALE' ? 'HELM_STATUS_STALE' : null, bot: 'helm_v5_paper', status }, dataUpdatedAt: now, refetch() {} }) } });
+  const { load } = frontendModules({ '@tanstack/react-query': { useQuery: () => ({ data: { state, reason: state === 'STALE' ? 'HELM_STATUS_STALE' : null, bot: 'helm_v5_paper', observed_at: status.generated_at + status.age_s, status }, dataUpdatedAt: now, refetch() {} }) } });
   const window = new Window();
   const Helm = load('v5/V5Helm.tsx').V5Helm;
   const render = () => {
     window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Helm));
     const phone = window.document.querySelector('.v5m-helm-mobile');
     const cells = window.document.querySelectorAll('.v5m-helm-table tbody td');
-    assert.equal(cells.length, 5);
+    assert.equal(cells.length, 6);
     for (const cell of cells) assert.ok(phone.textContent.includes(cell.textContent), cell.textContent);
     return phone;
   };
@@ -239,6 +239,34 @@ test('Helm native phone cards retain every desktop coin field and withhold stale
   assert.match(stale.textContent, /15 Nov 12:34 UTC · 10 s ago · stale/);
   assert.doesNotMatch(stale.textContent, /operator entry pause|owner journal held|RSI 40\.5|123\.457|432\.1/);
   assert.match(window.document.body.textContent, /Values below are as last published[^]*not the current state/);
+});
+
+test('a long owner reason in the Helm and Overview summaries wraps instead of widening the phone page', context => {
+  context.mock.method(Date, 'now', () => now);
+  const reason = 'w'.repeat(96);
+  const status = { generated_at: now / 1000, age_s: 0, ready: true, reasons: [], actions: 1, steps: 1, withheld: 0, gates: [{ gate: 'ready', note: '' }], control_rejections: { count: 0, recent: [] },
+    symbols: [{ pair: 'BNB-USDC', status: 'held', candidate_hold: 'no_rebound', bag: null, signal: null, last_decision: { at: now / 1000 - 20, reason } }] };
+  const helm = { state: 'FRESH', reason: 'HELM_STATUS_FRESH', bot: 'helm_v5_paper', observed_at: now / 1000, status };
+  const { load } = frontendModules({
+    '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: queryKey[0] === 'v5-helm' ? helm : undefined, isPending: queryKey[0] !== 'v5-helm', dataUpdatedAt: now, refetch() {} }) },
+    './V5Money': { V5Money: () => null, readMoney() {} },
+    './V5Helm': { readHelm() {} },
+  });
+  const { V5Helm } = frontendModules({ '@tanstack/react-query': { useQuery: () => ({ data: helm, dataUpdatedAt: now, refetch() {} }) } }).load('v5/V5Helm.tsx');
+  for (const [name, element] of [['Helm', React.createElement(V5Helm)], ['Overview', React.createElement(MemoryRouter, null, React.createElement(load('v5/V5Overview.tsx').V5Overview))]]) {
+    const window = new Window({ width: 390, height: 844 });
+    window.document.head.innerHTML = `<style>${marketCss}</style>`;
+    window.document.body.innerHTML = renderToStaticMarkup(element);
+    // The desktop table sits in its own horizontal scroller and is hidden at phone width; every other place the reason shows must wrap.
+    const holders = [...window.document.querySelectorAll('*')].filter(node => node.children.length === 0 && node.textContent.includes(reason) && !node.closest('.v5m-helm-table'));
+    assert.ok(holders.length >= (name === 'Helm' ? 2 : 1), `${name}: the reason is shown in the summary${name === 'Helm' ? ' and on the coin card' : ''}`);
+    for (const holder of holders) {
+      let node = holder;
+      while (node && window.getComputedStyle(node).overflowWrap !== 'anywhere') node = node.parentElement;
+      assert.ok(node, `${name}: ${holder.tagName.toLowerCase()}.${holder.className} must sit in an element with overflow-wrap: anywhere`);
+    }
+    window.close();
+  }
 });
 
 for (const kind of ['fills', 'positions']) test(`phone ${kind} preserve the owner's freshness gate and exact record IDs`, () => {

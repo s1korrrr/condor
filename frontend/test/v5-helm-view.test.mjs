@@ -12,7 +12,7 @@ function render({ state = 'FRESH', age_s = 0, signal = null, rejections = { coun
     symbols: [{ pair: 'BNB-USDC', signal, bag: { held_amount: '0', breakeven_price: '0' } }], ...extra,
   };
   const { load } = frontendModules({
-    '@tanstack/react-query': { useQuery: () => ({ data: { state, status, bot: 'helm_v5_paper' }, dataUpdatedAt: Date.now(), refetch() {} }) },
+    '@tanstack/react-query': { useQuery: () => ({ data: { state, status, bot: 'helm_v5_paper', observed_at: status.generated_at + age_s }, dataUpdatedAt: Date.now(), refetch() {} }) },
   });
   return renderToStaticMarkup(React.createElement(load('v5/V5Helm').V5Helm));
 }

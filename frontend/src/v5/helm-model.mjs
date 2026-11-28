@@ -16,10 +16,20 @@ function points(value) {
   return `${value / SCALE}${fraction ? `.${fraction}` : ''}`;
 }
 
+/**
+ * The server's own time at the read, moved on by the seconds since the response arrived: the one clock every age on
+ * the Helm surfaces is judged against. Undated reads give undefined, and no age is then claimed.
+ */
+export function helmReadTimeS(read, elapsedS) {
+  const readAt = read?.observed_at, now = typeof readAt === 'number' ? readAt + elapsedS : NaN;
+  return Number.isFinite(now) ? now : undefined;
+}
+
 export function helmCoinRow(row, { fresh, nowS }) {
   const signal = row.signal;
-  const time = utcMin(signal?.at == null ? null : signal.at * 1000, nowS * 1000);
-  const ageS = time == null ? null : nowS - signal.at;
+  const known = typeof nowS === 'number';
+  const time = utcMin(signal?.at == null ? null : signal.at * 1000, known ? nowS * 1000 : undefined);
+  const ageS = time == null || !known ? null : nowS - signal.at;
   const problem = !signal ? 'Signal not published by Helm' : !fresh ? 'Helm status is stale'
     : ageS == null ? 'Signal time not published' : ageS < 0 ? 'Signal time is in the future'
     : ageS > 30 ? 'Signal is stale' : null;
@@ -33,7 +43,7 @@ export function helmCoinRow(row, { fresh, nowS }) {
     rsi: `— · ${problem ?? 'RSI or line not published by Helm'}`, rsiTitle: undefined,
     atr: `— · ${problem ?? 'ATR not published by Helm'}`,
     decision: `— · ${problem ?? 'Entry decision not published'}`,
-    sample: !time ? 'Signal time not published' : `${time} · ${ageS < 0 ? 'ahead of this read' : `${age(ageS)} ago`}${!fresh || ageS > 30 ? ' · stale' : ''}`,
+    sample: !time ? 'Signal time not published' : ageS == null ? `${time} · age unknown` : `${time} · ${ageS < 0 ? 'ahead of this read' : `${age(ageS)} ago`}${!fresh || ageS > 30 ? ' · stale' : ''}`,
     owner: fresh ? `State: ${words(row.status)} · entry hold: ${words(row.candidate_hold)}` : '— · Helm status is stale',
     held: '—', breakeven: '—', bagNote: !fresh ? 'Helm status is stale' : 'Bag not published by Helm',
   };
@@ -67,6 +77,27 @@ export function helmCoinRow(row, { fresh, nowS }) {
   return result;
 }
 
+/** Time, age and reason of a published point in time; "not published" when the owner gives nothing, never a guess. */
+function whenAndWhy(atS, reason, nowS) {
+  const time = utcMin(typeof atS === 'number' ? atS * 1000 : null, typeof nowS === 'number' ? nowS * 1000 : undefined);
+  const why = typeof reason === 'string' && reason ? words(reason) : null;
+  if (!time) return why ? `time not published · ${why}` : 'not published';
+  const ago = typeof nowS !== 'number' ? '' : nowS < atS ? ' · ahead of this read' : ` · ${age(nowS - atS)} ago`;
+  return `${time}${ago} · ${why ?? 'reason not published'}`;
+}
+
+/** One coin's last decision as Helm published it (condor's `last_decision {at, reason}`). */
+export function helmLastDecision(row, { nowS } = {}) {
+  return whenAndWhy(row?.last_decision?.at, row?.last_decision?.reason, nowS);
+}
+
+/** What Helm itself says it has been doing: the newest published decision, or that no decision time is published. */
+function helmActivity(status, nowS) {
+  const decided = (Array.isArray(status.symbols) ? status.symbols : []).filter(row => typeof row?.last_decision?.at === 'number');
+  const newest = decided.reduce((best, row) => (best && best.last_decision.at >= row.last_decision.at ? best : row), null);
+  return newest ? `Latest decision: ${newest.pair ?? 'a coin'} ${helmLastDecision(newest, { nowS })}.` : 'No decision time published.';
+}
+
 /**
  * Entry-check results that mean "no entry signal yet" in the engine's signal policies (modular_spot_core/signals.py).
  * Only these upgrade a ready gate to "waiting for a signal"; any other coin hold (planner codes such as bag_gap_not_met,
@@ -74,7 +105,7 @@ export function helmCoinRow(row, { fresh, nowS }) {
  */
 const SIGNAL_WAIT = new Set(['no_rebound', 'low_volatility', 'high_volatility', 'no_turn', 'score_below_minimum', 'no_breakout']);
 
-export function helmHeadline(read) {
+export function helmHeadline(read, { nowS } = {}) {
   if (!read) return { text: '', good: false };
   if (read.state === 'UNBOUND') return { text: 'Not connected to this dashboard', good: false };
   // No status file: only absence is known. The runtime may be stopped or still starting; neither is claimed.
@@ -102,9 +133,12 @@ export function helmHeadline(read) {
     const symbols = Array.isArray(status.symbols) ? status.symbols : [];
     const other = symbols.filter(row => !SIGNAL_WAIT.has(row?.candidate_hold));
     if (symbols.length && !other.length) {
-      return { text: 'Running, waiting for a signal', good: true, detail: `Every coin idle: ${[...new Set(symbols.map(row => row.candidate_hold))].map(words).join(', ')}.` };
+      // "No entry signal" is all the holds say. The latest published decision is added so the page never reads as idle.
+      return { text: 'Running, waiting for a signal', good: true,
+        detail: `No coin has an entry signal: ${[...new Set(symbols.map(row => row.candidate_hold))].map(words).join(', ')}. ${helmActivity(status, nowS)}` };
     }
-    return { text: 'Running, entry gate ready', good: null, detail: other.map(row => `${row?.pair ?? 'a coin'}: ${row?.candidate_hold ? words(row.candidate_hold) : 'no entry check published this tick'}`).join(' · ') || undefined };
+    const holds = other.map(row => `${row?.pair ?? 'a coin'}: ${row?.candidate_hold ? words(row.candidate_hold) : 'no entry check published this tick'}`).join(' · ');
+    return { text: 'Running, entry gate ready', good: null, detail: `${holds ? `${holds}. ` : ''}${helmActivity(status, nowS)}` };
   }
   return { text: `Publishing status, ready: ${tri(status?.ready, 'yes', 'no')}`, good: false };
 }

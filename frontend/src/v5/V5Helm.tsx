@@ -1,10 +1,11 @@
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 import { ownerTitleText, age, count, usdc, utcMin } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { tri } from "./shown.mjs";
-import { helmCoinRow, helmHeadline } from "./helm-model.mjs";
+import { helmCoinRow, helmHeadline, helmLastDecision } from "./helm-model.mjs";
+import { useHelmClock } from "./useHelmClock";
 import "./market.css";
 
 type Amount = number | string | null;
@@ -27,7 +28,7 @@ export type HelmStatus = {
   symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: { held_amount: Amount; breakeven_price: Amount } | null; last_decision: { at: number | null; reason: string | null } | null; signal: HelmSignal | null }[];
   withheld: number;
 };
-export type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; status: HelmStatus | null };
+export type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; observed_at?: number; status: HelmStatus | null };
 
 export async function readHelm(): Promise<HelmRead> {
   const response = await fetch("/api/v5/helm", { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(14_000) });
@@ -43,16 +44,16 @@ const at = (ms: number | null | undefined) => utcMin(ms) ?? "unknown time";
 export function V5Helm() {
   const helm = useQuery({ queryKey: ["v5-helm"], queryFn: readHelm, retry: false, refetchInterval: 15_000 });
   const read = helm.data, status = read?.status;
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1_000); return () => window.clearInterval(timer); }, []);
-  // The server's age at read time plus local time since the read arrived, so it ticks between reads.
-  const ageS = status ? status.age_s + Math.max(0, now - helm.dataUpdatedAt) / 1000 : null;
+  // Every age here is judged at the server's read time plus the time since that read arrived, so it ticks between reads.
+  const { elapsedS, nowS } = useHelmClock(read, helm.dataUpdatedAt);
+  const ageS = status ? status.age_s + elapsedS : null;
   const fresh = read?.state === "FRESH";
-  const coins = status?.symbols.map(row => helmCoinRow(row, { fresh: fresh && ageS != null && ageS <= 30, nowS: status.generated_at + (ageS ?? status.age_s) })) ?? [];
+  // A coin row carries its own decision: rows are not unique by pair, so a pair-keyed lookup would overwrite one with another.
+  const coins = status?.symbols.map(row => ({ ...helmCoinRow(row, { fresh: fresh && nowS != null && ageS != null && ageS <= 30, nowS }), lastDecision: helmLastDecision(row, { nowS }) })) ?? [];
   const rejectionCount = status?.control_rejections?.count;
   const noRejections = rejectionCount === 0 || typeof rejectionCount === "string" && /^-?0+(?:\.0+)?$/.test(rejectionCount);
   const lastAt = at(status ? status.generated_at * 1000 : null);
-  const { text: headline, good, detail } = helmHeadline(read);
+  const { text: headline, good, detail } = helmHeadline(read, { nowS });
   return <div className="v5m">
     <header className="v5m-head">
       <div><h1>Helm</h1><p>Helm paper bot ({read?.bot ?? "helm_v5_paper"}) · its own published runtime state · read-only, no controls on this page.</p></div>
@@ -83,13 +84,13 @@ export function V5Helm() {
         </div>
         <section className="v5m-section"><header><h2>Coins</h2><span>Why each coin is or is not buying, and its bag</span></header>
           {coins.length ? <>
-            <div className="v5m-card v5m-helm-table"><table className="v5m-heat v5m-helm-coins"><thead><tr><th>Pair</th><th>Buy rule</th><th>Where it is now</th><th className="is-number">Held</th><th className="is-number">Breakeven</th></tr></thead><tbody>{coins.map(row => <tr key={row.pair}>
-              <td>{row.pair}</td><td>{row.rule}</td><td><CoinSignal row={row} /></td>
+            <div className="v5m-card v5m-helm-table"><table className="v5m-heat v5m-helm-coins"><thead><tr><th>Pair</th><th>Buy rule</th><th>Where it is now</th><th>Last decision</th><th className="is-number">Held</th><th className="is-number">Breakeven</th></tr></thead><tbody>{coins.map((row, index) => <tr key={index}>
+              <td>{row.pair}</td><td>{row.rule}</td><td><CoinSignal row={row} /></td><td><Decision text={row.lastDecision} /></td>
               <td className="is-number">{row.held}{row.bagNote && <small>{row.bagNote}</small>}</td><td className="is-number">{row.breakeven}</td>
             </tr>)}</tbody></table></div>
-            <div className="v5m-helm-mobile">{coins.map(row => <article className="v5m-card v5m-helm-coin" key={row.pair}>
+            <div className="v5m-helm-mobile">{coins.map((row, index) => <article className="v5m-card v5m-helm-coin" key={index}>
               <h3>{row.pair}</h3><p>{row.rule}</p><CoinSignal row={row} />
-              <dl className="v5m-kv"><dt>Held</dt><dd>{row.held}</dd><dt>Breakeven</dt><dd>{row.breakeven}</dd></dl>
+              <dl className="v5m-kv"><dt>Last decision</dt><dd><Decision text={row.lastDecision} /></dd><dt>Held</dt><dd>{row.held}</dd><dt>Breakeven</dt><dd>{row.breakeven}</dd></dl>
               {row.bagNote && <small>{row.bagNote}</small>}
             </article>)}</div>
           </> : <p className="v5m-hint">No per-coin state published.</p>}
@@ -105,6 +106,11 @@ export function V5Helm() {
 
 function CoinSignal({ row }: { row: ReturnType<typeof helmCoinRow> }) {
   return <div className="v5m-helm-signal"><span className={row.rsi.startsWith("—") ? "v5m-muted" : undefined} title={ownerTitleText(row.rsiTitle)}>{row.rsi}</span><span className={row.atr.startsWith("—") ? "v5m-muted" : undefined}>{row.atr}</span><small>{row.decision}</small><small>{row.owner}</small><small>{row.sample}</small></div>;
+}
+
+/** One coin's last decision as Helm published it; "not published" is muted so it never reads as a value. */
+function Decision({ text = "not published" }: { text?: string }) {
+  return <span className={text === "not published" ? "v5m-muted" : undefined}>{text}</span>;
 }
 
 function Stat({ label, value, note, warn, title }: { label: string; value: ReactNode; note?: ReactNode; warn?: boolean; title?: string }) {

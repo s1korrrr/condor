@@ -22,7 +22,8 @@
 .v5m-hour.is-gap { background: var(--color-surface-hover); color: var(--color-text-muted); }
 .v5m-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 14px; min-width: 0; }
 .v5m-card h3 { margin: 0; font-size: 0.8125rem; font-weight: 600; }
-.v5m-hint { margin: 2px 0 10px; color: var(--color-text-muted); font-size: 12px; }
+.v5-overview .v5m-card > p { overflow-wrap: anywhere; }
+.v5m-hint { margin: 2px 0 10px; color: var(--color-text-muted); font-size: 12px; overflow-wrap: anywhere; }
 .v5m-section { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .v5m-section > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
 .v5m-section > header h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
@@ -136,7 +137,7 @@
 .v5m-feature-meta { color: var(--color-text-muted); font-size: 11px; word-break: break-all; }
 
 /* Helm page */
-.v5m-helm-head { border-left-width: 4px; }
+.v5m-helm-head { border-left-width: 4px; overflow-wrap: anywhere; }
 .v5m-helm-head.is-up { border-left-color: var(--color-green); }
 .v5m-helm-head.is-down { border-left-color: var(--color-yellow); }
 .v5m-helm-head strong { font-size: 1.05rem; }

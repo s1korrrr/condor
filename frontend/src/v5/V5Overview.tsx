@@ -7,6 +7,7 @@ import { ownerTitleText, ownerDisplay, usdc } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
 import { readHelm } from "./V5Helm";
+import { useHelmClock } from "./useHelmClock";
 import { readMoney, V5Money } from "./V5Money";
 import "./market.css";
 
@@ -31,7 +32,9 @@ export function V5Overview() {
   const sinceStart = exactSignedSum(equity, oppositeFunding);
   const sinceExact = sinceStart == null ? undefined : `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(sinceStart.replace(/^-/, "−"))}`;
   const realized = v5Values?.realized, unrealized = v5Values?.unrealized;
-  const headline = helmHeadline(helm.data);
+  // The same live read clock as the Helm page, so a decision ages here exactly as it does there.
+  const { nowS } = useHelmClock(helm.data, helm.dataUpdatedAt);
+  const headline = helmHeadline(helm.data, { nowS });
   const helmMoney = helmRow.withValues;
   return <div className="v5m v5-overview">
     <header className="v5m-head"><div><h1>Overview</h1><p>Both paper bots and their money. Simulated wallets only; nothing here places orders.</p></div></header>

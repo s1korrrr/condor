@@ -189,11 +189,57 @@ export function price(value) {
  * `asset` is appended when given ("0.016246 BTC").
  */
 export function coin(value, asset) {
+  return amount(value, asset, false);
+}
+
+/**
+ * Coin quantity held, bought or sold (the Bots page): `coin()`, except that a non-zero value is never shown as "0".
+ * Below 0.001 it keeps three significant digits, up to 8 decimals (0.00000049; 0.00000123), the most the dashboard
+ * shows. Under 0.00000001 it reads "< 0.00000001" ("> −0.00000001" when negative): plain digits, never exponent
+ * text. Zero is "0".
+ *
+ * Hover title (`ownerTitle`, shared by every owner value): the owner's exact text when it has at most 12 fractional
+ * places after trailing zeros, which covers 18-decimal values such as 0.016245819000000000. Above 12 places it is
+ * approximate: "≈ x (rounded)" to 12 places, and "≈ 0 (rounded)" for a non-zero amount below 0.0000000000005
+ * (0.00000000000049). The cell text still reads "< 0.00000001"; only that hover is not exact.
+ */
+export function quantity(value, asset) {
+  return amount(value, asset, true);
+}
+
+/**
+ * -1, 0 or 1 for two decimal strings, compared exactly as digits (an 18-decimal value never goes through a float),
+ * or null when either is not a decimal string. A table sorts a coin column by this, never by its display text.
+ */
+export function compareDecimal(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string') return null;
+  const a = parse(left), b = parse(right);
+  if (!a || !b) return null;
+  const places = Math.max(a.frac.length, b.frac.length);
+  const scaled = parts => {
+    const magnitude = BigInt(parts.int + parts.frac.padEnd(places, '0'));
+    return parts.neg ? -magnitude : magnitude;
+  };
+  const x = scaled(a), y = scaled(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
+const SMALLEST_PLACES = 8;
+
+function amount(value, asset, keepSmall) {
   const parts = parse(value);
   if (!parts) return DASH;
   let digits;
   if (parts.int !== '0') digits = Math.max(0, 6 - parts.int.length);
-  else digits = 6;
+  else if (!keepSmall) digits = 6;
+  else {
+    const leading = /^0*/.exec(parts.frac)[0].length;
+    if (leading >= SMALLEST_PLACES && /[1-9]/.test(parts.frac)) {
+      const bound = `${parts.neg ? `> ${MINUS}` : '< '}0.${'0'.repeat(SMALLEST_PLACES - 1)}1`;
+      return asset ? `${bound} ${asset}` : bound;
+    }
+    digits = Math.min(SMALLEST_PLACES, Math.max(6, leading + 3));
+  }
   const rounded = round(parts, digits);
   const frac = rounded.frac.replace(/0+$/, '');
   const text = `${rounded.neg ? MINUS : ''}${group(rounded.int)}${frac ? `.${frac}` : ''}`;
@@ -235,6 +281,7 @@ export function ownerDisplay(value, kind, { unit, digits = 2 } = {}) {
   if (!parse(value)) return { text: DASH, exact: null, tone: 'none' };
   const text = kind === 'usdc' ? usdc(value, unit)
     : kind === 'coin' ? coin(value, unit)
+    : kind === 'quantity' ? quantity(value, unit)
     : kind === 'price' ? price(value)
     : kind === 'pct' ? pct(value, digits)
     : kind === 'bps' ? `${signed(value, digits)} ${unit ?? 'bps'}`

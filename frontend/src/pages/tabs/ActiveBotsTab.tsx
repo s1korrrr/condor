@@ -28,9 +28,9 @@ import { PAPER_SNAPSHOT_FRESH_MS, paperAge, paperDimmedSnapshot, paperSnapshotPr
 import { paperReadFailureMessage } from "@/v5/policy";
 import { paperCompleteRead, paperNativeHolds, paperSnapshotsAgree } from "@/v5/policy";
 import { utcExact } from "@/v5/shown.mjs";
-import { ownerTitleText, coin, usdc } from '@/v5/format.mjs';
+import { ownerTitleText, quantity, usdc } from '@/v5/format.mjs';
 import { latest, SAMPLE_MS } from "@/v5/money-model.mjs";
-import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionAdmissionError, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
+import { paperAmount, paperQuantity, paperQuantityValue, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionAdmissionError, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
 import { phoneRecordTime } from "@/v5/phone-records";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
@@ -751,15 +751,20 @@ function PaperRecords({ read, positions, executors, now, valuesAt = now, kind }:
   const unit = (row: PaperRow) => typeof row.unit === "string" ? row.unit : "USDC";
   const base = (row: PaperRow) => String(row.trading_pair ?? "").split("-")[0] || "base units";
   const exactAmount = (value: unknown, denomination: string, places = 4) => <span title={ownerTitleText(typeof value === "string" ? value : undefined)}>{paperAmount(value, denomination, places)}</span>;
-  const detailAmount = (value: unknown, denomination: string, quantity = false) => {
+  const rowQuantity = (row: PaperRow) => kind === "executors" ? row.remaining_close_quantity : row.quantity;
+  const quantityText = (row: PaperRow) => paperQuantity(rowQuantity(row), base(row));
+  const detailAmount = (value: unknown, denomination: string, isQuantity = false) => {
     const exact = paperExactAmount(value, denomination);
-    return exact === "Not published" ? exact : <span title={ownerTitleText(String(value))}>{quantity ? coin(value, denomination) : usdc(value, denomination)}</span>;
+    return exact === "Not published" ? exact : <span title={ownerTitleText(String(value))}>{isQuantity ? quantity(value, denomination) : usdc(value, denomination)}</span>;
   };
   const columns: TableColumn<PaperRow>[] = [
     { id: "id", header: kind === "fills" ? "Fill ID" : kind === "positions" ? "Position ID" : "Executor ID", value: row => String(row[idKey] ?? "Not published"), size: 180, cell: row => <button className="paper-copy" onClick={() => { const id = String(row[idKey] ?? ""); void navigator.clipboard.writeText(id).then(() => { setCopied(id); setCopyError(false); }, () => setCopyError(true)); }} title="Copy full owner ID">{copied === row[idKey] ? "Copied" : String(row[idKey] ?? "Not published")}</button> },
     { id: "pair", header: "Pair", value: row => String(row.trading_pair ?? "Not published"), size: 130 },
     { id: "state", header: kind === "fills" ? "Side" : "State", value: row => paperWords(row.side ?? row.state), size: 150 },
-    { id: "quantity", header: kind === "executors" ? "Remaining close" : "Quantity", value: row => paperAmount(kind === "executors" ? row.remaining_close_quantity : row.quantity, base(row), 6), cell: row => exactAmount(kind === "executors" ? row.remaining_close_quantity : row.quantity, base(row), 6), size: 180 },
+    { id: "quantity", header: kind === "executors" ? "Remaining close" : "Quantity", kind: "number", value: row => paperQuantityValue(rowQuantity(row)), searchText: quantityText, cell: row => {
+      const raw = rowQuantity(row);
+      return <span title={ownerTitleText(typeof raw === "string" ? raw : undefined)}>{quantityText(row)}</span>;
+    }, size: 180 },
     ...(kind === "fills" ? [
       { id: "price", header: "Fill price", value: (row: PaperRow) => paperAmount(row.price, "USDC"), cell: (row: PaperRow) => exactAmount(row.price, "USDC"), size: 160 },
       { id: "fee", header: "Fee", value: (row: PaperRow) => paperAmount(row.fee_amount, String(row.fee_currency ?? "unit not published")), cell: (row: PaperRow) => exactAmount(row.fee_amount, String(row.fee_currency ?? "unit not published")), size: 160 },

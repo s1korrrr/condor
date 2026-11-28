@@ -22,7 +22,7 @@ const ownerValue = (value: string, kind: OwnerValueKind, exactValue?: string) =>
 const money = (value: string) => ownerValue(value, 'usdc');
 const profit = (value: string) => <>{ownerValue(value, 'pnl')} USDC</>;
 const unitPrice = (value: string) => ownerValue(value, 'price');
-const coinValue = (value: string, unit?: string) => <OwnerValue value={value} kind="coin" unit={unit} />;
+const coinValue = (value: string, unit?: string) => <OwnerValue value={value} kind="quantity" unit={unit} />;
 const countValue = (value: string | number) => <OwnerValue value={value} kind="coin" />;
 const costRatio = (ratio: { value: string; exact: string; title: string; rounded: boolean } | null, kind: 'price' | 'pct') => ratio
   ? <>{ratio.rounded ? '≈ ' : ''}<OwnerValue value={ratio.value} kind={kind} exact={ratio.title} />{ratio.rounded ? ' (rounded)' : ''}</>
